@@ -1,0 +1,15 @@
+# Swift Package Manager & Build artifacts
+.build/
+Packages/
+*.xcodeproj
+*.xcworkspace
+
+# macOS System Files
+.DS_Store
+*.swp
+*~
+
+# Temporary Audio Files
+*.wav
+*.mp3
+*.m4a
