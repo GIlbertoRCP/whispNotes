@@ -4,9 +4,6 @@ WhispNotes is a native macOS application for markdown note-taking with integrate
 
 ## Interface Preview
 
-### Demo Video
-![WhispNotes Demo](assets/demo.gif)
-
 ### Main 3-Pane Interface
 ![WhispNotes Main Interface](assets/main_interface.png)
 
