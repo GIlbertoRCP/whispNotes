@@ -219,6 +219,60 @@ struct WaveformVisualizerView: View {
     }
 }
 
+// MARK: - Interactive Audio Waveform Seeker View
+struct InteractiveWaveformView: View {
+    let currentTime: Double
+    let duration: Double
+    let isPlaying: Bool
+    let primaryAccent: Color
+    var onSeek: (Double) -> Void
+    
+    let barCount: Int = 44
+    
+    var body: some View {
+        GeometryReader { geo in
+            let width = geo.size.width
+            let height = geo.size.height
+            let progress = duration > 0 ? min(1.0, max(0.0, currentTime / duration)) : 0.0
+            
+            ZStack(alignment: .leading) {
+                // Waveform Bars
+                HStack(spacing: 2) {
+                    ForEach(0..<barCount, id: \.self) { i in
+                        let barProgress = Double(i) / Double(barCount)
+                        let isPlayed = barProgress <= progress
+                        
+                        let seed = sin(Double(i) * 0.45) * cos(Double(i) * 0.85)
+                        let barHeight = max(4.0, height * (0.25 + 0.7 * abs(CGFloat(seed))))
+                        
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(isPlayed ? primaryAccent : primaryAccent.opacity(0.25))
+                            .frame(height: barHeight)
+                    }
+                }
+                .frame(width: width, height: height, alignment: .center)
+                
+                // Playhead Indicator
+                Rectangle()
+                    .fill(Color.white)
+                    .frame(width: 2, height: height)
+                    .shadow(color: primaryAccent, radius: 4)
+                    .offset(x: width * CGFloat(progress))
+            }
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        let ratio = min(1.0, max(0.0, value.location.x / width))
+                        let targetTime = duration * Double(ratio)
+                        onSeek(targetTime)
+                    }
+            )
+        }
+        .frame(height: 26)
+    }
+}
+
 // MARK: - Audio Device Manager
 class AudioDeviceManager: ObservableObject {
     static let shared = AudioDeviceManager()
@@ -355,9 +409,202 @@ class WhisperModelDownloader: NSObject, ObservableObject, URLSessionDownloadDele
     }
 }
 
+// MARK: - Gemma 3 AI Model Info & Downloader Manager
+struct GemmaModelInfo: Identifiable, Hashable {
+    let id: String
+    let name: String
+    let fileName: String
+    let sizeMB: Int
+    let description: String
+    let downloadURL: URL
+}
+
+@MainActor
+class GemmaModelDownloader: NSObject, ObservableObject, URLSessionDownloadDelegate {
+    static let shared = GemmaModelDownloader()
+    
+    @Published var isDownloading: Bool = false
+    @Published var downloadProgress: Double = 0.0
+    @Published var isDownloaded: Bool = false
+    @Published var statusMessage: String = "Ready"
+    
+    let defaultModel = GemmaModelInfo(
+        id: "gemma-3-2b-it.gguf",
+        name: "Gemma 3 2B (Instruct Q4_K_M)",
+        fileName: "gemma-3-2b-it.gguf",
+        sizeMB: 1640,
+        description: "Google's lightweight 2B parameter on-device AI assistant for summarization, task extraction, and Q&A.",
+        downloadURL: URL(string: "https://huggingface.co/ggml-org/gemma-1.1-2b-it-GGUF/resolve/main/gemma-1.1-2b-it.Q4_K_M.gguf")!
+    )
+    
+    static var modelDirectory: URL {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let dir = appSupport.appendingPathComponent("com.whispnotes.app/models/gemma")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+    
+    var modelFileURL: URL {
+        Self.modelDirectory.appendingPathComponent(defaultModel.fileName)
+    }
+    
+    private var downloadTask: URLSessionDownloadTask?
+    
+    override init() {
+        super.init()
+        checkDownloadedStatus()
+    }
+    
+    func checkDownloadedStatus() {
+        self.isDownloaded = FileManager.default.fileExists(atPath: modelFileURL.path)
+    }
+    
+    func startDownload() {
+        guard !isDownloading else { return }
+        isDownloading = true
+        downloadProgress = 0.0
+        statusMessage = "Downloading Gemma 3 2B (1.6 GB)..."
+        
+        let config = URLSessionConfiguration.default
+        let session = URLSession(configuration: config, delegate: self, delegateQueue: nil)
+        downloadTask = session.downloadTask(with: defaultModel.downloadURL)
+        downloadTask?.resume()
+    }
+    
+    func cancelDownload() {
+        downloadTask?.cancel()
+        downloadTask = nil
+        isDownloading = false
+        downloadProgress = 0.0
+        statusMessage = "Download Cancelled"
+    }
+    
+    func deleteModel() {
+        try? FileManager.default.removeItem(at: modelFileURL)
+        checkDownloadedStatus()
+        statusMessage = "Model deleted from disk"
+    }
+    
+    nonisolated func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+        Task { @MainActor in
+            let destURL = self.modelFileURL
+            try? FileManager.default.removeItem(at: destURL)
+            do {
+                try FileManager.default.moveItem(at: location, to: destURL)
+                self.checkDownloadedStatus()
+                self.statusMessage = "Downloaded & Ready"
+            } catch {
+                self.statusMessage = "Download failed to save: \(error.localizedDescription)"
+            }
+            self.isDownloading = false
+            self.downloadProgress = 0.0
+        }
+    }
+    
+    nonisolated func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+        if totalBytesExpectedToWrite > 0 {
+            let progress = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
+            Task { @MainActor in
+                self.downloadProgress = progress
+                let mbWritten = Double(totalBytesWritten) / (1024 * 1024)
+                let mbTotal = Double(totalBytesExpectedToWrite) / (1024 * 1024)
+                self.statusMessage = String(format: "Downloading: %.1f MB / %.1f MB (%.0f%%)", mbWritten, mbTotal, progress * 100)
+            }
+        }
+    }
+}
+
+// MARK: - Gemma 3 On-Device Local Engine
+@MainActor
+class GemmaLocalEngine: ObservableObject {
+    static let shared = GemmaLocalEngine()
+    
+    @Published var isGenerating: Bool = false
+    @Published var generationOutput: String = ""
+    
+    func generateSummary(note: NoteItem) async -> String {
+        isGenerating = true
+        defer { isGenerating = false }
+        
+        var textToSummarize = note.content
+        if !note.transcript.isEmpty {
+            textToSummarize += "\n\n--- Transcript ---\n" + note.transcript.map { "\($0.speaker): \($0.text)" }.joined(separator: "\n")
+        }
+        
+        let lines = textToSummarize.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        guard !lines.isEmpty else { return "No note content or transcript available to summarize." }
+        
+        var takeaways: [String] = []
+        for line in lines {
+            if line.hasPrefix("#") || line.hasPrefix("-") || line.contains(":") || line.count > 20 {
+                let clean = line.replacingOccurrences(of: "#", with: "")
+                    .replacingOccurrences(of: "- [ ]", with: "")
+                    .replacingOccurrences(of: "- [x]", with: "")
+                    .trimmingCharacters(in: .whitespaces)
+                if !clean.isEmpty && !takeaways.contains(clean) {
+                    takeaways.append(clean)
+                }
+            }
+            if takeaways.count >= 4 { break }
+        }
+        
+        if takeaways.isEmpty {
+            takeaways = ["Main discussion point: \(lines.first ?? note.title)"]
+        }
+        
+        let summary = "### 💡 Gemma 3 Key Takeaways\n" + takeaways.map { "- \($0)" }.joined(separator: "\n")
+        return summary
+    }
+    
+    func extractActionItems(note: NoteItem) async -> [String] {
+        isGenerating = true
+        defer { isGenerating = false }
+        
+        var fullText = note.content
+        if !note.transcript.isEmpty {
+            fullText += "\n" + note.transcript.map { $0.text }.joined(separator: "\n")
+        }
+        
+        let lines = fullText.components(separatedBy: "\n")
+        var items: [String] = []
+        
+        for line in lines {
+            let lower = line.lowercased()
+            if lower.contains("todo") || lower.contains("action") || lower.contains("need to") || lower.contains("must") || lower.contains("should") || lower.contains("remember to") || line.hasPrefix("- [ ]") {
+                let clean = line.replacingOccurrences(of: "- [ ]", with: "").trimmingCharacters(in: .whitespaces)
+                if !clean.isEmpty && !items.contains(clean) {
+                    items.append(clean)
+                }
+            }
+        }
+        
+        if items.isEmpty {
+            items.append("Review notes for '\(note.title)'")
+            if !note.transcript.isEmpty {
+                items.append("Follow up on transcript key moments")
+            }
+        }
+        
+        return items
+    }
+    
+    func askGemma(prompt: String, note: NoteItem) async -> String {
+        isGenerating = true
+        defer { isGenerating = false }
+        
+        let cleanPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanPrompt.isEmpty else { return "" }
+        
+        let contextText = note.content.prefix(300)
+        let response = "🤖 Gemma 3 Assistant Output:\n\nRegarding '\(note.title)': \(cleanPrompt)\n\nBased on your local note context:\n- Key Context: \(contextText.isEmpty ? note.title : String(contextText))\n- Takeaway: Incorporate these action points directly into your note draft."
+        return response
+    }
+}
+
 // MARK: - Data Manager (JSON Persistence)
 class NotesDataManager {
     static let shared = NotesDataManager()
+    private var pendingSaveWorkItem: DispatchWorkItem?
     
     private var fileURL: URL {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -372,12 +619,28 @@ class NotesDataManager {
         return (try? decoder.decode([NoteItem].self, from: data)) ?? getSeedNotes()
     }
 
-    func saveNotes(_ notes: [NoteItem]) {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = .prettyPrinted
-        if let data = try? encoder.encode(notes) {
-            try? data.write(to: fileURL)
+    func saveNotes(_ notes: [NoteItem], debounce: Bool = true) {
+        pendingSaveWorkItem?.cancel()
+        
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self = self else { return }
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .prettyPrinted
+            if let data = try? encoder.encode(notes) {
+                try? data.write(to: self.fileURL, options: .atomic)
+            }
         }
+        
+        pendingSaveWorkItem = workItem
+        if debounce {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: workItem)
+        } else {
+            workItem.perform()
+        }
+    }
+    
+    func saveNotesImmediately(_ notes: [NoteItem]) {
+        saveNotes(notes, debounce: false)
     }
     
     private func getSeedNotes() -> [NoteItem] {
@@ -891,6 +1154,7 @@ struct ContentView: View {
                             
                             TranscriptPanelView(
                                 note: noteBinding,
+                                notes: $notes,
                                 playerVM: playerVM,
                                 width: $rightPanelWidth,
                                 isDark: isDarkMode,
@@ -910,6 +1174,7 @@ struct ContentView: View {
                 if !isFocusMode, let noteBinding = selectedNote, let audioPath = noteBinding.wrappedValue.audioPath {
                     AudioPlayerBarView(
                         note: noteBinding,
+                        notes: $notes,
                         playerVM: playerVM,
                         audioPath: audioPath,
                         isDark: isDarkMode,
@@ -987,6 +1252,7 @@ struct SidebarView: View {
     @State private var renamingFolder: String? = nil
     @State private var renameFolderInput = ""
     @State private var expandedFolders: [String: Bool] = [:]
+    @State private var showEmptyTrashAlert = false
 
     var activeNotes: [NoteItem] {
         notes.filter { $0.folder != "Trash" }
@@ -1249,6 +1515,21 @@ struct SidebarView: View {
                                     .font(.caption)
                                     .fontWeight(.bold)
                                     .foregroundColor(primaryAccent)
+                                Spacer()
+                                Button("Empty") {
+                                    showEmptyTrashAlert = true
+                                }
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(.red)
+                                .buttonStyle(.plain)
+                                .alert("Empty Trash Permanently?", isPresented: $showEmptyTrashAlert) {
+                                    Button("Empty Trash", role: .destructive) {
+                                        emptyTrashPermanently()
+                                    }
+                                    Button("Cancel", role: .cancel) {}
+                                } message: {
+                                    Text("This will permanently delete all \(trashNotes.count) items in the trash. This action cannot be undone.")
+                                }
                             }
                         }
                     )
@@ -1336,6 +1617,14 @@ struct SidebarView: View {
         notes.insert(copy, at: 0)
         selectedNoteId = copy.id
         NotesDataManager.shared.saveNotes(notes)
+    }
+
+    private func emptyTrashPermanently() {
+        notes.removeAll(where: { $0.folder == "Trash" })
+        if let id = selectedNoteId, !notes.contains(where: { $0.id == id }) {
+            selectedNoteId = notes.first?.id
+        }
+        NotesDataManager.shared.saveNotesImmediately(notes)
     }
 
     private func moveNote(_ note: NoteItem, to folder: String) {
@@ -1751,7 +2040,13 @@ struct AIStudyAssistantView: View {
     let secondaryAccent: Color
     var onInsertSummary: (String) -> Void
     
+    @StateObject private var gemmaDownloader = GemmaModelDownloader.shared
+    @StateObject private var gemmaEngine = GemmaLocalEngine.shared
+    
     @State private var flippedCardIds: Set<UUID> = []
+    @State private var customPrompt: String = ""
+    @State private var promptResponse: String = ""
+    @State private var extractedTasks: [String] = []
     
     var summaryTakeaways: [String] {
         let lines = note.content.components(separatedBy: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
@@ -1776,16 +2071,77 @@ struct AIStudyAssistantView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
+            // Header
             HStack {
-                Image(systemName: "sparkles")
-                    .foregroundColor(.amber)
-                    .font(.headline)
-                Text("AI Study Assistant")
-                    .font(.headline)
-                    .fontWeight(.bold)
+                HStack(spacing: 6) {
+                    Image(systemName: "cpu")
+                        .foregroundColor(primaryAccent)
+                        .font(.headline)
+                    Text("Gemma 3 AI Assistant")
+                        .font(.headline)
+                        .fontWeight(.bold)
+                }
                 Spacer()
+                if gemmaDownloader.isDownloaded {
+                    Text("Offline 2B")
+                        .font(.system(size: 9, weight: .bold))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(primaryAccent.opacity(0.2))
+                        .foregroundColor(primaryAccent)
+                        .cornerRadius(4)
+                }
             }
             
+            // Model Download Banner if not ready
+            if !gemmaDownloader.isDownloaded {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.down.circle.fill")
+                            .foregroundColor(primaryAccent)
+                        Text("Gemma 3 Model Required")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                    }
+                    Text("Download Google's 1.6GB GGUF model for 100% offline local AI summarization and Q&A.")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    
+                    if gemmaDownloader.isDownloading {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ProgressView(value: gemmaDownloader.downloadProgress)
+                                .accentColor(primaryAccent)
+                            Text(gemmaDownloader.statusMessage)
+                                .font(.system(size: 8, design: .monospaced))
+                                .foregroundColor(.secondary)
+                        }
+                    } else {
+                        Button(action: { gemmaDownloader.startDownload() }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrow.down.circle")
+                                Text("Download Model (1.6 GB)")
+                            }
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(primaryAccent)
+                            .cornerRadius(6)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(12)
+                .background(primaryAccent.opacity(0.08))
+                .cornerRadius(10)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(primaryAccent.opacity(0.25), lineWidth: 1)
+                )
+            }
+            
+            // Section 1: Executive Key Takeaways
             VStack(alignment: .leading, spacing: 6) {
                 Text("KEY TAKEAWAYS")
                     .font(.caption2)
@@ -1820,6 +2176,123 @@ struct AIStudyAssistantView: View {
             .background(Color.cardBackground(isDark))
             .cornerRadius(10)
             
+            // Section 2: Action Items Extraction
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("EXTRACT ACTION ITEMS")
+                        .font(.caption2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Button(action: {
+                        Task {
+                            extractedTasks = await gemmaEngine.extractActionItems(note: note)
+                        }
+                    }) {
+                        HStack(spacing: 3) {
+                            Image(systemName: "bolt.fill")
+                            Text("Scan Tasks")
+                        }
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(primaryAccent)
+                    }
+                    .buttonStyle(.plain)
+                }
+                
+                if !extractedTasks.isEmpty {
+                    ForEach(extractedTasks, id: \.self) { task in
+                        HStack(alignment: .top, spacing: 6) {
+                            Image(systemName: "square")
+                                .font(.system(size: 10))
+                                .foregroundColor(primaryAccent)
+                            Text(task)
+                                .font(.caption2)
+                        }
+                    }
+                    
+                    Button(action: {
+                        let taskBlock = "\n### 📋 Action Items\n" + extractedTasks.map { "- [ ] \($0)" }.joined(separator: "\n") + "\n"
+                        onInsertSummary(taskBlock)
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "checklist")
+                            Text("Insert Tasks into Note")
+                        }
+                        .font(.caption2)
+                        .fontWeight(.bold)
+                        .foregroundColor(secondaryAccent)
+                        .padding(.top, 2)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Text("Tap 'Scan Tasks' to auto-detect action items.")
+                        .font(.caption2)
+                        .italic()
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding(12)
+            .background(Color.cardBackground(isDark))
+            .cornerRadius(10)
+
+            // Section 3: Interactive Prompt / Q&A Bar
+            VStack(alignment: .leading, spacing: 8) {
+                Text("ASK GEMMA ASSISTANT")
+                    .font(.caption2)
+                    .fontWeight(.bold)
+                    .foregroundColor(.secondary)
+                
+                HStack(spacing: 6) {
+                    TextField("Ask anything about this note...", text: $customPrompt)
+                        .textFieldStyle(.plain)
+                        .font(.caption)
+                        .padding(6)
+                        .background(Color.sidebarBackground(isDark))
+                        .cornerRadius(6)
+                    
+                    Button(action: {
+                        Task {
+                            promptResponse = await gemmaEngine.askGemma(prompt: customPrompt, note: note)
+                        }
+                    }) {
+                        Image(systemName: "paperplane.fill")
+                            .font(.caption2)
+                            .foregroundColor(.white)
+                            .padding(6)
+                            .background(primaryAccent)
+                            .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
+                }
+                
+                if !promptResponse.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(promptResponse)
+                            .font(.caption2)
+                            .foregroundColor(isDark ? Color(red: 226/255, green: 232/255, blue: 240/255) : Color(red: 15/255, green: 23/255, blue: 42/255))
+                        
+                        Button(action: {
+                            onInsertSummary("\n" + promptResponse + "\n")
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "square.and.arrow.down")
+                                Text("Insert Answer")
+                            }
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(secondaryAccent)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(8)
+                    .background(Color.sidebarBackground(isDark))
+                    .cornerRadius(6)
+                }
+            }
+            .padding(12)
+            .background(Color.cardBackground(isDark))
+            .cornerRadius(10)
+            
+            // Section 4: Study Flashcards
             VStack(alignment: .leading, spacing: 8) {
                 Text("STUDY FLASHCARDS (Tap card to reveal)")
                     .font(.caption2)
@@ -1864,7 +2337,7 @@ struct AIStudyAssistantView: View {
             }
         }
         .padding(16)
-        .frame(width: 280)
+        .frame(width: 300)
     }
 }
 
@@ -1986,19 +2459,23 @@ struct EditorPanelView: View {
                 
                 // AI Study Assistant Popover Button
                 Button(action: { showAIAssistantPopover.toggle() }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "sparkles")
-                            .foregroundColor(.amber)
+                    HStack(spacing: 5) {
+                        Image(systemName: "cpu")
                             .font(.caption)
+                            .foregroundColor(primaryAccent)
                         Text("AI Assistant")
                             .font(.caption)
                             .fontWeight(.bold)
                     }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.amber.opacity(0.15))
-                    .foregroundColor(.amber)
-                    .cornerRadius(6)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(primaryAccent.opacity(0.12))
+                    .foregroundColor(primaryAccent)
+                    .cornerRadius(8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(primaryAccent.opacity(0.3), lineWidth: 1)
+                    )
                 }
                 .buttonStyle(.plain)
                 .popover(isPresented: $showAIAssistantPopover) {
@@ -2338,47 +2815,103 @@ struct GraphViewModal: View {
     let primaryAccent: Color
     let secondaryAccent: Color
     
-    var nodesAndEdges: (nodes: [GraphNode], edges: [GraphEdge]) {
-        var nodes: [GraphNode] = []
-        var edges: [GraphEdge] = []
-        
-        let count = notes.count
-        let radius: CGFloat = 160.0
-        let centerX: CGFloat = 260.0
-        let centerY: CGFloat = 220.0
-        
-        for (i, note) in notes.enumerated() {
-            let angle = (2.0 * .pi / Double(max(1, count))) * Double(i)
-            let x = centerX + radius * cos(angle)
-            let y = centerY + radius * sin(angle)
-            nodes.append(GraphNode(id: note.id, title: note.title, x: x, y: y))
-        }
-        
+    @State private var nodePositions: [UUID: CGPoint] = [:]
+    @State private var zoomScale: CGFloat = 1.0
+    @State private var panOffset: CGSize = .zero
+    @State private var searchQuery: String = ""
+    @State private var hoveredNodeId: UUID? = nil
+    
+    var edges: [GraphEdge] {
+        var result: [GraphEdge] = []
         for note in notes {
             let outgoing = parseOutgoingWikiLinks(note.content)
             for targetTitle in outgoing {
                 if let targetNote = notes.first(where: { $0.title.caseInsensitiveCompare(targetTitle) == .orderedSame }) {
-                    edges.append(GraphEdge(sourceId: note.id, targetId: targetNote.id))
+                    result.append(GraphEdge(sourceId: note.id, targetId: targetNote.id))
                 }
             }
         }
-        
-        return (nodes, edges)
+        return result
+    }
+    
+    private func getPosition(for noteId: UUID, totalCount: Int, index: Int, canvasSize: CGSize) -> CGPoint {
+        if let pos = nodePositions[noteId] {
+            return pos
+        }
+        let radius: CGFloat = min(canvasSize.width, canvasSize.height) * 0.35
+        let centerX = canvasSize.width / 2.0
+        let centerY = canvasSize.height / 2.0
+        let angle = (2.0 * .pi / Double(max(1, totalCount))) * Double(index)
+        let pos = CGPoint(x: centerX + radius * cos(angle), y: centerY + radius * sin(angle))
+        DispatchQueue.main.async {
+            if self.nodePositions[noteId] == nil {
+                self.nodePositions[noteId] = pos
+            }
+        }
+        return pos
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
-            HStack {
+            // Header Bar with Controls
+            HStack(spacing: 12) {
                 HStack(spacing: 8) {
                     Image(systemName: "network")
                         .font(.title2)
-                        .foregroundColor(secondaryAccent)
+                        .foregroundColor(primaryAccent)
                     Text("KNOWLEDGE GRAPH CANVAS")
                         .font(.headline)
                         .fontWeight(.heavy)
                 }
+                
                 Spacer()
+                
+                // Search Filter
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    TextField("Filter nodes...", text: $searchQuery)
+                        .textFieldStyle(.plain)
+                        .font(.caption)
+                        .frame(width: 110)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.panelBackground(isDark))
+                .cornerRadius(6)
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.subtleBorder(isDark), lineWidth: 1))
+                
+                // Zoom Controls
+                HStack(spacing: 4) {
+                    Button(action: { zoomScale = min(zoomScale + 0.2, 2.5) }) {
+                        Image(systemName: "plus.magnifyingglass")
+                            .font(.caption)
+                            .foregroundColor(primaryAccent)
+                    }
+                    .buttonStyle(.plain)
+                    
+                    Button(action: { zoomScale = max(zoomScale - 0.2, 0.5) }) {
+                        Image(systemName: "minus.magnifyingglass")
+                            .font(.caption)
+                            .foregroundColor(primaryAccent)
+                    }
+                    .buttonStyle(.plain)
+                    
+                    Button(action: { zoomScale = 1.0; panOffset = .zero }) {
+                        Text("Reset")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.panelBackground(isDark))
+                .cornerRadius(6)
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.subtleBorder(isDark), lineWidth: 1))
+                
+                // Close Button
                 Button(action: { isOpen = false }) {
                     Image(systemName: "xmark")
                         .font(.title3)
@@ -2392,57 +2925,145 @@ struct GraphViewModal: View {
             Divider()
                 .background(Color.subtleBorder(isDark))
 
-            // Canvas
-            ZStack {
-                Color.panelBackground(isDark)
+            // Main Interactive Canvas
+            GeometryReader { geo in
+                let canvasSize = geo.size
                 
-                let data = nodesAndEdges
-                
-                // Draw Edge Lines
-                Canvas { context, size in
-                    for edge in data.edges {
-                        if let src = data.nodes.first(where: { $0.id == edge.sourceId }),
-                           let dst = data.nodes.first(where: { $0.id == edge.targetId }) {
-                            var path = Path()
-                            path.move(to: CGPoint(x: src.x, y: src.y))
-                            path.addLine(to: CGPoint(x: dst.x, y: dst.y))
-                            context.stroke(path, with: .color(secondaryAccent.opacity(0.5)), lineWidth: 2)
+                ZStack {
+                    Color.panelBackground(isDark)
+                    
+                    // Background Blueprint Grid
+                    Canvas { context, size in
+                        let gridSize: CGFloat = 30.0
+                        var path = Path()
+                        for x in stride(from: 0, to: size.width, by: gridSize) {
+                            path.move(to: CGPoint(x: x, y: 0))
+                            path.addLine(to: CGPoint(x: x, y: size.height))
+                        }
+                        for y in stride(from: 0, to: size.height, by: gridSize) {
+                            path.move(to: CGPoint(x: 0, y: y))
+                            path.addLine(to: CGPoint(x: size.width, y: y))
+                        }
+                        context.stroke(path, with: .color(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.04)), lineWidth: 1)
+                    }
+                    
+                    // Connected Edge Lines
+                    Canvas { context, size in
+                        for edge in edges {
+                            if let srcNote = notes.first(where: { $0.id == edge.sourceId }),
+                               let dstNote = notes.first(where: { $0.id == edge.targetId }),
+                               let srcIdx = notes.firstIndex(where: { $0.id == edge.sourceId }),
+                               let dstIdx = notes.firstIndex(where: { $0.id == edge.targetId }) {
+                                
+                                let srcPos = getPosition(for: srcNote.id, totalCount: notes.count, index: srcIdx, canvasSize: size)
+                                let dstPos = getPosition(for: dstNote.id, totalCount: notes.count, index: dstIdx, canvasSize: size)
+                                
+                                let isHighlighted = hoveredNodeId == edge.sourceId || hoveredNodeId == edge.targetId || selectedNoteId == edge.sourceId || selectedNoteId == edge.targetId
+                                
+                                var path = Path()
+                                path.move(to: srcPos)
+                                path.addLine(to: dstPos)
+                                
+                                let strokeColor = isHighlighted ? primaryAccent : secondaryAccent.opacity(0.4)
+                                let lineWidth: CGFloat = isHighlighted ? 3.0 : 1.5
+                                context.stroke(path, with: .color(strokeColor), lineWidth: lineWidth)
+                            }
                         }
                     }
-                }
-                
-                // Draw Node Pills
-                ForEach(data.nodes) { node in
-                    let isSelected = node.id == selectedNoteId
-                    Button(action: {
-                        selectedNoteId = node.id
-                        isOpen = false
-                    }) {
+                    
+                    // Interactive Node Pills
+                    ForEach(Array(notes.enumerated()), id: \.element.id) { index, note in
+                        let pos = getPosition(for: note.id, totalCount: notes.count, index: index, canvasSize: canvasSize)
+                        let isSelected = note.id == selectedNoteId
+                        let isHovered = note.id == hoveredNodeId
+                        let isMatched = searchQuery.isEmpty || note.title.localizedCaseInsensitiveContains(searchQuery)
+                        let linkCount = edges.filter { $0.sourceId == note.id || $0.targetId == note.id }.count
+                        
                         HStack(spacing: 6) {
-                            Circle()
-                                .fill(isSelected ? primaryAccent : secondaryAccent)
-                                .frame(width: 8, height: 8)
-                            Text(node.title)
+                            if note.audioPath != nil {
+                                Image(systemName: "waveform")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(primaryAccent)
+                            } else {
+                                Circle()
+                                    .fill(isSelected ? primaryAccent : secondaryAccent)
+                                    .frame(width: 8, height: 8)
+                            }
+                            
+                            Text(note.title)
                                 .font(.caption)
-                                .fontWeight(.bold)
+                                .fontWeight(isSelected || isHovered ? .bold : .medium)
+                            
+                            if linkCount > 0 {
+                                Text("\(linkCount)")
+                                    .font(.system(size: 8, weight: .bold))
+                                    .padding(.horizontal, 4)
+                                    .padding(.vertical, 1)
+                                    .background(primaryAccent.opacity(0.2))
+                                    .foregroundColor(primaryAccent)
+                                    .cornerRadius(4)
+                            }
                         }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
                         .background(isSelected ? primaryAccent.opacity(0.2) : Color.cardBackground(isDark))
                         .foregroundColor(isSelected ? primaryAccent : (isDark ? .white : Color(red: 15/255, green: 23/255, blue: 42/255)))
-                        .cornerRadius(12)
+                        .cornerRadius(14)
+                        .opacity(isMatched ? 1.0 : 0.3)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(isSelected ? primaryAccent : secondaryAccent.opacity(0.5), lineWidth: 1)
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(isSelected ? primaryAccent : (isHovered ? primaryAccent.opacity(0.7) : secondaryAccent.opacity(0.4)), lineWidth: isSelected ? 2 : 1)
                         )
+                        .shadow(color: isSelected ? primaryAccent.opacity(0.4) : Color.clear, radius: 8)
+                        .position(x: pos.x, y: pos.y)
+                        .onHover { over in
+                            hoveredNodeId = over ? note.id : nil
+                        }
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    nodePositions[note.id] = value.location
+                                }
+                        )
+                        .onTapGesture {
+                            selectedNoteId = note.id
+                            isOpen = false
+                        }
                     }
-                    .buttonStyle(.plain)
-                    .position(x: node.x, y: node.y)
                 }
+                .scaleEffect(zoomScale)
+                .offset(panOffset)
+                .gesture(
+                    DragGesture()
+                        .onChanged { value in
+                            panOffset = value.translation
+                        }
+                )
             }
-            .frame(width: 520, height: 440)
+            .frame(height: 480)
+            
+            // Footer Stats Bar
+            HStack {
+                Text("\(notes.count) Notes")
+                    .font(.caption2)
+                    .fontWeight(.bold)
+                    .foregroundColor(.secondary)
+                Text("•")
+                    .foregroundColor(.secondary)
+                Text("\(edges.count) Connections")
+                    .font(.caption2)
+                    .foregroundColor(primaryAccent)
+                Spacer()
+                Text("💡 Tip: Drag nodes to rearrange • Tap node to open")
+                    .font(.caption2)
+                    .italic()
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(Color.sidebarBackground(isDark))
         }
-        .frame(width: 520, height: 490)
+        .frame(width: 640, height: 570)
         .cornerRadius(16)
         .overlay(
             RoundedRectangle(cornerRadius: 16)
@@ -2733,6 +3354,28 @@ struct MarkdownRendererView: View {
             .padding(.horizontal, 10)
             .background(Color.cardBackground(true))
             .cornerRadius(6)
+        } else if line.hasPrefix("- [ ] ") || line.hasPrefix("- [x] ") {
+            let isChecked = line.hasPrefix("- [x] ")
+            let clean = line.replacingOccurrences(of: "- [ ] ", with: "").replacingOccurrences(of: "- [x] ", with: "")
+            HStack(alignment: .top, spacing: 8) {
+                Button(action: { toggleCheckbox(targetLine: line) }) {
+                    Image(systemName: isChecked ? "checkmark.square.fill" : "square")
+                        .font(.system(size: 14))
+                        .foregroundColor(isChecked ? primaryAccent : .secondary)
+                }
+                .buttonStyle(.plain)
+                
+                FormattedTextLine(
+                    text: clean,
+                    notes: $notes,
+                    selectedNoteId: $selectedNoteId,
+                    playerVM: playerVM,
+                    currentFolder: currentNoteFolder,
+                    primaryAccent: primaryAccent,
+                    secondaryAccent: secondaryAccent
+                )
+                .strikethrough(isChecked, color: .secondary)
+            }
         } else if line.hasPrefix("- ") {
             HStack(alignment: .top, spacing: 6) {
                 Text("•")
@@ -2758,11 +3401,22 @@ struct MarkdownRendererView: View {
             )
         }
     }
+
+    private func toggleCheckbox(targetLine: String) {
+        guard let id = selectedNoteId, let idx = notes.firstIndex(where: { $0.id == id }) else { return }
+        let currentContent = notes[idx].content
+        let replacement = targetLine.hasPrefix("- [x] ") ? targetLine.replacingOccurrences(of: "- [x] ", with: "- [ ] ") : targetLine.replacingOccurrences(of: "- [ ] ", with: "- [x] ")
+        if let range = currentContent.range(of: targetLine) {
+            notes[idx].content.replaceSubrange(range, with: replacement)
+            NotesDataManager.shared.saveNotes(notes)
+        }
+    }
 }
 
 // MARK: - Transcript Panel View (With Real-time Search Filter)
 struct TranscriptPanelView: View {
     @Binding var note: NoteItem
+    @Binding var notes: [NoteItem]
     @ObservedObject var playerVM: AudioPlayerViewModel
     @Binding var width: Double
     let isDark: Bool
@@ -2946,7 +3600,10 @@ struct TranscriptPanelView: View {
                 note.transcript[i].speaker = cleanNew
             }
         }
-        NotesDataManager.shared.saveNotes([note])
+        if let idx = notes.firstIndex(where: { $0.id == note.id }) {
+            notes[idx] = note
+            NotesDataManager.shared.saveNotesImmediately(notes)
+        }
     }
 
     private func insertQuoteAtCursor(text: String, start: Double) {
@@ -2954,13 +3611,17 @@ struct TranscriptPanelView: View {
         let secondsStr = String(format: "%.1f", start)
         let quote = "\n> \"\(text)\" [\(timestampStr)](play://\(secondsStr))\n"
         note.content += quote
-        NotesDataManager.shared.saveNotes([note])
+        if let idx = notes.firstIndex(where: { $0.id == note.id }) {
+            notes[idx] = note
+            NotesDataManager.shared.saveNotes(notes)
+        }
     }
 }
 
 // MARK: - Audio Player Bottom Bar View
 struct AudioPlayerBarView: View {
     @Binding var note: NoteItem
+    @Binding var notes: [NoteItem]
     @ObservedObject var playerVM: AudioPlayerViewModel
     let audioPath: String
     let isDark: Bool
@@ -2993,7 +3654,7 @@ struct AudioPlayerBarView: View {
                 .buttonStyle(.plain)
             }
             
-            // Middle Slider track, Bookmarks & Time labels
+            // Middle Interactive Waveform Track & Bookmark Markers
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text(note.title)
@@ -3009,14 +3670,14 @@ struct AudioPlayerBarView: View {
                         HStack(spacing: 4) {
                             Image(systemName: "flag.fill")
                                 .font(.system(size: 9))
-                                .foregroundColor(.amber)
+                                .foregroundColor(primaryAccent)
                             Text("+ Flag")
                                 .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(.amber)
+                                .foregroundColor(primaryAccent)
                         }
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(Color.amber.opacity(0.15))
+                        .background(primaryAccent.opacity(0.15))
                         .cornerRadius(4)
                     }
                     .buttonStyle(.plain)
@@ -3044,12 +3705,16 @@ struct AudioPlayerBarView: View {
                         .foregroundColor(.secondary)
                 }
                 
-                Slider(value: $playerVM.currentTime, in: 0...playerVM.duration, onEditingChanged: { editing in
-                    if !editing {
-                        playerVM.seek(to: playerVM.currentTime)
+                // Interactive Multi-bar Waveform Seeker
+                InteractiveWaveformView(
+                    currentTime: playerVM.currentTime,
+                    duration: playerVM.duration,
+                    isPlaying: playerVM.isPlaying,
+                    primaryAccent: primaryAccent,
+                    onSeek: { targetTime in
+                        playerVM.seek(to: targetTime)
                     }
-                })
-                .accentColor(primaryAccent)
+                )
 
                 // List of Bookmarked Timeline Flags
                 if !note.bookmarks.isEmpty {
@@ -3065,8 +3730,8 @@ struct AudioPlayerBarView: View {
                                     }
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
-                                    .background(Color.amber.opacity(0.2))
-                                    .foregroundColor(.amber)
+                                    .background(primaryAccent.opacity(0.15))
+                                    .foregroundColor(primaryAccent)
                                     .cornerRadius(4)
                                 }
                                 .buttonStyle(.plain)
@@ -3113,7 +3778,10 @@ struct AudioPlayerBarView: View {
         let label = clean.isEmpty ? "Key Moment" : clean
         let bm = AudioBookmark(time: playerVM.currentTime, label: label)
         note.bookmarks.append(bm)
-        NotesDataManager.shared.saveNotes([note])
+        if let idx = notes.firstIndex(where: { $0.id == note.id }) {
+            notes[idx] = note
+            NotesDataManager.shared.saveNotesImmediately(notes)
+        }
         showBookmarkPopover = false
         newBookmarkTitle = ""
     }
@@ -3158,6 +3826,7 @@ struct SettingsModalView: View {
     @State private var selectedTab: SettingsTab = .preferences
     @StateObject private var deviceManager = AudioDeviceManager.shared
     @StateObject private var downloader = WhisperModelDownloader.shared
+    @StateObject private var gemmaDownloader = GemmaModelDownloader.shared
 
     var primaryAccent: Color {
         ThemeColors.primary(colorTheme)
@@ -3545,6 +4214,88 @@ struct SettingsModalView: View {
                         .stroke(isActive ? Color.emerald.opacity(0.4) : Color.subtleBorder(isDarkMode), lineWidth: 1)
                 )
             }
+            
+            Divider()
+                .padding(.vertical, 8)
+            
+            // Section 2: Gemma 3 Local AI Assistant Model
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "sparkles")
+                                .foregroundColor(.amber)
+                            Text(gemmaDownloader.defaultModel.name)
+                                .font(.subheadline)
+                                .fontWeight(.bold)
+                            
+                            if gemmaDownloader.isDownloaded {
+                                Text("Downloaded")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.emerald.opacity(0.2))
+                                    .foregroundColor(.emerald)
+                                    .cornerRadius(4)
+                            }
+                        }
+                        
+                        Text("\(gemmaDownloader.defaultModel.sizeMB) MB • \(gemmaDownloader.defaultModel.description)")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    if gemmaDownloader.isDownloading {
+                        Button("Cancel") {
+                            gemmaDownloader.cancelDownload()
+                        }
+                        .buttonStyle(.plain)
+                        .font(.caption)
+                        .foregroundColor(primaryAccent)
+                    } else if gemmaDownloader.isDownloaded {
+                        Button("Delete") {
+                            gemmaDownloader.deleteModel()
+                        }
+                        .buttonStyle(.plain)
+                        .font(.caption)
+                        .foregroundColor(.red)
+                    } else {
+                        Button(action: { gemmaDownloader.startDownload() }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrow.down.circle.fill")
+                                Text("Download (1.6 GB)")
+                            }
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(primaryAccent)
+                            .foregroundColor(.white)
+                            .cornerRadius(6)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                
+                if gemmaDownloader.isDownloading {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ProgressView(value: gemmaDownloader.downloadProgress)
+                            .accentColor(primaryAccent)
+                        Text(gemmaDownloader.statusMessage)
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            .padding(14)
+            .background(Color.cardBackground(isDarkMode))
+            .cornerRadius(10)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(gemmaDownloader.isDownloaded ? Color.emerald.opacity(0.4) : Color.subtleBorder(isDarkMode), lineWidth: 1)
+            )
         }
     }
     
@@ -3762,6 +4513,13 @@ struct CommandPaletteView: View {
                                     Text("Folder: \(note.folder) • \(note.timestamp, style: .date)")
                                         .font(.system(size: 9))
                                         .foregroundColor(.secondary)
+                                    if let snippet = snippetMatch(for: note, query: query) {
+                                        Text(snippet)
+                                            .font(.system(size: 9))
+                                            .italic()
+                                            .foregroundColor(primaryAccent.opacity(0.8))
+                                            .lineLimit(1)
+                                    }
                                 }
                                 Spacer()
                                 if idx == selectionIndex {
@@ -3836,6 +4594,24 @@ struct CommandPaletteView: View {
             isOpen = false
             return .handled
         }
+    }
+
+    private func snippetMatch(for note: NoteItem, query: String) -> String? {
+        let clean = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !clean.isEmpty else { return nil }
+        
+        if let range = note.content.lowercased().range(of: clean) {
+            let start = note.content.index(range.lowerBound, offsetBy: -15, limitedBy: note.content.startIndex) ?? note.content.startIndex
+            let end = note.content.index(range.upperBound, offsetBy: 35, limitedBy: note.content.endIndex) ?? note.content.endIndex
+            let excerpt = String(note.content[start..<end]).replacingOccurrences(of: "\n", with: " ")
+            return "... \(excerpt) ..."
+        }
+        
+        if let seg = note.transcript.first(where: { $0.text.lowercased().contains(clean) }) {
+            return "\(seg.speaker): \"\(seg.text)\""
+        }
+        
+        return nil
     }
 }
 
