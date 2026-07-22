@@ -1746,14 +1746,21 @@ struct HeaderToolbarView: View {
                 .buttonStyle(.plain)
                 .help("Import Audio File (.wav, .mp3, .m4a)")
 
-                // Export Note Button
-                Button(action: { exportNote(noteBinding.wrappedValue) }) {
+                // Export Note Menu Button
+                Menu {
+                    Button(action: { exportNoteMarkdown(noteBinding.wrappedValue) }) {
+                        Label("Export as Markdown (.md)", systemImage: "doc.text")
+                    }
+                    Button(action: { exportNoteHTML(noteBinding.wrappedValue) }) {
+                        Label("Export as Web Page (.html)", systemImage: "globe")
+                    }
+                } label: {
                     Image(systemName: "square.and.arrow.up")
                         .font(.body)
                         .foregroundColor(primaryAccent)
                 }
-                .buttonStyle(.plain)
-                .help("Export Note (.md)")
+                .menuStyle(.borderlessButton)
+                .help("Export Note (Markdown / HTML)")
                 
                 // Delete Note Trash Icon
                 Button(action: { showDeleteAlert = true }) {
@@ -1884,9 +1891,9 @@ struct HeaderToolbarView: View {
         }
     }
 
-    private func exportNote(_ note: NoteItem) {
+    private func exportNoteMarkdown(_ note: NoteItem) {
         let panel = NSSavePanel()
-        panel.title = "Export Note"
+        panel.title = "Export Note as Markdown"
         panel.nameFieldStringValue = "\(note.title).md"
         panel.allowedContentTypes = [UTType.plainText]
         
@@ -1903,6 +1910,62 @@ struct HeaderToolbarView: View {
                 try? markdownExport.write(to: url, atomically: true, encoding: .utf8)
             }
         }
+    }
+
+    private func exportNoteHTML(_ note: NoteItem) {
+        let panel = NSSavePanel()
+        panel.title = "Export Note as HTML"
+        panel.nameFieldStringValue = "\(note.title).html"
+        panel.allowedContentTypes = [UTType.html]
+        
+        panel.begin { response in
+            if response == .OK, let url = panel.url {
+                let html = generateFormattedHTML(for: note)
+                try? html.write(to: url, atomically: true, encoding: .utf8)
+            }
+        }
+    }
+
+    private func generateFormattedHTML(for note: NoteItem) -> String {
+        let bodyHTML = note.content
+            .replacingOccurrences(of: "\n", with: "<br>")
+            .replacingOccurrences(of: "- [ ]", with: "<span>&#9633;</span>")
+            .replacingOccurrences(of: "- [x]", with: "<span>&#9745;</span>")
+        
+        var transcriptHTML = ""
+        if !note.transcript.isEmpty {
+            transcriptHTML += "<h2>Diarized Transcript</h2><div class='transcript'>"
+            for seg in note.transcript {
+                let timeStr = formatTime(seg.startTime)
+                transcriptHTML += "<div class='segment'><span class='speaker'>\(seg.speaker)</span> <span class='time'>[\(timeStr)]</span>: \(seg.text)</div>"
+            }
+            transcriptHTML += "</div>"
+        }
+        
+        return """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <title>\(note.title)</title>
+            <style>
+                body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #0f172a; color: #f8fafc; padding: 40px; max-width: 800px; margin: 0 auto; line-height: 1.6; }
+                h1 { color: #38bdf8; border-bottom: 1px solid #334155; padding-bottom: 10px; }
+                h2 { color: #818cf8; margin-top: 30px; }
+                .content { background: #1e293b; padding: 24px; border-radius: 12px; border: 1px solid #334155; margin-bottom: 24px; }
+                .transcript { background: #1e293b; padding: 24px; border-radius: 12px; border: 1px solid #334155; }
+                .segment { margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #334155; }
+                .speaker { font-weight: bold; color: #34d399; }
+                .time { font-family: monospace; color: #94a3b8; font-size: 0.85em; }
+            </style>
+        </head>
+        <body>
+            <h1>\(note.title)</h1>
+            <div class='content'>\(bodyHTML)</div>
+            \(transcriptHTML)
+        </body>
+        </html>
+        """
     }
 }
 
@@ -2578,6 +2641,30 @@ struct EditorPanelView: View {
                     }
                     .buttonStyle(.plain)
                     .help("Code Snippet (`code`)")
+
+                    Button(action: { insertMarkdown("[[", "]]") }) {
+                        Text("[ [ ] ]")
+                            .font(.system(size: 10, weight: .bold))
+                            .frame(width: 28, height: 24)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Wiki Link ([[Note Title]])")
+
+                    Button(action: { insertMarkdown("\n| Header 1 | Header 2 |\n| --- | --- |\n| Item 1 | Item 2 |\n", "") }) {
+                        Image(systemName: "tablecells")
+                            .font(.system(size: 12))
+                            .frame(width: 24, height: 24)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Insert Table Template")
+
+                    Button(action: { insertMarkdown("\n> ", "") }) {
+                        Image(systemName: "text.quote")
+                            .font(.system(size: 12))
+                            .frame(width: 24, height: 24)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Blockquote (> Quote)")
 
                     Spacer()
                 }
