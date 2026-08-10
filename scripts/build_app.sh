@@ -1,8 +1,10 @@
 #!/bin/bash
 set -e
 
+VERSION="${1:-1.0.0}"
+
 echo "========================================"
-echo "  Building WhispNotes Release Package  "
+echo "  Building WhispNotes v${VERSION} Release  "
 echo "========================================"
 
 # 1. Compile Swift executable in release mode
@@ -49,7 +51,7 @@ codesign -v --verbose "$APP_DIR"
 # 5. Build DMG Package
 echo "==> Packaging DMG Installer..."
 DMG_STAGE="build/dmg_stage"
-DMG_OUTPUT="build/WhispNotes-1.0.0.dmg"
+DMG_OUTPUT="build/WhispNotes-${VERSION}.dmg"
 
 rm -rf "$DMG_STAGE" "$DMG_OUTPUT"
 mkdir -p "$DMG_STAGE"

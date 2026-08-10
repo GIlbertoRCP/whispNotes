@@ -1,16 +1,31 @@
-# Swift Package Manager & Build artifacts
+# Swift Package Manager & Xcode Build Artifacts
 .build/
 build/
 Packages/
-*.xcodeproj
+.swiftpm/
+xcuserdata/
+*.xcodeproj/
+!WhispNotes.xcodeproj
 *.xcworkspace
 
 # macOS System Files
 .DS_Store
+.AppleDouble
+.LSSharedFileList
 *.swp
 *~
 
-# Temporary Audio Files
+# Release & Packaging Output
+*.dmg
+*.zip
+
+# Temporary Audio & Model Downloads
 *.wav
 *.mp3
 *.m4a
+*.bin
+*.gguf
+
+# IDE & Editor Files
+.vscode/
+.idea/

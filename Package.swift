@@ -23,6 +23,11 @@ let package = Package(
                     "-Xlinker", "Info.plist"
                 ])
             ]
+        ),
+        .testTarget(
+            name: "swift-whispnotesTests",
+            dependencies: ["swift-whispnotes"],
+            path: "Tests/swift-whispnotesTests"
         )
     ]
 )

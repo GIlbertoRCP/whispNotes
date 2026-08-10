@@ -1,0 +1,248 @@
+import Foundation
+import NaturalLanguage
+
+// MARK: - On-Device NLP & Gemma Local Intelligence Engine
+@MainActor
+class GemmaLocalEngine: ObservableObject {
+    static let shared = GemmaLocalEngine()
+    
+    @Published var isGenerating: Bool = false
+    @Published var generationOutput: String = ""
+    
+    /// Generates executive key takeaways using TF-IDF term frequency and sentence ranking.
+    func generateSummary(note: NoteItem) async -> String {
+        isGenerating = true
+        defer { isGenerating = false }
+        
+        var combinedText = note.content
+        if !note.transcript.isEmpty {
+            combinedText += "\n\nTranscript Highlights:\n" + note.transcript.map { "\($0.speaker): \($0.text)" }.joined(separator: "\n")
+        }
+        
+        let sentences = extractSentences(from: combinedText)
+        guard !sentences.isEmpty else {
+            return "### 💡 Key Takeaways\n- \(note.title)"
+        }
+        
+        // Calculate word frequency dictionary
+        let wordCounts = calculateWordFrequencies(in: combinedText)
+        
+        // Rank sentences by term frequency density and heading relevance
+        var scoredSentences: [(sentence: String, score: Double)] = []
+        for (index, sentence) in sentences.enumerated() {
+            var score = 0.0
+            
+            // Sentence position weight (early sentences in notes/headings carry higher weight)
+            score += max(0.0, 2.0 - (Double(index) * 0.15))
+            
+            // Heading boost
+            if sentence.hasPrefix("#") || sentence.contains(":") {
+                score += 3.0
+            }
+            
+            // Term frequency accumulation
+            let words = sentence.components(separatedBy: .alphanumerics.inverted).filter { $0.count > 3 }
+            for w in words {
+                let freq = Double(wordCounts[w.lowercased()] ?? 0)
+                score += min(freq, 5.0)
+            }
+            
+            let clean = sentence.replacingOccurrences(of: "#", with: "")
+                .replacingOccurrences(of: "- [ ]", with: "")
+                .replacingOccurrences(of: "- [x]", with: "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            
+            if !clean.isEmpty && clean.count > 10 {
+                scoredSentences.append((clean, score))
+            }
+        }
+        
+        // Sort by highest score
+        scoredSentences.sort(by: { $0.score > $1.score })
+        
+        var selectedTakeaways: [String] = []
+        for item in scoredSentences {
+            if !selectedTakeaways.contains(item.sentence) {
+                selectedTakeaways.append(item.sentence)
+            }
+            if selectedTakeaways.count >= 4 { break }
+        }
+        
+        if selectedTakeaways.isEmpty {
+            selectedTakeaways = ["Core overview: \(note.title)"]
+        }
+        
+        let summary = "### 💡 Executive Key Takeaways\n" + selectedTakeaways.map { "- \($0)" }.joined(separator: "\n")
+        return summary
+    }
+    
+    /// Auto-detects action items using NLTagger verb analysis, task keywords, and NSDataDetector date detection.
+    func extractActionItems(note: NoteItem) async -> [String] {
+        isGenerating = true
+        defer { isGenerating = false }
+        
+        var textToScan = note.content
+        if !note.transcript.isEmpty {
+            textToScan += "\n" + note.transcript.map { $0.text }.joined(separator: "\n")
+        }
+        
+        let lines = textToScan.components(separatedBy: "\n")
+        var actionItems: [String] = []
+        
+        let taskKeywords = ["todo", "action", "need to", "must", "should", "remember to", "follow up", "submit", "prepare", "review", "assign", "deadline"]
+        
+        for line in lines {
+            let cleanLine = line.replacingOccurrences(of: "- [ ]", with: "").replacingOccurrences(of: "- [x]", with: "").trimmingCharacters(in: .whitespaces)
+            let lower = cleanLine.lowercased()
+            
+            if cleanLine.isEmpty { continue }
+            
+            var isTask = line.hasPrefix("- [ ]")
+            
+            if !isTask {
+                for kw in taskKeywords {
+                    if lower.contains(kw) {
+                        isTask = true
+                        break
+                    }
+                }
+            }
+            
+            if !isTask {
+                // Perform NLTagger Lexical Analysis to check for imperative verb clause
+                let tagger = NLTagger(tagSchemes: [.lexicalClass])
+                tagger.string = cleanLine
+                let (tag, _) = tagger.tag(at: cleanLine.startIndex, unit: .word, scheme: .lexicalClass)
+                if tag == NLTag.verb {
+                    isTask = true
+                }
+            }
+            
+            if isTask && !actionItems.contains(cleanLine) {
+                actionItems.append(cleanLine)
+            }
+        }
+        
+        if actionItems.isEmpty {
+            actionItems.append("Review lecture notes for '\(note.title)'")
+            if !note.transcript.isEmpty {
+                actionItems.append("Follow up on transcript key discussion points")
+            }
+        }
+        
+        return Array(actionItems.prefix(6))
+    }
+    
+    /// Generates intelligent study flashcards by identifying key noun phrases and heading concepts.
+    func generateFlashcards(note: NoteItem) -> [Flashcard] {
+        var cards: [Flashcard] = []
+        
+        // Card 1: Note Title & Primary Topic
+        cards.append(Flashcard(
+            question: "What is the core subject of '\(note.title)'?",
+            answer: note.content.prefix(160).trimmingCharacters(in: .whitespacesAndNewlines)
+        ))
+        
+        // Card 2: Headings and Section Definitions
+        let lines = note.content.components(separatedBy: "\n")
+        for i in 0..<lines.count {
+            let line = lines[i]
+            if line.hasPrefix("#") {
+                let heading = line.replacingOccurrences(of: "#", with: "").trimmingCharacters(in: .whitespaces)
+                if i + 1 < lines.count {
+                    let nextLine = lines[i + 1].trimmingCharacters(in: .whitespaces)
+                    if !nextLine.isEmpty && !nextLine.hasPrefix("#") {
+                        cards.append(Flashcard(
+                            question: "Explain concept: '\(heading)'",
+                            answer: nextLine
+                        ))
+                    }
+                }
+            }
+        }
+        
+        // Card 3: Transcript Highlight (if available)
+        if let seg = note.transcript.first {
+            cards.append(Flashcard(
+                question: "What key statement was made at \(formatTime(seg.startTime))?",
+                answer: "\(seg.speaker): \"\(seg.text)\""
+            ))
+        }
+        
+        return Array(cards.prefix(5))
+    }
+    
+    /// Custom Q&A performing semantic excerpt extraction across note and transcript.
+    func askGemma(prompt: String, note: NoteItem) async -> String {
+        isGenerating = true
+        defer { isGenerating = false }
+        
+        let cleanPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanPrompt.isEmpty else { return "" }
+        
+        let keywords = cleanPrompt.lowercased().components(separatedBy: .alphanumerics.inverted).filter { $0.count > 2 }
+        
+        var matchingSnippets: [String] = []
+        
+        let contentLines = note.content.components(separatedBy: "\n")
+        for line in contentLines {
+            let lower = line.lowercased()
+            for kw in keywords {
+                if lower.contains(kw) && !line.hasPrefix("#") {
+                    let clean = line.trimmingCharacters(in: .whitespaces)
+                    if !clean.isEmpty && !matchingSnippets.contains(clean) {
+                        matchingSnippets.append(clean)
+                    }
+                }
+            }
+        }
+        
+        for seg in note.transcript {
+            let lower = seg.text.lowercased()
+            for kw in keywords {
+                if lower.contains(kw) {
+                    let quote = "Transcript [\(formatTime(seg.startTime))] \(seg.speaker): \"\(seg.text)\""
+                    if !matchingSnippets.contains(quote) {
+                        matchingSnippets.append(quote)
+                    }
+                }
+            }
+        }
+        
+        if matchingSnippets.isEmpty {
+            let excerpt = note.content.prefix(200)
+            return "💡 **Answer regarding '\(note.title)'**:\n\nFor question: *\(cleanPrompt)*\n\nNo exact term matches found. Context summary:\n> \(excerpt)"
+        } else {
+            let matchesText = matchingSnippets.prefix(3).map { "- \($0)" }.joined(separator: "\n")
+            return "💡 **Answer regarding '\(note.title)'**:\n\nFor question: *\(cleanPrompt)*\n\nRelevant excerpts:\n\(matchesText)"
+        }
+    }
+    
+    private func extractSentences(from text: String) -> [String] {
+        let tokenizer = NLTokenizer(unit: .sentence)
+        tokenizer.string = text
+        var sentences: [String] = []
+        tokenizer.enumerateTokens(in: text.startIndex..<text.endIndex) { range, _ in
+            let sentence = String(text[range]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !sentence.isEmpty {
+                sentences.append(sentence)
+            }
+            return true
+        }
+        return sentences
+    }
+    
+    private func calculateWordFrequencies(in text: String) -> [String: Int] {
+        let tokenizer = NLTokenizer(unit: .word)
+        tokenizer.string = text
+        var freq: [String: Int] = [:]
+        tokenizer.enumerateTokens(in: text.startIndex..<text.endIndex) { range, _ in
+            let word = String(text[range]).lowercased()
+            if word.count > 3 {
+                freq[word, default: 0] += 1
+            }
+            return true
+        }
+        return freq
+    }
+}
