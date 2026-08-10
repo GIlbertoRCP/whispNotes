@@ -56,7 +56,19 @@ struct SidebarView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Sidebar Header
-            HStack {
+            HStack(spacing: 8) {
+                if let nsImg = NSImage(named: "AppIcon") {
+                    Image(nsImage: nsImg)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 22, height: 22)
+                        .cornerRadius(5)
+                } else {
+                    Image(systemName: "leaf.fill")
+                        .font(.title3)
+                        .foregroundColor(primaryAccent)
+                }
+                
                 Text("whispNotes")
                     .font(.title3)
                     .fontWeight(.bold)
