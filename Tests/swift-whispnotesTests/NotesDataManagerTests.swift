@@ -7,7 +7,7 @@ final class NotesDataManagerTests: XCTestCase {
         let text = "Hello world! This is WhispNotes.\nSecond line with words."
         let (words, chars) = calculateWordAndCharCount(text)
         
-        XCTAssertEqual(words, 8)
+        XCTAssertEqual(words, 9)
         XCTAssertGreaterThan(chars, 30)
     }
     

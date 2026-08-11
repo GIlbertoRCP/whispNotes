@@ -22,7 +22,7 @@ final class NoteExporterTests: XCTestCase {
         XCTAssertTrue(markdownOutput.contains("folder: \"Lectures\""))
         XCTAssertTrue(markdownOutput.contains("# Lecture 1"))
         XCTAssertTrue(markdownOutput.contains("## Diarized Audio Transcript"))
-        XCTAssertTrue(markdownOutput.contains("[00:00] Speaker 1: Welcome to class"))
+        XCTAssertTrue(markdownOutput.contains("**Speaker 1** [00:00] : Welcome to class"))
     }
     
     func testHTMLExportConversion() {

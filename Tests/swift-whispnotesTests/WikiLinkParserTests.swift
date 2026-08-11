@@ -7,7 +7,7 @@ final class WikiLinkParserTests: XCTestCase {
         let line = "Referenced from [[Lecture Notes]] with #lecture tag."
         let tokens = parseLineTokens(line)
         
-        XCTAssertEqual(tokens.count, 4)
+        XCTAssertEqual(tokens.count, 5)
         
         if case .text(let prefix) = tokens[0].type {
             XCTAssertEqual(prefix, "Referenced from ")
