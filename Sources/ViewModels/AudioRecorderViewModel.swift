@@ -10,7 +10,7 @@ class AudioRecorderViewModel: ObservableObject {
     
     private var audioRecorder: AVAudioRecorder?
     private var timer: Timer?
-    private var currentAudioURL: URL?
+    var currentAudioURL: URL?
 
     func startRecording() {
         AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in

@@ -85,7 +85,7 @@ class AudioPlayerViewModel: ObservableObject {
         }
     }
 
-    private func updateActiveSegment(_ time: Double) {
+    func updateActiveSegment(_ time: Double) {
         let index = transcriptSegments.firstIndex { time >= $0.startTime && time <= $0.endTime } ?? -1
         if index != activeSegmentIndex {
             activeSegmentIndex = index

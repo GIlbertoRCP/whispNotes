@@ -35,16 +35,16 @@ final class AudioViewModelTests: XCTestCase {
         
         playerVM.loadAudio(url: URL(fileURLWithPath: "/tmp/dummy.mp3"), transcript: segments)
         
-        playerVM.updateActiveSegment(for: 2.5)
+        playerVM.updateActiveSegment(2.5)
         XCTAssertEqual(playerVM.activeSegmentIndex, 0)
         
-        playerVM.updateActiveSegment(for: 7.0)
+        playerVM.updateActiveSegment(7.0)
         XCTAssertEqual(playerVM.activeSegmentIndex, 1)
         
-        playerVM.updateActiveSegment(for: 12.0)
+        playerVM.updateActiveSegment(12.0)
         XCTAssertEqual(playerVM.activeSegmentIndex, 2)
         
-        playerVM.updateActiveSegment(for: 20.0)
+        playerVM.updateActiveSegment(20.0)
         XCTAssertEqual(playerVM.activeSegmentIndex, -1)
     }
 
