@@ -115,10 +115,43 @@ struct CommandPaletteView: View {
             }
             
             // Footer Navigation Hint
-            HStack {
-                Text("↑↓ Navigate  •  ↵ Select  •  Esc Dismiss")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
+            HStack(spacing: 12) {
+                HStack(spacing: 4) {
+                    Text("↑↓")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .background(Color.cardBackground(isDark))
+                        .cornerRadius(3)
+                    Text("Navigate")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+
+                HStack(spacing: 4) {
+                    Text("↵")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .background(Color.cardBackground(isDark))
+                        .cornerRadius(3)
+                    Text("Select")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+
+                HStack(spacing: 4) {
+                    Text("esc")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .background(Color.cardBackground(isDark))
+                        .cornerRadius(3)
+                    Text("Dismiss")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                
                 Spacer()
             }
             .padding(.horizontal, 16)

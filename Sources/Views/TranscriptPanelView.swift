@@ -76,91 +76,101 @@ struct TranscriptPanelView: View {
                             let isActive = idx == playerVM.activeSegmentIndex
                             let isMe = seg.speaker == "Speaker 1"
                             
-                            VStack(alignment: .leading, spacing: 8) {
-                                HStack {
-                                    // Speaker tag with Popover Renamer
-                                    Button(action: {
-                                        renamingSpeaker = seg.speaker
-                                        newSpeakerName = seg.speaker
-                                    }) {
-                                        HStack(spacing: 4) {
-                                            Image(systemName: "person.circle.fill")
-                                                .font(.system(size: 11))
-                                            Text(seg.speaker)
-                                                .font(.system(size: 11, weight: .bold))
-                                            Image(systemName: "pencil")
-                                                .font(.system(size: 8))
-                                        }
-                                        .foregroundColor(isMe ? secondaryAccent : .emerald)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .popover(isPresented: Binding(
-                                        get: { renamingSpeaker == seg.speaker },
-                                        set: { if !$0 { renamingSpeaker = nil } }
-                                    )) {
-                                        VStack(alignment: .leading, spacing: 8) {
-                                            Text("Rename Speaker Globally")
-                                                .font(.caption)
-                                                .fontWeight(.bold)
-                                            TextField("Speaker Name...", text: $newSpeakerName, onCommit: {
-                                                renameSpeakerGlobally(oldName: seg.speaker, newName: newSpeakerName)
-                                                renamingSpeaker = nil
-                                            })
-                                            .textFieldStyle(.roundedBorder)
-                                            .frame(width: 160)
-                                            
-                                            HStack {
-                                                Spacer()
-                                                Button("Save") {
-                                                    renameSpeakerGlobally(oldName: seg.speaker, newName: newSpeakerName)
-                                                    renamingSpeaker = nil
-                                                }
-                                                .buttonStyle(.borderedProminent)
-                                                .controlSize(.small)
-                                            }
-                                        }
-                                        .padding()
-                                    }
-                                    
-                                    Spacer()
-                                    
-                                    // Seek Moment Play button
-                                    Button(action: { playerVM.seek(to: seg.startTime) }) {
-                                        HStack(spacing: 4) {
-                                            Image(systemName: "play.fill")
-                                                .font(.system(size: 8))
-                                            Text(formatTime(seg.startTime))
-                                                .font(.system(size: 10, design: .monospaced))
-                                        }
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 3)
-                                        .background(Color.black.opacity(0.2))
-                                        .cornerRadius(6)
-                                    }
-                                    .buttonStyle(.plain)
-                                    
-                                    // Copy Quote to Editor Button
-                                    Button(action: { insertQuoteAtCursor(text: seg.text, start: seg.startTime) }) {
-                                        Image(systemName: "quote.bubble")
-                                            .font(.system(size: 10))
-                                            .foregroundColor(.secondary)
-                                            .padding(4)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .help("Copy quote to editor")
+                            HStack(spacing: 0) {
+                                if isActive {
+                                    Rectangle()
+                                        .fill(primaryAccent)
+                                        .frame(width: 3)
                                 }
                                 
-                                Text(seg.text)
-                                    .font(.subheadline)
-                                    .foregroundColor(isActive ? (isDark ? .white : Color(red: 15/255, green: 23/255, blue: 42/255)) : .secondary)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                VStack(alignment: .leading, spacing: 8) {
+                                    HStack {
+                                        // Speaker tag with Popover Renamer
+                                        Button(action: {
+                                            renamingSpeaker = seg.speaker
+                                            newSpeakerName = seg.speaker
+                                        }) {
+                                            HStack(spacing: 4) {
+                                                Image(systemName: "person.circle.fill")
+                                                    .font(.system(size: 11))
+                                                Text(seg.speaker)
+                                                    .font(.system(size: 11, weight: .bold))
+                                                Image(systemName: "pencil")
+                                                    .font(.system(size: 8))
+                                            }
+                                            .foregroundColor(isMe ? secondaryAccent : (isDark ? Color(red: 52/255, green: 211/255, blue: 153/255) : Color(red: 5/255, green: 150/255, blue: 105/255)))
+                                        }
+                                        .buttonStyle(.plain)
+                                        .popover(isPresented: Binding(
+                                            get: { renamingSpeaker == seg.speaker },
+                                            set: { if !$0 { renamingSpeaker = nil } }
+                                        )) {
+                                            VStack(alignment: .leading, spacing: 8) {
+                                                Text("Rename Speaker Globally")
+                                                    .font(.caption)
+                                                    .fontWeight(.bold)
+                                                TextField("Speaker Name...", text: $newSpeakerName, onCommit: {
+                                                    renameSpeakerGlobally(oldName: seg.speaker, newName: newSpeakerName)
+                                                    renamingSpeaker = nil
+                                                })
+                                                .textFieldStyle(.roundedBorder)
+                                                .frame(width: 160)
+                                                
+                                                HStack {
+                                                    Spacer()
+                                                    Button("Save") {
+                                                        renameSpeakerGlobally(oldName: seg.speaker, newName: newSpeakerName)
+                                                        renamingSpeaker = nil
+                                                    }
+                                                    .buttonStyle(.borderedProminent)
+                                                    .controlSize(.small)
+                                                }
+                                            }
+                                            .padding()
+                                        }
+                                        
+                                        Spacer()
+                                        
+                                        // Seek Moment Play button
+                                        Button(action: { playerVM.seek(to: seg.startTime) }) {
+                                            HStack(spacing: 4) {
+                                                Image(systemName: "play.fill")
+                                                    .font(.system(size: 8))
+                                                Text(formatTime(seg.startTime))
+                                                    .font(.system(size: 10, design: .monospaced))
+                                            }
+                                            .padding(.horizontal, 7)
+                                            .padding(.vertical, 3)
+                                            .background(primaryAccent.opacity(0.12))
+                                            .foregroundColor(primaryAccent)
+                                            .cornerRadius(5)
+                                        }
+                                        .buttonStyle(.plain)
+                                        
+                                        // Copy Quote to Editor Button
+                                        Button(action: { insertQuoteAtCursor(text: seg.text, start: seg.startTime) }) {
+                                            Image(systemName: "quote.bubble")
+                                                .font(.system(size: 10))
+                                                .foregroundColor(.secondary)
+                                                .padding(4)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .help("Copy quote to editor")
+                                    }
+                                    
+                                    Text(seg.text)
+                                        .font(.subheadline)
+                                        .lineSpacing(4)
+                                        .foregroundColor(isActive ? (isDark ? .white : Color(red: 15/255, green: 23/255, blue: 42/255)) : (isDark ? Color(red: 203/255, green: 213/255, blue: 225/255) : Color(red: 51/255, green: 65/255, blue: 85/255)))
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .padding(12)
                             }
-                            .padding(12)
-                            .background(isActive ? primaryAccent.opacity(0.12) : Color.cardBackground(isDark))
-                            .cornerRadius(10)
+                            .background(isActive ? primaryAccent.opacity(0.08) : Color.cardBackground(isDark))
+                            .cornerRadius(8)
                             .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .stroke(isActive ? primaryAccent.opacity(0.4) : Color.subtleBorder(isDark), lineWidth: 1)
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(isActive ? primaryAccent.opacity(0.3) : Color.subtleBorder(isDark), lineWidth: 1)
                             )
                             .id(idx)
                         }

@@ -237,6 +237,25 @@ struct EditorPanelView: View {
                         .background(Color.subtleBorder(isDark))
                     
                     ScrollView {
+                        VStack(alignment: .leading) {
+                            MarkdownRendererView(
+                                markdown: localContent.replacingOccurrences(of: "\\n", with: "\n"),
+                                notes: $notes,
+                                selectedNoteId: $selectedNoteId,
+                                playerVM: playerVM,
+                                isDark: isDark,
+                                primaryAccent: primaryAccent,
+                                secondaryAccent: secondaryAccent
+                            )
+                            .frame(maxWidth: 720, alignment: .leading)
+                        }
+                        .padding(24)
+                    }
+                    .background(Color.panelBackground(isDark))
+                }
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading) {
                         MarkdownRendererView(
                             markdown: localContent.replacingOccurrences(of: "\\n", with: "\n"),
                             notes: $notes,
@@ -246,24 +265,9 @@ struct EditorPanelView: View {
                             primaryAccent: primaryAccent,
                             secondaryAccent: secondaryAccent
                         )
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(20)
+                        .frame(maxWidth: 720, alignment: .leading)
                     }
-                    .background(Color.panelBackground(isDark))
-                }
-            } else {
-                ScrollView {
-                    MarkdownRendererView(
-                        markdown: localContent.replacingOccurrences(of: "\\n", with: "\n"),
-                        notes: $notes,
-                        selectedNoteId: $selectedNoteId,
-                        playerVM: playerVM,
-                        isDark: isDark,
-                        primaryAccent: primaryAccent,
-                        secondaryAccent: secondaryAccent
-                    )
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(24)
+                    .padding(32)
                 }
                 .background(Color.panelBackground(isDark))
             }

@@ -58,9 +58,8 @@ struct InteractiveWaveformView: View {
                 
                 // Playhead Indicator
                 Rectangle()
-                    .fill(Color.white)
-                    .frame(width: 2, height: height)
-                    .shadow(color: primaryAccent, radius: 4)
+                    .fill(Color.primary)
+                    .frame(width: 1.5, height: height)
                     .offset(x: width * CGFloat(progress))
             }
             .contentShape(Rectangle())
