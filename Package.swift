@@ -12,9 +12,10 @@ let package = Package(
             targets: ["swift-whispnotes"])
     ],
     targets: [
-        .executableTarget(
-            name: "swift-whispnotes",
+        .target(
+            name: "WhispNotesLibrary",
             path: "Sources",
+            exclude: ["AppMain"],
             linkerSettings: [
                 .unsafeFlags([
                     "-Xlinker", "-sectcreate",
@@ -24,9 +25,14 @@ let package = Package(
                 ])
             ]
         ),
+        .executableTarget(
+            name: "swift-whispnotes",
+            dependencies: ["WhispNotesLibrary"],
+            path: "Sources/AppMain"
+        ),
         .testTarget(
             name: "swift-whispnotesTests",
-            dependencies: ["swift-whispnotes"],
+            dependencies: ["WhispNotesLibrary"],
             path: "Tests/swift-whispnotesTests"
         )
     ]

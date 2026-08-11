@@ -1,8 +1,7 @@
 import SwiftUI
 
 // MARK: - Main SwiftUI Application Entry
-@main
-struct WhispNotesSwiftApp: App {
+public struct WhispNotesSwiftApp: App {
     @StateObject private var recorderVM = AudioRecorderViewModel()
     @StateObject private var playerVM = AudioPlayerViewModel()
     
@@ -17,12 +16,12 @@ struct WhispNotesSwiftApp: App {
         return notes.first(where: { $0.id == id })
     }
 
-    init() {
+    public init() {
         NSApplication.shared.setActivationPolicy(.regular)
         NSApplication.shared.activate(ignoringOtherApps: true)
     }
 
-    var body: some Scene {
+    public var body: some Scene {
         WindowGroup {
             ContentView(
                 notes: $notes,

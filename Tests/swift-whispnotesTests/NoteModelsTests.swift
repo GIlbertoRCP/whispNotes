@@ -1,5 +1,5 @@
 import XCTest
-@testable import swift_whispnotes
+@testable import WhispNotesLibrary
 
 final class NoteModelsTests: XCTestCase {
     
