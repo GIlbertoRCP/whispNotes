@@ -9,6 +9,7 @@ class NotesDataManager: ObservableObject {
     @Published var lastSavedAt: Date? = Date()
     
     private var pendingSaveWorkItem: DispatchWorkItem?
+    private let ioQueue = DispatchQueue(label: "com.whispnotes.datamanager.io", qos: .userInitiated)
     
     var appSupportDir: URL {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -34,17 +35,19 @@ class NotesDataManager: ObservableObject {
     }
 
     func loadNotes() -> [NoteItem] {
-        let decoder = JSONDecoder()
-        if let data = try? Data(contentsOf: fileURL), let notes = try? decoder.decode([NoteItem].self, from: data) {
-            return notes
+        return ioQueue.sync {
+            let decoder = JSONDecoder()
+            if let data = try? Data(contentsOf: fileURL), let notes = try? decoder.decode([NoteItem].self, from: data) {
+                return notes
+            }
+            
+            // Corruption recovery: load latest backup snapshot
+            if let recoveredNotes = recoverFromLatestBackup() {
+                return recoveredNotes
+            }
+            
+            return getSeedNotes()
         }
-        
-        // Corruption recovery: load latest backup snapshot
-        if let recoveredNotes = recoverFromLatestBackup() {
-            return recoveredNotes
-        }
-        
-        return getSeedNotes()
     }
 
     func saveNotes(_ notes: [NoteItem], debounce: Bool = true) {
@@ -56,15 +59,17 @@ class NotesDataManager: ObservableObject {
         
         let workItem = DispatchWorkItem { [weak self] in
             guard let self = self else { return }
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = .prettyPrinted
-            if let data = try? encoder.encode(notes) {
-                try? data.write(to: self.fileURL, options: .atomic)
-                self.createRollingBackup(data: data)
-            }
-            DispatchQueue.main.async {
-                self.isSaving = false
-                self.lastSavedAt = Date()
+            self.ioQueue.async {
+                let encoder = JSONEncoder()
+                encoder.outputFormatting = .prettyPrinted
+                if let data = try? encoder.encode(notes) {
+                    try? data.write(to: self.fileURL, options: .atomic)
+                    self.createRollingBackup(data: data)
+                }
+                DispatchQueue.main.async {
+                    self.isSaving = false
+                    self.lastSavedAt = Date()
+                }
             }
         }
         

@@ -9,6 +9,21 @@ class AudioDeviceManager: ObservableObject {
     @Published var inputDevices: [String] = ["Default System Microphone"]
     @Published var outputDevices: [String] = ["Default System Speaker"]
     
+    private var cancellables = Set<AnyCancellable>()
+
+    init() {
+        refreshDevices()
+        setupDeviceChangeListener()
+    }
+    
+    private func setupDeviceChangeListener() {
+        NotificationCenter.default.publisher(for: .AVAudioEngineConfigurationChange)
+            .sink { [weak self] _ in
+                self?.refreshDevices()
+            }
+            .store(in: &cancellables)
+    }
+
     func refreshDevices() {
         let discoverySession = AVCaptureDevice.DiscoverySession(
             deviceTypes: [.microphone, .external],

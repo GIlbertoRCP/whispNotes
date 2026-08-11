@@ -76,6 +76,83 @@ class NoteExporter {
         }
     }
 
+    /// Generates Markdown string representation of note
+    func generateMarkdownString(_ note: NoteItem) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        
+        var exportText = """
+        ---
+        title: "\(note.title)"
+        folder: "\(note.folder)"
+        created: "\(formatter.string(from: note.timestamp))"
+        standalone: \(note.isStandalone)
+        ---
+
+        # \(note.title)
+
+        \(note.content)
+
+        """
+        
+        if !note.transcript.isEmpty {
+            exportText += "## Diarized Audio Transcript\n\n"
+            for seg in note.transcript {
+                exportText += "**\(seg.speaker)** [\(formatTime(seg.startTime))] : \(seg.text)\n\n"
+            }
+        }
+        return exportText
+    }
+
+    /// Generates HTML string representation of note
+    func generateHTMLString(_ note: NoteItem) -> String {
+        let bodyHTML = note.content.replacingOccurrences(of: "\n", with: "<br>")
+        var transcriptHTML = ""
+        if !note.transcript.isEmpty {
+            transcriptHTML += "<h2>Diarized Transcript</h2><div class='transcript'>"
+            for seg in note.transcript {
+                transcriptHTML += "<div class='segment'><span class='speaker'>\(seg.speaker)</span> <span class='time'>[\(formatTime(seg.startTime))]</span>: \(seg.text)</div>"
+            }
+            transcriptHTML += "</div>"
+        }
+        
+        return """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset='utf-8'>
+            <title>\(note.title)</title>
+            <style>
+                body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background-color: #0f172a; color: #f8fafc; padding: 40px; max-width: 800px; margin: 0 auto; line-height: 1.6; }
+                h1 { color: #38bdf8; border-bottom: 1px solid #334155; padding-bottom: 10px; }
+                .content { background: #1e293b; padding: 24px; border-radius: 12px; border: 1px solid #334155; margin-bottom: 24px; }
+                .transcript { background: #1e293b; padding: 24px; border-radius: 12px; border: 1px solid #334155; }
+                .segment { margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #334155; }
+                .speaker { font-weight: bold; color: #34d399; }
+                .time { font-family: monospace; color: #94a3b8; font-size: 0.85em; }
+            </style>
+        </head>
+        <body>
+            <h1>\(note.title)</h1>
+            <div class='content'>\(bodyHTML)</div>
+            \(transcriptHTML)
+        </body>
+        </html>
+        """
+    }
+
+    /// Generates Plain Text string representation of note
+    func generatePlainTextString(_ note: NoteItem) -> String {
+        var exportText = "Title: \(note.title)\nFolder: \(note.folder)\n\n\(note.content)\n\n"
+        if !note.transcript.isEmpty {
+            exportText += "TRANSCRIPT:\n"
+            for seg in note.transcript {
+                exportText += "\(seg.speaker) [\(formatTime(seg.startTime))]: \(seg.text)\n"
+            }
+        }
+        return exportText
+    }
+
     /// Exports note as Markdown (.md)
     func exportMarkdown(_ note: NoteItem) {
         let savePanel = NSSavePanel()
@@ -85,13 +162,7 @@ class NoteExporter {
         
         savePanel.begin { response in
             guard response == .OK, let url = savePanel.url else { return }
-            var exportText = "# \(note.title)\n\n\(note.content)\n\n"
-            if !note.transcript.isEmpty {
-                exportText += "## Diarized Audio Transcript\n\n"
-                for seg in note.transcript {
-                    exportText += "**\(seg.speaker)** [\(formatTime(seg.startTime))] : \(seg.text)\n\n"
-                }
-            }
+            let exportText = self.generateMarkdownString(note)
             try? exportText.write(to: url, atomically: true, encoding: .utf8)
         }
     }
@@ -105,39 +176,7 @@ class NoteExporter {
         
         savePanel.begin { response in
             guard response == .OK, let url = savePanel.url else { return }
-            let bodyHTML = note.content.replacingOccurrences(of: "\n", with: "<br>")
-            var transcriptHTML = ""
-            if !note.transcript.isEmpty {
-                transcriptHTML += "<h2>Diarized Transcript</h2><div class='transcript'>"
-                for seg in note.transcript {
-                    transcriptHTML += "<div class='segment'><span class='speaker'>\(seg.speaker)</span> <span class='time'>[\(formatTime(seg.startTime))]</span>: \(seg.text)</div>"
-                }
-                transcriptHTML += "</div>"
-            }
-            
-            let html = """
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset='utf-8'>
-                <title>\(note.title)</title>
-                <style>
-                    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background-color: #0f172a; color: #f8fafc; padding: 40px; max-width: 800px; margin: 0 auto; line-height: 1.6; }
-                    h1 { color: #38bdf8; border-bottom: 1px solid #334155; padding-bottom: 10px; }
-                    .content { background: #1e293b; padding: 24px; border-radius: 12px; border: 1px solid #334155; margin-bottom: 24px; }
-                    .transcript { background: #1e293b; padding: 24px; border-radius: 12px; border: 1px solid #334155; }
-                    .segment { margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #334155; }
-                    .speaker { font-weight: bold; color: #34d399; }
-                    .time { font-family: monospace; color: #94a3b8; font-size: 0.85em; }
-                </style>
-            </head>
-            <body>
-                <h1>\(note.title)</h1>
-                <div class='content'>\(bodyHTML)</div>
-                \(transcriptHTML)
-            </body>
-            </html>
-            """
+            let html = self.generateHTMLString(note)
             try? html.write(to: url, atomically: true, encoding: .utf8)
         }
     }
@@ -151,13 +190,7 @@ class NoteExporter {
         
         savePanel.begin { response in
             guard response == .OK, let url = savePanel.url else { return }
-            var exportText = "\(note.title)\n\n\(note.content)\n\n"
-            if !note.transcript.isEmpty {
-                exportText += "TRANSCRIPT:\n"
-                for seg in note.transcript {
-                    exportText += "\(seg.speaker) [\(formatTime(seg.startTime))]: \(seg.text)\n"
-                }
-            }
+            let exportText = self.generatePlainTextString(note)
             try? exportText.write(to: url, atomically: true, encoding: .utf8)
         }
     }

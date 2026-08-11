@@ -61,6 +61,9 @@ class WhisperModelDownloader: NSObject, ObservableObject, URLSessionDownloadDele
         downloadProgress = 0.0
         
         let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 30.0
+        config.timeoutIntervalForResource = 600.0
+        config.waitsForConnectivity = true
         let session = URLSession(configuration: config, delegate: self, delegateQueue: nil)
         downloadTask = session.downloadTask(with: model.downloadURL)
         downloadTask?.resume()
@@ -97,6 +100,16 @@ class WhisperModelDownloader: NSObject, ObservableObject, URLSessionDownloadDele
             let progress = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
             Task { @MainActor in
                 self.downloadProgress = progress
+            }
+        }
+    }
+
+    nonisolated func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        if let err = error {
+            Task { @MainActor in
+                print("Download error: \(err.localizedDescription)")
+                self.downloadingModelId = nil
+                self.downloadProgress = 0.0
             }
         }
     }

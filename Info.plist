@@ -15,15 +15,15 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0.0</string>
+    <string>1.1.0</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>1.1.0</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>NSHumanReadableCopyright</key>
     <string>Copyright © 2026 WhispNotes. All rights reserved.</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>WhispNotes needs microphone access to record audio notes for transcription.</string>
+    <string>WhispNotes requires microphone access to record and transcribe lecture audio locally on your Mac.</string>
     <key>NSSpeechRecognitionUsageDescription</key>
     <string>WhispNotes needs speech recognition access to transcribe audio on-device.</string>
     <key>CFBundleDocumentTypes</key>

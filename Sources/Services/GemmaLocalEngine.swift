@@ -9,6 +9,15 @@ class GemmaLocalEngine: ObservableObject {
     @Published var isGenerating: Bool = false
     @Published var generationOutput: String = ""
     
+    /// Truncates input text to respect local LLM context window limits (~3000 words / 4000 tokens)
+    private func truncateToContextWindow(_ text: String, maxWords: Int = 3000) -> String {
+        let words = text.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
+        if words.count <= maxWords {
+            return text
+        }
+        return words.prefix(maxWords).joined(separator: " ")
+    }
+
     /// Generates executive key takeaways using TF-IDF term frequency and sentence ranking.
     func generateSummary(note: NoteItem) async -> String {
         isGenerating = true
@@ -18,6 +27,7 @@ class GemmaLocalEngine: ObservableObject {
         if !note.transcript.isEmpty {
             combinedText += "\n\nTranscript Highlights:\n" + note.transcript.map { "\($0.speaker): \($0.text)" }.joined(separator: "\n")
         }
+        combinedText = truncateToContextWindow(combinedText)
         
         let sentences = extractSentences(from: combinedText)
         guard !sentences.isEmpty else {
