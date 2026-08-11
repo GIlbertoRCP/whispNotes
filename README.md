@@ -11,8 +11,8 @@
 
 ## Quick Download & Direct Installation (No Terminal Required)
 
-1. Download **`WhispNotes-1.0.0.dmg`** from the latest GitHub Release.
-2. Double-click **`WhispNotes-1.0.0.dmg`** to open the installer.
+1. Download **`WhispNotes-1.1.0.dmg`** from the latest GitHub Release.
+2. Double-click **`WhispNotes-1.1.0.dmg`** to open the installer.
 3. Drag **`WhispNotes.app`** into your **`Applications`** folder.
 4. Launch **WhispNotes** directly from Applications or Spotlight (`⌘Space`)!
 
