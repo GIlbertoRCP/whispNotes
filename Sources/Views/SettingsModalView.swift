@@ -13,7 +13,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     
     var iconName: String {
         switch self {
-        case .preferences: return "slider.horizontal.3"
+        case .preferences: return "gearshape"
         case .typography: return "textformat"
         case .aiProvider: return "sparkles"
         case .cloudSync: return "folder.badge.gearshape"
@@ -227,7 +227,7 @@ struct SettingsModalView: View {
             HStack(spacing: 14) {
                 Image(systemName: isDarkMode ? "moon.stars.fill" : "sun.max.fill")
                     .font(.title2)
-                    .foregroundColor(.amber)
+                    .foregroundColor(primaryAccent)
                     .frame(width: 32)
                 
                 VStack(alignment: .leading, spacing: 3) {
@@ -438,7 +438,7 @@ struct SettingsModalView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 8) {
                             Image(systemName: "sparkles")
-                                .foregroundColor(.amber)
+                                .foregroundColor(primaryAccent)
                             Text(gemmaDownloader.defaultModel.name)
                                 .font(.subheadline)
                                 .fontWeight(.bold)

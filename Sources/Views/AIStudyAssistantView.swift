@@ -41,7 +41,7 @@ struct AIStudyAssistantView: View {
             // Header
             HStack {
                 HStack(spacing: 6) {
-                    Image(systemName: "cpu")
+                    Image(systemName: "sparkles")
                         .foregroundColor(primaryAccent)
                         .font(.headline)
                     Text("Gemma 3 AI Assistant")

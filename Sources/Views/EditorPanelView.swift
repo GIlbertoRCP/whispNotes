@@ -6,6 +6,7 @@ struct EditorPanelView: View {
     @Binding var notes: [NoteItem]
     @Binding var selectedNoteId: UUID?
     @ObservedObject var playerVM: AudioPlayerViewModel
+    @Binding var editMode: EditModeType
     let isDark: Bool
     let primaryAccent: Color
     let secondaryAccent: Color
@@ -13,11 +14,9 @@ struct EditorPanelView: View {
     @AppStorage("editorFontSize") private var editorFontSize: Double = 14.0
     @AppStorage("editorFontDesign") private var editorFontDesign: String = "Monospaced"
     
-    @State private var editMode: EditModeType = .split
     @State private var localContent: String = ""
     @State private var saveTimer: Timer? = nil
     @State private var showBacklinks = true
-    @State private var showAIAssistantPopover = false
     @State private var showTOCDrawer = false
 
     private var selectedFontDesign: Font.Design {
@@ -64,207 +63,127 @@ struct EditorPanelView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Top Status Header Bar
-            HStack(spacing: 12) {
-                HStack(spacing: 6) {
-                    Image(systemName: "doc.text.fill")
-                        .foregroundColor(primaryAccent)
-                        .font(.subheadline)
-                    Text("SHORTHAND NOTES")
-                        .font(.caption)
-                        .fontWeight(.heavy)
-                        .foregroundColor(.secondary)
-                }
-                
-                // TOC Heading Outline Drawer Button
-                if !headingOutline.isEmpty {
-                    Button(action: { showTOCDrawer.toggle() }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "list.bullet.indent")
-                                .font(.caption)
-                                .foregroundColor(secondaryAccent)
-                            Text("Outline (\(headingOutline.count))")
-                                .font(.caption2)
-                                .fontWeight(.bold)
-                                .foregroundColor(secondaryAccent)
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(secondaryAccent.opacity(0.15))
-                        .cornerRadius(6)
-                    }
-                    .buttonStyle(.plain)
-                    .popover(isPresented: $showTOCDrawer) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Table of Contents")
-                                .font(.caption)
-                                .fontWeight(.bold)
-                            ForEach(headingOutline, id: \.self) { heading in
-                                Text(heading)
-                                    .font(.caption2)
-                                    .fontWeight(.medium)
-                            }
-                        }
-                        .padding(12)
-                    }
-                }
-                
-                Spacer()
-                
-                Text("\(stats.words) words  |  \(stats.chars) chars")
-                    .font(.caption2)
-                    .fontDesign(.monospaced)
-                    .foregroundColor(.secondary)
-                
-                // AI Study Assistant Popover Button
-                Button(action: { showAIAssistantPopover.toggle() }) {
-                    HStack(spacing: 5) {
-                        Image(systemName: "cpu")
-                            .font(.caption)
-                            .foregroundColor(primaryAccent)
-                        Text("AI Assistant")
-                            .font(.caption)
-                            .fontWeight(.bold)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(primaryAccent.opacity(0.12))
-                    .foregroundColor(primaryAccent)
-                    .cornerRadius(8)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(primaryAccent.opacity(0.3), lineWidth: 1)
-                    )
-                }
-                .buttonStyle(.plain)
-                .popover(isPresented: $showAIAssistantPopover) {
-                    AIStudyAssistantView(note: note, isDark: isDark, primaryAccent: primaryAccent, secondaryAccent: secondaryAccent, onInsertSummary: { summaryBlock in
-                        localContent += summaryBlock
-                        note.content = localContent
-                        NotesDataManager.shared.saveNotes(notes)
-                        showAIAssistantPopover = false
-                    })
-                }
-
-                // Edit | Split | Preview Mode Picker
-                HStack(spacing: 0) {
-                    ForEach(EditModeType.allCases, id: \.self) { mode in
-                        Button(action: { editMode = mode }) {
-                            Text(mode.rawValue)
-                                .font(.caption)
-                                .fontWeight(.bold)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(editMode == mode ? primaryAccent.opacity(0.18) : Color.clear)
-                                .foregroundColor(editMode == mode ? primaryAccent : .secondary)
-                                .cornerRadius(6)
+            // Streamlined Markdown Formatting & Document Stats Bar
+            if editMode == .edit || editMode == .split {
+                HStack(spacing: 10) {
+                    Group {
+                        Button(action: { insertMarkdown("**", "**") }) {
+                            Text("B")
+                                .font(.system(size: 13, weight: .bold, design: .serif))
+                                .frame(width: 24, height: 24)
                         }
                         .buttonStyle(.plain)
+                        .help("Bold (**text**)")
+
+                        Button(action: { insertMarkdown("*", "*") }) {
+                            Text("I")
+                                .font(.system(size: 13, weight: .semibold, design: .serif))
+                                .italic()
+                                .frame(width: 24, height: 24)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Italic (*text*)")
+
+                        Button(action: { insertMarkdown("\n# ", "") }) {
+                            Text("#")
+                                .font(.system(size: 13, weight: .bold, design: .monospaced))
+                                .frame(width: 24, height: 24)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Heading (# Heading)")
+
+                        Rectangle()
+                            .fill(Color.subtleBorder(isDark))
+                            .frame(width: 1, height: 16)
+
+                        Button(action: { insertMarkdown("\n- ", "") }) {
+                            Image(systemName: "list.bullet")
+                                .font(.system(size: 12))
+                                .frame(width: 24, height: 24)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Bullet List (- Item)")
+
+                        Button(action: { insertMarkdown("\n- [ ] ", "") }) {
+                            Image(systemName: "checkmark.square")
+                                .font(.system(size: 12))
+                                .frame(width: 24, height: 24)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Checklist Task (- [ ] Task)")
+
+                        Button(action: { insertMarkdown("`", "`") }) {
+                            Image(systemName: "chevron.left.forwardslash.chevron.right")
+                                .font(.system(size: 11))
+                                .frame(width: 24, height: 24)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Code Snippet (`code`)")
+
+                        Button(action: { insertMarkdown("[[", "]]") }) {
+                            Text("[ [ ] ]")
+                                .font(.system(size: 10, weight: .bold))
+                                .frame(width: 28, height: 24)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Wiki Link ([[Note Title]])")
+
+                        Button(action: { insertMarkdown("\n| Header 1 | Header 2 |\n| --- | --- |\n| Item 1 | Item 2 |\n", "") }) {
+                            Image(systemName: "tablecells")
+                                .font(.system(size: 12))
+                                .frame(width: 24, height: 24)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Insert Table Template")
+
+                        Button(action: { insertMarkdown("\n> ", "") }) {
+                            Image(systemName: "text.quote")
+                                .font(.system(size: 12))
+                                .frame(width: 24, height: 24)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Blockquote (> Quote)")
                     }
-                }
-                .padding(3)
-                .background(Color.cardBackground(isDark))
-                .cornerRadius(8)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.subtleBorder(isDark), lineWidth: 1)
-                )
-
-                Text("Auto-saves")
-                    .font(.caption2)
-                    .italic()
-                    .foregroundColor(.secondary)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(Color.panelBackground(isDark))
-            
-            Divider()
-                .background(Color.subtleBorder(isDark))
-
-            // Markdown Formatting Toolbar
-            if editMode == .edit || editMode == .split {
-                HStack(spacing: 12) {
-                    Button(action: { insertMarkdown("**", "**") }) {
-                        Text("B")
-                            .font(.system(size: 13, weight: .bold, design: .serif))
-                            .frame(width: 24, height: 24)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Bold (**text**)")
-
-                    Button(action: { insertMarkdown("*", "*") }) {
-                        Text("I")
-                            .font(.system(size: 13, weight: .semibold, design: .serif))
-                            .italic()
-                            .frame(width: 24, height: 24)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Italic (*text*)")
-
-                    Button(action: { insertMarkdown("\n# ", "") }) {
-                        Text("#")
-                            .font(.system(size: 13, weight: .bold, design: .monospaced))
-                            .frame(width: 24, height: 24)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Heading (# Heading)")
-
-                    Rectangle()
-                        .fill(Color.subtleBorder(isDark))
-                        .frame(width: 1, height: 16)
-
-                    Button(action: { insertMarkdown("\n- ", "") }) {
-                        Image(systemName: "list.bullet")
-                            .font(.system(size: 12))
-                            .frame(width: 24, height: 24)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Bullet List (- Item)")
-
-                    Button(action: { insertMarkdown("\n- [ ] ", "") }) {
-                        Image(systemName: "checkmark.square")
-                            .font(.system(size: 12))
-                            .frame(width: 24, height: 24)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Checklist Task (- [ ] Task)")
-
-                    Button(action: { insertMarkdown("`", "`") }) {
-                        Image(systemName: "chevron.left.forwardslash.chevron.right")
-                            .font(.system(size: 11))
-                            .frame(width: 24, height: 24)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Code Snippet (`code`)")
-
-                    Button(action: { insertMarkdown("[[", "]]") }) {
-                        Text("[ [ ] ]")
-                            .font(.system(size: 10, weight: .bold))
-                            .frame(width: 28, height: 24)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Wiki Link ([[Note Title]])")
-
-                    Button(action: { insertMarkdown("\n| Header 1 | Header 2 |\n| --- | --- |\n| Item 1 | Item 2 |\n", "") }) {
-                        Image(systemName: "tablecells")
-                            .font(.system(size: 12))
-                            .frame(width: 24, height: 24)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Insert Table Template")
-
-                    Button(action: { insertMarkdown("\n> ", "") }) {
-                        Image(systemName: "text.quote")
-                            .font(.system(size: 12))
-                            .frame(width: 24, height: 24)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Blockquote (> Quote)")
 
                     Spacer()
+
+                    // Document Outline & Word Counter
+                    if !headingOutline.isEmpty {
+                        Button(action: { showTOCDrawer.toggle() }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "list.bullet.indent")
+                                    .font(.caption2)
+                                    .foregroundColor(secondaryAccent)
+                                Text("Outline (\(headingOutline.count))")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(secondaryAccent)
+                            }
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(secondaryAccent.opacity(0.15))
+                            .cornerRadius(5)
+                        }
+                        .buttonStyle(.plain)
+                        .popover(isPresented: $showTOCDrawer) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Table of Contents")
+                                    .font(.caption)
+                                    .fontWeight(.bold)
+                                ForEach(headingOutline, id: \.self) { heading in
+                                    Text(heading)
+                                        .font(.caption2)
+                                        .fontWeight(.medium)
+                                }
+                            }
+                            .padding(12)
+                        }
+                    }
+
+                    Text("\(stats.words) words • \(stats.chars) chars")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.secondary)
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 14)
                 .padding(.vertical, 6)
                 .background(Color.sidebarBackground(isDark))
 
@@ -279,8 +198,12 @@ struct EditorPanelView: View {
                     .scrollContentBackground(.hidden)
                     .padding(16)
                     .background(Color.panelBackground(isDark))
-                    .onChange(of: localContent) { _, newContent in
-                        handleAutoSave(newContent)
+                    .onChange(of: localContent) { oldContent, newContent in
+                        let formatted = processMarkdownAutoFormatting(oldText: oldContent, newText: newContent)
+                        if formatted != newContent {
+                            localContent = formatted
+                        }
+                        handleAutoSave(formatted)
                     }
             } else if editMode == .split {
                 HStack(spacing: 0) {
@@ -289,8 +212,12 @@ struct EditorPanelView: View {
                         .scrollContentBackground(.hidden)
                         .padding(16)
                         .background(Color.panelBackground(isDark))
-                        .onChange(of: localContent) { _, newContent in
-                            handleAutoSave(newContent)
+                        .onChange(of: localContent) { oldContent, newContent in
+                            let formatted = processMarkdownAutoFormatting(oldText: oldContent, newText: newContent)
+                            if formatted != newContent {
+                                localContent = formatted
+                            }
+                            handleAutoSave(formatted)
                         }
                     
                     Divider()
@@ -473,5 +400,55 @@ struct EditorPanelView: View {
             selectedNoteId = newNote.id
             NotesDataManager.shared.saveNotes(notes)
         }
+    }
+
+    private func processMarkdownAutoFormatting(oldText: String, newText: String) -> String {
+        guard newText.count > oldText.count else { return newText }
+        
+        var formatted = newText
+        
+        if formatted.hasPrefix("* ") {
+            formatted = "• " + String(formatted.dropFirst(2))
+        }
+        formatted = formatted.replacingOccurrences(of: "\n* ", with: "\n• ")
+        
+        if newText.hasSuffix("\n") && !oldText.hasSuffix("\n") {
+            let lines = oldText.components(separatedBy: "\n")
+            if let lastLine = lines.last {
+                let trimmed = lastLine.trimmingCharacters(in: .whitespaces)
+                if trimmed == "•" || trimmed == "• " || trimmed == "-" || trimmed == "- " || trimmed == "- [ ]" || trimmed == "- [ ] " || trimmed == "- [x]" || trimmed == "- [x] " {
+                    var modifiedLines = lines
+                    modifiedLines.removeLast()
+                    formatted = modifiedLines.joined(separator: "\n") + "\n"
+                } else if lastLine.hasPrefix("• ") {
+                    formatted += "• "
+                } else if lastLine.hasPrefix("- [ ] ") || lastLine.hasPrefix("- [x] ") {
+                    formatted += "- [ ] "
+                } else if lastLine.hasPrefix("- ") {
+                    formatted += "- "
+                } else if let match = parseNumberedListPrefix(trimmed) {
+                    if trimmed == "\(match.number)." || trimmed == "\(match.number). " {
+                        var modifiedLines = lines
+                        modifiedLines.removeLast()
+                        formatted = modifiedLines.joined(separator: "\n") + "\n"
+                    } else {
+                        formatted += "\(match.number + 1). "
+                    }
+                }
+            }
+        }
+        
+        return formatted
+    }
+
+    private func parseNumberedListPrefix(_ line: String) -> (number: Int, prefix: String)? {
+        let pattern = "^(\\d+)\\.\\s*"
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)),
+              let numberRange = Range(match.range(at: 1), in: line),
+              let num = Int(line[numberRange]) else {
+            return nil
+        }
+        return (num, "\(num). ")
     }
 }

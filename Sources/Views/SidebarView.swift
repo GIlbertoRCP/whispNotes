@@ -11,6 +11,7 @@ struct SidebarView: View {
     var createNewNote: () -> Void
 
     @State private var selectedTag: String? = nil
+    @State private var searchText = ""
     @State private var showNewFolderPopover = false
     @State private var newFolderName = ""
     @State private var renamingFolder: String? = nil
@@ -45,8 +46,15 @@ struct SidebarView: View {
     }
 
     var filteredNotes: [NoteItem] {
-        guard let tag = selectedTag else { return activeNotes }
-        return activeNotes.filter { $0.content.lowercased().contains("#\(tag.lowercased())") }
+        var result = activeNotes
+        if let tag = selectedTag {
+            result = result.filter { $0.content.lowercased().contains("#\(tag.lowercased())") }
+        }
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if !query.isEmpty {
+            result = result.filter { $0.title.lowercased().contains(query) || $0.content.lowercased().contains(query) }
+        }
+        return result
     }
 
     var groupedNotes: [String: [NoteItem]] {
@@ -79,11 +87,10 @@ struct SidebarView: View {
                 // + New Folder Button
                 Button(action: { showNewFolderPopover.toggle() }) {
                     Image(systemName: "folder.badge.plus")
-                        .font(.body)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.amber)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(secondaryAccent)
                         .padding(6)
-                        .background(Color.amber.opacity(0.12))
+                        .background(secondaryAccent.opacity(0.12))
                         .cornerRadius(6)
                 }
                 .buttonStyle(.plain)
@@ -109,19 +116,48 @@ struct SidebarView: View {
                 // + New Note Button
                 Button(action: createNewNote) {
                     Image(systemName: "plus")
-                        .font(.body)
-                        .fontWeight(.semibold)
-                        .foregroundColor(secondaryAccent)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(primaryAccent)
                         .padding(6)
-                        .background(secondaryAccent.opacity(0.12))
+                        .background(primaryAccent.opacity(0.12))
                         .cornerRadius(6)
                 }
                 .buttonStyle(.plain)
                 .help("New Note (⌘N)")
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
             
+            // Real-Time Note Search Field
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.secondary)
+                
+                TextField("Search notes...", text: $searchText)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12))
+                
+                if !searchText.isEmpty {
+                    Button(action: { searchText = "" }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(Color.cardBackground(isDark))
+            .cornerRadius(6)
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(Color.subtleBorder(isDark), lineWidth: 1)
+            )
+            .padding(.horizontal, 14)
+            .padding(.bottom, 8)
+
             Divider()
                 .background(Color.subtleBorder(isDark))
 
@@ -188,18 +224,21 @@ struct SidebarView: View {
                                     HStack(spacing: 8) {
                                         Image(systemName: note.isStandalone ? "doc.text" : "waveform")
                                             .font(.caption)
-                                            .foregroundColor(note.isStandalone ? .secondary : primaryAccent)
+                                            .foregroundColor(note.isStandalone ? (isDark ? .secondary : Color(red: 71/255, green: 85/255, blue: 105/255)) : primaryAccent)
                                         
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text(note.title)
-                                                .font(.subheadline)
-                                                .fontWeight(.medium)
+                                                .font(.system(size: 13, weight: .semibold))
+                                                .foregroundColor(isDark ? .white : Color(red: 15/255, green: 23/255, blue: 42/255))
                                                 .lineLimit(1)
                                             Text(note.timestamp, style: .date)
-                                                .font(.system(size: 9))
-                                                .foregroundColor(.secondary)
+                                                .font(.system(size: 9, weight: .medium))
+                                                .foregroundColor(isDark ? .secondary : Color(red: 100/255, green: 116/255, blue: 139/255))
                                         }
                                     }
+                                }
+                                .onDrag {
+                                    NSItemProvider(object: note.id.uuidString as NSString)
                                 }
                                 .contextMenu {
                                     Button(action: { duplicateNote(note) }) {
@@ -223,13 +262,28 @@ struct SidebarView: View {
                             }
                         },
                         label: {
-                            HStack {
-                                Image(systemName: "folder.fill")
-                                    .foregroundColor(.amber)
+                            HStack(spacing: 6) {
+                                Image(systemName: "folder")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(secondaryAccent)
                                 Text(folder)
-                                    .font(.caption)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.secondary)
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundColor(isDark ? .secondary : Color(red: 51/255, green: 65/255, blue: 85/255))
+                                
+                                Spacer()
+                                
+                                let noteCount = (groupedNotes[folder] ?? []).count
+                                Text("\(noteCount)")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 1)
+                                    .background(secondaryAccent.opacity(0.15))
+                                    .foregroundColor(secondaryAccent)
+                                    .clipShape(Capsule())
+                            }
+                            .contentShape(Rectangle())
+                            .onDrop(of: [.text], isTargeted: nil) { providers in
+                                handleDrop(providers: providers, targetFolder: folder)
                             }
                             .contextMenu {
                                 Button(action: {
@@ -262,13 +316,16 @@ struct SidebarView: View {
                                         
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text(note.title)
-                                                .font(.subheadline)
-                                                .foregroundColor(.secondary)
+                                                .font(.system(size: 13, weight: .medium))
+                                                .foregroundColor(isDark ? .secondary : Color(red: 71/255, green: 85/255, blue: 105/255))
                                             Text("In Trash")
-                                                .font(.system(size: 9))
+                                                .font(.system(size: 9, weight: .bold))
                                                 .foregroundColor(primaryAccent)
                                         }
                                     }
+                                }
+                                .onDrag {
+                                    NSItemProvider(object: note.id.uuidString as NSString)
                                 }
                                 .contextMenu {
                                     Button(action: { restoreFromTrash(note) }) {
@@ -288,8 +345,7 @@ struct SidebarView: View {
                                 Image(systemName: "trash.fill")
                                     .foregroundColor(primaryAccent)
                                 Text("Trash Bin (\(trashNotes.count))")
-                                    .font(.caption)
-                                    .fontWeight(.bold)
+                                    .font(.system(size: 12, weight: .bold))
                                     .foregroundColor(primaryAccent)
                                 Spacer()
                                 Button("Empty") {
@@ -306,6 +362,10 @@ struct SidebarView: View {
                                 } message: {
                                     Text("This will permanently delete all \(trashNotes.count) items in the trash. This action cannot be undone.")
                                 }
+                            }
+                            .contentShape(Rectangle())
+                            .onDrop(of: [.text], isTargeted: nil) { providers in
+                                handleDrop(providers: providers, targetFolder: "Trash")
                             }
                         }
                     )
@@ -343,6 +403,30 @@ struct SidebarView: View {
             }
             .padding()
         }
+    }
+
+    private func handleDrop(providers: [NSItemProvider], targetFolder: String) -> Bool {
+        guard let provider = providers.first else { return false }
+        provider.loadItem(forTypeIdentifier: "public.text", options: nil) { (item, error) in
+            var targetIdStr: String? = nil
+            if let data = item as? Data {
+                targetIdStr = String(data: data, encoding: .utf8)
+            } else if let str = item as? String {
+                targetIdStr = str
+            } else if let nsStr = item as? NSString {
+                targetIdStr = nsStr as String
+            }
+            
+            if let idStr = targetIdStr, let noteId = UUID(uuidString: idStr) {
+                DispatchQueue.main.async {
+                    if let idx = self.notes.firstIndex(where: { $0.id == noteId }) {
+                        self.notes[idx].folder = targetFolder
+                        NotesDataManager.shared.saveNotes(self.notes)
+                    }
+                }
+            }
+        }
+        return true
     }
 
     private func createFolder() {

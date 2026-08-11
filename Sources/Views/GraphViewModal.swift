@@ -38,14 +38,7 @@ struct GraphViewModal: View {
         let centerX = canvasSize.width / 2.0
         let centerY = canvasSize.height / 2.0
         let angle = (2.0 * .pi / Double(max(1, totalCount))) * Double(index)
-        let initialPos = CGPoint(x: centerX + radius * CGFloat(cos(angle)), y: centerY + radius * CGFloat(sin(angle)))
-        DispatchQueue.main.async {
-            if self.nodePositions[noteId] == nil {
-                self.nodePositions[noteId] = initialPos
-                self.nodeVelocities[noteId] = .zero
-            }
-        }
-        return initialPos
+        return CGPoint(x: centerX + radius * CGFloat(cos(angle)), y: centerY + radius * CGFloat(sin(angle)))
     }
 
     var body: some View {
@@ -53,7 +46,7 @@ struct GraphViewModal: View {
             // Header Bar with Controls
             HStack(spacing: 12) {
                 HStack(spacing: 8) {
-                    Image(systemName: "network")
+                    Image(systemName: "circle.hexagonpath")
                         .font(.title2)
                         .foregroundColor(primaryAccent)
                     Text("KNOWLEDGE GRAPH CANVAS")
@@ -364,6 +357,16 @@ struct GraphViewModal: View {
     }
 
     private func runInitialPhysicsSimulation(canvasSize: CGSize) {
+        let radius: CGFloat = min(canvasSize.width, canvasSize.height) * 0.3
+        let centerX = canvasSize.width / 2.0
+        let centerY = canvasSize.height / 2.0
+        for (index, note) in notes.enumerated() {
+            if nodePositions[note.id] == nil {
+                let angle = (2.0 * .pi / Double(max(1, notes.count))) * Double(index)
+                nodePositions[note.id] = CGPoint(x: centerX + radius * CGFloat(cos(angle)), y: centerY + radius * CGFloat(sin(angle)))
+                nodeVelocities[note.id] = .zero
+            }
+        }
         for _ in 0..<20 {
             stepPhysicsSimulation(canvasSize: canvasSize)
         }

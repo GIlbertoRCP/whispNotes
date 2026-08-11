@@ -62,13 +62,14 @@ struct ContentView: View {
     @State private var isRightPanelOpen = true
     @State private var isSidebarOpen = true
     @State private var isFocusMode = false
+    @State private var editMode: EditModeType = .split
 
     var primaryAccent: Color {
-        ThemeColors.primary(colorTheme)
+        ThemeColors.primary(colorTheme, isDark: isDarkMode)
     }
 
     var secondaryAccent: Color {
-        ThemeColors.secondary(colorTheme)
+        ThemeColors.secondary(colorTheme, isDark: isDarkMode)
     }
     
     var selectedNote: Binding<NoteItem>? {
@@ -111,6 +112,7 @@ struct ContentView: View {
                     isSettingsOpen: $isSettingsOpen,
                     isGraphViewOpen: $isGraphViewOpen,
                     isFocusMode: $isFocusMode,
+                    editMode: $editMode,
                     isDark: isDarkMode,
                     primaryAccent: primaryAccent,
                     secondaryAccent: secondaryAccent,
@@ -140,6 +142,7 @@ struct ContentView: View {
                             notes: $notes,
                             selectedNoteId: $selectedNoteId,
                             playerVM: playerVM,
+                            editMode: $editMode,
                             isDark: isDarkMode,
                             primaryAccent: primaryAccent,
                             secondaryAccent: secondaryAccent

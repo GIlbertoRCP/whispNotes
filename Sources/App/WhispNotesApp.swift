@@ -42,6 +42,11 @@ struct WhispNotesSwiftApp: App {
                     createNewNote()
                 }
                 .keyboardShortcut("n", modifiers: .command)
+
+                Button("Import Lecture Audio File...") {
+                    importAudioFile()
+                }
+                .keyboardShortcut("i", modifiers: .command)
                 
                 Button("Quick Search Palette...") {
                     isCommandPaletteOpen = true
@@ -136,5 +141,25 @@ struct WhispNotesSwiftApp: App {
         notes.insert(newNote, at: 0)
         selectedNoteId = newNote.id
         NotesDataManager.shared.saveNotes(notes)
+    }
+
+    private func importAudioFile() {
+        let panel = NSOpenPanel()
+        panel.title = "Import Lecture Audio File"
+        panel.allowedContentTypes = [.audio, .mp3, .wav, .mpeg4Audio]
+        panel.allowsMultipleSelection = false
+        panel.begin { response in
+            if response == .OK, let url = panel.url {
+                LocalSpeechTranscriber.transcribe(url: url) { segments in
+                    if let id = selectedNoteId, let idx = notes.firstIndex(where: { $0.id == id }) {
+                        notes[idx].transcript = segments
+                        notes[idx].audioPath = url.path
+                        notes[idx].isStandalone = false
+                        NotesDataManager.shared.saveNotes(notes)
+                        playerVM.loadAudio(url: url, transcript: segments)
+                    }
+                }
+            }
+        }
     }
 }
