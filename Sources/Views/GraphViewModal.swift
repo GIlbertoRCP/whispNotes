@@ -16,6 +16,7 @@ struct GraphViewModal: View {
     @State private var searchQuery: String = ""
     @State private var hoveredNodeId: UUID? = nil
     @State private var simulationTimer: Timer? = nil
+    @State private var isPhysicsPaused: Bool = false
 
     var edges: [GraphEdge] {
         var result: [GraphEdge] = []
@@ -72,6 +73,30 @@ struct GraphViewModal: View {
                 .cornerRadius(6)
                 .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.subtleBorder(isDark), lineWidth: 1))
                 
+                // Freeze Physics Toggle Button
+                Button(action: {
+                    isPhysicsPaused.toggle()
+                    if isPhysicsPaused {
+                        simulationTimer?.invalidate()
+                        simulationTimer = nil
+                    }
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: isPhysicsPaused ? "play.fill" : "pause.fill")
+                            .font(.caption2)
+                            .foregroundColor(isPhysicsPaused ? .emerald : secondaryAccent)
+                        Text(isPhysicsPaused ? "Resume" : "Freeze")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(isPhysicsPaused ? .emerald : secondaryAccent)
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 4)
+                    .background(isPhysicsPaused ? Color.emerald.opacity(0.15) : secondaryAccent.opacity(0.12))
+                    .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+                .help("Toggle physics animation / reduced motion")
+
                 // Zoom & Physics Controls
                 HStack(spacing: 4) {
                     Button(action: { zoomScale = min(zoomScale + 0.2, 2.5) }) {
@@ -277,7 +302,7 @@ struct GraphViewModal: View {
 
     /// Force-Directed Physics Engine Iteration
     private func stepPhysicsSimulation(canvasSize: CGSize) {
-        guard !notes.isEmpty else { return }
+        guard !notes.isEmpty && !isPhysicsPaused else { return }
         
         let centerX = canvasSize.width / 2.0
         let centerY = canvasSize.height / 2.0

@@ -43,6 +43,7 @@ struct HeaderToolbarView: View {
     
     @ObservedObject var recorderVM: AudioRecorderViewModel
     @ObservedObject var playerVM: AudioPlayerViewModel
+    @ObservedObject private var dataManager = NotesDataManager.shared
     
     var onAudioTranscribed: ([TranscriptSegment], String) -> Void
     @State private var showFolderPopover = false
@@ -65,17 +66,38 @@ struct HeaderToolbarView: View {
                     TextField("Untitled Note", text: noteBinding.title)
                         .font(.system(size: 14, weight: .bold))
                         .textFieldStyle(.plain)
-                        .frame(minWidth: 120, maxWidth: 280)
+                        .frame(minWidth: 120, maxWidth: 240)
+                    
+                    // Save Status Indicator Pill
+                    HStack(spacing: 3) {
+                        if dataManager.isSaving {
+                            ProgressView()
+                                .controlSize(.small)
+                                .scaleEffect(0.6)
+                            Text("Saving...")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundColor(.secondary)
+                        } else {
+                            Text("Saved ✓")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(.emerald.opacity(0.85))
+                        }
+                    }
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 3)
+                    .background(Color.cardBackground(isDark))
+                    .cornerRadius(4)
+                    .help("Vault automatic save state")
                     
                     // Folder Selector Pill
                     Button(action: { showFolderPopover.toggle() }) {
                         HStack(spacing: 4) {
                             Text(noteBinding.wrappedValue.folder)
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundColor(.primary)
+                               .font(.system(size: 11, weight: .semibold))
+                               .foregroundColor(.primary)
                             Image(systemName: "chevron.down")
-                                .font(.system(size: 8, weight: .bold))
-                                .foregroundColor(.secondary)
+                               .font(.system(size: 8, weight: .bold))
+                               .foregroundColor(.secondary)
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)

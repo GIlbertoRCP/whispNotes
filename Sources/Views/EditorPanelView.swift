@@ -43,6 +43,19 @@ struct EditorPanelView: View {
         }
     }
 
+    var unlinkedMentions: [NoteItem] {
+        let currentTitle = note.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard currentTitle.count > 2 else { return [] }
+        let currentLower = currentTitle.lowercased()
+        return notes.filter { n in
+            if n.id == note.id { return false }
+            let lowerContent = n.content.lowercased()
+            let hasPlain = lowerContent.contains(currentLower)
+            let hasWiki = lowerContent.contains("[[\(currentLower)]]")
+            return hasPlain && !hasWiki
+        }
+    }
+
     var outgoingWikiLinks: [String] {
         let pattern = "\\[\\[(.*?)\\]\\]"
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
@@ -256,7 +269,7 @@ struct EditorPanelView: View {
             }
 
             // Collapsible Obsidian-Style Backlinks Drawer
-            if !incomingBacklinks.isEmpty || !outgoingWikiLinks.isEmpty {
+            if !incomingBacklinks.isEmpty || !unlinkedMentions.isEmpty || !outgoingWikiLinks.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
                         Image(systemName: "network")
@@ -297,6 +310,38 @@ struct EditorPanelView: View {
                                             .cornerRadius(6)
                                         }
                                         .buttonStyle(.plain)
+                                    }
+                                }
+                            }
+
+                            if !unlinkedMentions.isEmpty {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("UNLINKED MENTIONS (\(unlinkedMentions.count))")
+                                        .font(.system(size: 9, weight: .bold))
+                                        .foregroundColor(.secondary)
+                                    
+                                    ForEach(unlinkedMentions) { unlinkedNote in
+                                        HStack(spacing: 6) {
+                                            Button(action: { selectedNoteId = unlinkedNote.id }) {
+                                                Text(unlinkedNote.title)
+                                                    .font(.caption)
+                                                    .fontWeight(.medium)
+                                                    .foregroundColor(.primary)
+                                            }
+                                            .buttonStyle(.plain)
+                                            
+                                            Button(action: { linkUnlinkedMention(in: unlinkedNote) }) {
+                                                Text("+ Link")
+                                                    .font(.system(size: 9, weight: .bold))
+                                                    .padding(.horizontal, 5)
+                                                    .padding(.vertical, 2)
+                                                    .background(primaryAccent.opacity(0.18))
+                                                    .foregroundColor(primaryAccent)
+                                                    .cornerRadius(4)
+                                            }
+                                            .buttonStyle(.plain)
+                                            .help("Convert text mention in '\(unlinkedNote.title)' into [[link]]")
+                                        }
                                     }
                                 }
                             }
@@ -450,5 +495,16 @@ struct EditorPanelView: View {
             return nil
         }
         return (num, "\(num). ")
+    }
+
+    private func linkUnlinkedMention(in targetNote: NoteItem) {
+        let currentTitle = note.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let idx = notes.firstIndex(where: { $0.id == targetNote.id }) else { return }
+        let pattern = "(?<!\\[\\[)(" + NSRegularExpression.escapedPattern(for: currentTitle) + ")(?!\\]\\])"
+        if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
+            let nsRange = NSRange(notes[idx].content.startIndex..., in: notes[idx].content)
+            notes[idx].content = regex.stringByReplacingMatches(in: notes[idx].content, range: nsRange, withTemplate: "[[$1]]")
+            NotesDataManager.shared.saveNotes(notes)
+        }
     }
 }

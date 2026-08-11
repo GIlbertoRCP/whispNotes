@@ -43,6 +43,11 @@ struct WhispNotesSwiftApp: App {
                 }
                 .keyboardShortcut("n", modifiers: .command)
 
+                Button("Today's Daily Note") {
+                    openOrCreateDailyNote()
+                }
+                .keyboardShortcut("d", modifiers: .command)
+
                 Button("Import Lecture Audio File...") {
                     importAudioFile()
                 }
@@ -99,6 +104,12 @@ struct WhispNotesSwiftApp: App {
                         NoteExporter.shared.exportPlainText(current)
                     }
                 }
+
+                Divider()
+
+                Button("Export Full Vault to Folder...") {
+                    exportFullVault()
+                }
             }
 
             CommandMenu("Audio Controls") {
@@ -141,6 +152,44 @@ struct WhispNotesSwiftApp: App {
         notes.insert(newNote, at: 0)
         selectedNoteId = newNote.id
         NotesDataManager.shared.saveNotes(notes)
+    }
+
+    private func openOrCreateDailyNote() {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let dateString = formatter.string(from: Date())
+        
+        if let existing = notes.first(where: { $0.folder == "Daily Notes" && $0.title == dateString }) {
+            selectedNoteId = existing.id
+        } else {
+            let dailyNote = NoteItem(
+                title: dateString,
+                folder: "Daily Notes",
+                content: "# Daily Journal — \(dateString)\n\n### Morning Intentions\n- [ ] Review lecture notes\n- [ ] Focus study goals\n\n### Notes & Reflections\nType daily notes here...\n",
+                timestamp: Date(),
+                audioPath: nil,
+                transcript: [],
+                isStandalone: true,
+                bookmarks: []
+            )
+            notes.insert(dailyNote, at: 0)
+            selectedNoteId = dailyNote.id
+            NotesDataManager.shared.saveNotes(notes)
+        }
+    }
+
+    private func exportFullVault() {
+        let panel = NSOpenPanel()
+        panel.title = "Choose Export Destination for Full Vault"
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.begin { response in
+            if response == .OK, let url = panel.url {
+                NotesDataManager.shared.exportVaultToFolder(targetDir: url, notes: notes)
+            }
+        }
     }
 
     private func importAudioFile() {
