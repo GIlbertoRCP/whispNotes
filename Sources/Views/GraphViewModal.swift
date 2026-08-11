@@ -17,6 +17,9 @@ struct GraphViewModal: View {
     @State private var hoveredNodeId: UUID? = nil
     @State private var simulationTimer: Timer? = nil
     @State private var isPhysicsPaused: Bool = false
+    @State private var draggedNodeId: UUID? = nil
+    @State private var dragInitialPos: CGPoint = .zero
+    @State private var basePanOffset: CGSize = .zero
 
     var edges: [GraphEdge] {
         var result: [GraphEdge] = []
@@ -157,6 +160,18 @@ struct GraphViewModal: View {
                 
                 ZStack {
                     Color.panelBackground(isDark)
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    panOffset = CGSize(
+                                        width: basePanOffset.width + value.translation.width,
+                                        height: basePanOffset.height + value.translation.height
+                                    )
+                                }
+                                .onEnded { _ in
+                                    basePanOffset = panOffset
+                                }
+                        )
                     
                     // Background Blueprint Grid
                     Canvas { context, size in
@@ -172,6 +187,7 @@ struct GraphViewModal: View {
                         }
                         context.stroke(path, with: .color(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.04)), lineWidth: 1)
                     }
+                    .allowsHitTesting(false)
                     
                     // Connected Edge Lines
                     Canvas { context, size in
@@ -196,6 +212,7 @@ struct GraphViewModal: View {
                             }
                         }
                     }
+                    .allowsHitTesting(false)
                     
                     // Interactive Node Pills
                     ForEach(Array(notes.enumerated()), id: \.element.id) { index, note in
@@ -246,25 +263,29 @@ struct GraphViewModal: View {
                             hoveredNodeId = over ? note.id : nil
                         }
                         .gesture(
-                            DragGesture()
+                            DragGesture(minimumDistance: 2)
                                 .onChanged { value in
-                                    nodePositions[note.id] = value.location
+                                    if draggedNodeId != note.id {
+                                        draggedNodeId = note.id
+                                        dragInitialPos = getPosition(for: note.id, totalCount: notes.count, index: index, canvasSize: canvasSize)
+                                    }
+                                    let newX = dragInitialPos.x + value.translation.width / zoomScale
+                                    let newY = dragInitialPos.y + value.translation.height / zoomScale
+                                    nodePositions[note.id] = CGPoint(x: newX, y: newY)
+                                    nodeVelocities[note.id] = .zero
+                                }
+                                .onEnded { value in
+                                    if hypot(value.translation.width, value.translation.height) < 5 {
+                                        selectedNoteId = note.id
+                                        isOpen = false
+                                    }
+                                    draggedNodeId = nil
                                 }
                         )
-                        .onTapGesture {
-                            selectedNoteId = note.id
-                            isOpen = false
-                        }
                     }
                 }
                 .scaleEffect(zoomScale)
                 .offset(panOffset)
-                .gesture(
-                    DragGesture()
-                        .onChanged { value in
-                            panOffset = value.translation
-                        }
-                )
                 .onAppear {
                     runInitialPhysicsSimulation(canvasSize: canvasSize)
                 }
@@ -360,6 +381,7 @@ struct GraphViewModal: View {
         // 3. Center gravity & Velocity update
         for note in notes {
             let id = note.id
+            if id == draggedNodeId { continue }
             guard let pos = nodePositions[id] else { continue }
 
             let gx = (centerX - pos.x) * gravityK
