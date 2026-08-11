@@ -276,8 +276,10 @@ struct HeaderToolbarView: View {
     private func toggleRecording() {
         if recorderVM.isRecording {
             if let url = recorderVM.stopRecording() {
-                LocalSpeechTranscriber.transcribe(url: url) { segments in
-                    onAudioTranscribed(segments, url.path)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    LocalSpeechTranscriber.transcribe(url: url) { segments in
+                        onAudioTranscribed(segments, url.path)
+                    }
                 }
             }
         } else {

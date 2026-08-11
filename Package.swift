@@ -28,7 +28,15 @@ let package = Package(
         .executableTarget(
             name: "swift-whispnotes",
             dependencies: ["WhispNotesLibrary"],
-            path: "Sources/AppMain"
+            path: "Sources/AppMain",
+            linkerSettings: [
+                .unsafeFlags([
+                    "-Xlinker", "-sectcreate",
+                    "-Xlinker", "__TEXT",
+                    "-Xlinker", "__info_plist",
+                    "-Xlinker", "Info.plist"
+                ])
+            ]
         ),
         .testTarget(
             name: "swift-whispnotesTests",
