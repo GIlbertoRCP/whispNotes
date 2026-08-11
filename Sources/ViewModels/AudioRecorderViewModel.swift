@@ -35,6 +35,9 @@ class AudioRecorderViewModel: ObservableObject {
             AVFormatIDKey: Int(kAudioFormatLinearPCM),
             AVSampleRateKey: 16000.0,
             AVNumberOfChannelsKey: 1,
+            AVLinearPCMBitDepthKey: 16,
+            AVLinearPCMIsBigEndianKey: false,
+            AVLinearPCMIsFloatKey: false,
             AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
         ]
 
@@ -64,6 +67,7 @@ class AudioRecorderViewModel: ObservableObject {
         timer?.invalidate()
         timer = nil
         audioRecorder?.stop()
+        audioRecorder = nil
         isRecording = false
         return currentAudioURL
     }

@@ -11,16 +11,24 @@ class LocalSpeechTranscriber {
     }
 
     static func transcribe(url: URL, completion: @escaping ([TranscriptSegment]) -> Void) {
+        guard FileManager.default.fileExists(atPath: url.path),
+              let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let size = attrs[.size] as? UInt64, size > 0 else {
+            print("Audio file is empty or missing: \(url.path)")
+            DispatchQueue.main.async { completion([]) }
+            return
+        }
+
         SFSpeechRecognizer.requestAuthorization { status in
             guard status == .authorized else {
                 print("Speech recognition authorization status: \(status)")
-                completion([])
+                DispatchQueue.main.async { completion([]) }
                 return
             }
             
             guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US")), recognizer.isAvailable else {
                 print("SFSpeechRecognizer is unavailable on this machine")
-                completion([])
+                DispatchQueue.main.async { completion([]) }
                 return
             }
             
@@ -30,16 +38,19 @@ class LocalSpeechTranscriber {
             recognizer.recognitionTask(with: request) { result, error in
                 if let error = error {
                     print("Speech transcription task error: \(error.localizedDescription)")
-                    completion([])
+                    DispatchQueue.main.async { completion([]) }
                     return
                 }
                 
-                guard let result = result else { return }
+                guard let result = result else {
+                    DispatchQueue.main.async { completion([]) }
+                    return
+                }
                 
-                if result.isFinal {
-                    let wordSegments = result.bestTranscription.segments
-                    let diarized = self.diarizeSpeechSegments(wordSegments)
-                    
+                let wordSegments = result.bestTranscription.segments
+                let diarized = self.diarizeSpeechSegments(wordSegments)
+                
+                if result.isFinal || !wordSegments.isEmpty {
                     DispatchQueue.main.async {
                         completion(diarized)
                     }

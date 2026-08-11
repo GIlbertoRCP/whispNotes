@@ -127,9 +127,8 @@ struct ContentView: View {
                             note.wrappedValue.audioPath = path
                             note.wrappedValue.isStandalone = false
                             NotesDataManager.shared.saveNotes(notes)
-                            if let url = URL(string: path) {
-                                playerVM.loadAudio(url: url, transcript: segments)
-                            }
+                            let audioFileURL = URL(fileURLWithPath: path)
+                            playerVM.loadAudio(url: audioFileURL, transcript: segments)
                         }
                     }
                 )
