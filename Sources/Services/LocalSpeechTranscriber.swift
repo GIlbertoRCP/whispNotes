@@ -19,41 +19,59 @@ class LocalSpeechTranscriber {
             return
         }
 
-        SFSpeechRecognizer.requestAuthorization { status in
-            guard status == .authorized else {
-                print("Speech recognition authorization status: \(status)")
+        let status = SFSpeechRecognizer.authorizationStatus()
+        if status == .authorized {
+            performTranscription(url: url, completion: completion)
+        } else if status == .notDetermined {
+            // Guard against macOS TCC crash if Info.plist privacy description is missing from main bundle
+            guard Bundle.main.object(forInfoDictionaryKey: "NSSpeechRecognitionUsageDescription") != nil else {
+                print("Warning: NSSpeechRecognitionUsageDescription missing from main bundle. Please launch WhispNotes.app or ensure Info.plist is in the execution directory.")
                 DispatchQueue.main.async { completion([]) }
                 return
             }
             
-            guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US")), recognizer.isAvailable else {
-                print("SFSpeechRecognizer is unavailable on this machine")
+            SFSpeechRecognizer.requestAuthorization { newStatus in
+                if newStatus == .authorized {
+                    self.performTranscription(url: url, completion: completion)
+                } else {
+                    print("Speech recognition authorization status: \(newStatus)")
+                    DispatchQueue.main.async { completion([]) }
+                }
+            }
+        } else {
+            print("Speech recognition authorization status: \(status)")
+            DispatchQueue.main.async { completion([]) }
+        }
+    }
+
+    private static func performTranscription(url: URL, completion: @escaping ([TranscriptSegment]) -> Void) {
+        guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US")), recognizer.isAvailable else {
+            print("SFSpeechRecognizer is unavailable on this machine")
+            DispatchQueue.main.async { completion([]) }
+            return
+        }
+        
+        let request = SFSpeechURLRecognitionRequest(url: url)
+        request.requiresOnDeviceRecognition = true // Force 100% offline local processing
+        
+        recognizer.recognitionTask(with: request) { result, error in
+            if let error = error {
+                print("Speech transcription task error: \(error.localizedDescription)")
                 DispatchQueue.main.async { completion([]) }
                 return
             }
             
-            let request = SFSpeechURLRecognitionRequest(url: url)
-            request.requiresOnDeviceRecognition = true // Force 100% offline local processing
+            guard let result = result else {
+                DispatchQueue.main.async { completion([]) }
+                return
+            }
             
-            recognizer.recognitionTask(with: request) { result, error in
-                if let error = error {
-                    print("Speech transcription task error: \(error.localizedDescription)")
-                    DispatchQueue.main.async { completion([]) }
-                    return
-                }
-                
-                guard let result = result else {
-                    DispatchQueue.main.async { completion([]) }
-                    return
-                }
-                
-                let wordSegments = result.bestTranscription.segments
-                let diarized = self.diarizeSpeechSegments(wordSegments)
-                
-                if result.isFinal || !wordSegments.isEmpty {
-                    DispatchQueue.main.async {
-                        completion(diarized)
-                    }
+            let wordSegments = result.bestTranscription.segments
+            let diarized = self.diarizeSpeechSegments(wordSegments)
+            
+            if result.isFinal || !wordSegments.isEmpty {
+                DispatchQueue.main.async {
+                    completion(diarized)
                 }
             }
         }
