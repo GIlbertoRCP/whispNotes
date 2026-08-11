@@ -40,30 +40,32 @@ class GemmaLocalEngine: ObservableObject {
         // Rank sentences by term frequency density and heading relevance
         var scoredSentences: [(sentence: String, score: Double)] = []
         for (index, sentence) in sentences.enumerated() {
-            var score = 0.0
-            
-            // Sentence position weight (early sentences in notes/headings carry higher weight)
-            score += max(0.0, 2.0 - (Double(index) * 0.15))
-            
-            // Heading boost
-            if sentence.hasPrefix("#") || sentence.contains(":") {
-                score += 3.0
-            }
-            
-            // Term frequency accumulation
-            let words = sentence.components(separatedBy: .alphanumerics.inverted).filter { $0.count > 3 }
-            for w in words {
-                let freq = Double(wordCounts[w.lowercased()] ?? 0)
-                score += min(freq, 5.0)
-            }
-            
-            let clean = sentence.replacingOccurrences(of: "#", with: "")
-                .replacingOccurrences(of: "- [ ]", with: "")
-                .replacingOccurrences(of: "- [x]", with: "")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            
-            if !clean.isEmpty && clean.count > 10 {
-                scoredSentences.append((clean, score))
+            autoreleasepool {
+                var score = 0.0
+                
+                // Sentence position weight (early sentences in notes/headings carry higher weight)
+                score += max(0.0, 2.0 - (Double(index) * 0.15))
+                
+                // Heading boost
+                if sentence.hasPrefix("#") || sentence.contains(":") {
+                    score += 3.0
+                }
+                
+                // Term frequency accumulation
+                let words = sentence.components(separatedBy: .alphanumerics.inverted).filter { $0.count > 3 }
+                for w in words {
+                    let freq = Double(wordCounts[w.lowercased()] ?? 0)
+                    score += min(freq, 5.0)
+                }
+                
+                let clean = sentence.replacingOccurrences(of: "#", with: "")
+                    .replacingOccurrences(of: "- [ ]", with: "")
+                    .replacingOccurrences(of: "- [x]", with: "")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                
+                if !clean.isEmpty && clean.count > 10 {
+                    scoredSentences.append((clean, score))
+                }
             }
         }
         

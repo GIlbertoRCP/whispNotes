@@ -349,7 +349,9 @@ struct GraphViewModal: View {
 
                 let dx = posB.x - posA.x
                 let dy = posB.y - posA.y
-                let dist = max(15.0, sqrt(dx * dx + dy * dy))
+                let distSq = dx * dx + dy * dy
+                if distSq > 122500.0 { continue } // Skip nodes further than 350pt
+                let dist = max(15.0, sqrt(distSq))
                 let forceMagnitude = repulsionK / (dist * dist)
 
                 let fx = (dx / dist) * forceMagnitude
