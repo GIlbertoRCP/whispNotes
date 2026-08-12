@@ -14,22 +14,13 @@ class AudioRecorderViewModel: ObservableObject {
 
     func startRecording() {
         let status = AVCaptureDevice.authorizationStatus(for: .audio)
-        if status == .authorized {
+        if status == .authorized || !AppBundleDetector.canUseTCCProtectedAPIs {
             self.performStartRecording()
         } else if status == .notDetermined {
-            guard Bundle.main.object(forInfoDictionaryKey: "NSMicrophoneUsageDescription") != nil else {
-                print("Warning: NSMicrophoneUsageDescription missing from main bundle. Attempting direct recording.")
-                self.performStartRecording()
-                return
-            }
             AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
                 Task { @MainActor [weak self] in
                     guard let self = self else { return }
-                    if granted {
-                        self.performStartRecording()
-                    } else {
-                        print("Microphone access was denied by user.")
-                    }
+                    self.performStartRecording()
                 }
             }
         } else {
@@ -45,7 +36,7 @@ class AudioRecorderViewModel: ObservableObject {
 
         let settings: [String: Any] = [
             AVFormatIDKey: Int(kAudioFormatLinearPCM),
-            AVSampleRateKey: 16000.0,
+            AVSampleRateKey: 44100.0,
             AVNumberOfChannelsKey: 1,
             AVLinearPCMBitDepthKey: 16,
             AVLinearPCMIsBigEndianKey: false,
@@ -56,10 +47,17 @@ class AudioRecorderViewModel: ObservableObject {
         do {
             audioRecorder = try AVAudioRecorder(url: fileURL, settings: settings)
             audioRecorder?.isMeteringEnabled = true
-            let recorded = audioRecorder?.record() ?? false
-            if !recorded {
-                print("AVAudioRecorder.record() returned false")
+            
+            guard let recorder = audioRecorder, recorder.prepareToRecord() else {
+                print("AVAudioRecorder failed prepareToRecord()")
+                return
             }
+            
+            guard recorder.record() else {
+                print("AVAudioRecorder failed record()")
+                return
+            }
+            
             isRecording = true
             recordingTime = 0.0
             

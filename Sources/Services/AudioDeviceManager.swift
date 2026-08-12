@@ -10,9 +10,12 @@ class AudioDeviceManager: ObservableObject {
     @Published var outputDevices: [String] = ["Default System Speaker"]
     
     private var cancellables = Set<AnyCancellable>()
+    private var hasRefreshed = false
 
     init() {
-        refreshDevices()
+        // NOTE: Do NOT call refreshDevices() here.
+        // AVCaptureDevice.DiscoverySession triggers macOS TCC at init time,
+        // which causes SIGABRT when running via `swift run` outside an app bundle.
         setupDeviceChangeListener()
     }
     
@@ -25,6 +28,18 @@ class AudioDeviceManager: ObservableObject {
     }
 
     func refreshDevices() {
+        // macOS TCC will SIGABRT bare CLI executables that call AVCaptureDevice APIs
+        guard AppBundleDetector.canUseTCCProtectedAPIs else {
+            return
+        }
+        
+        // Guard: only query AVCaptureDevice if microphone access is already authorized
+        let status = AVCaptureDevice.authorizationStatus(for: .audio)
+        guard status == .authorized else {
+            return
+        }
+        
+        hasRefreshed = true
         let discoverySession = AVCaptureDevice.DiscoverySession(
             deviceTypes: [.microphone, .external],
             mediaType: .audio,
