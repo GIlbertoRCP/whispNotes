@@ -13,6 +13,7 @@ struct EditorPanelView: View {
     
     @AppStorage("editorFontSize") private var editorFontSize: Double = 14.0
     @AppStorage("editorFontDesign") private var editorFontDesign: String = "Monospaced"
+    @AppStorage("editorSplitRatio") private var splitRatio: Double = 0.5
     
     @State private var localContent: String = ""
     @State private var saveTimer: Timer? = nil
@@ -27,58 +28,43 @@ struct EditorPanelView: View {
         }
     }
 
+    @State private var cachedStats: (words: Int, chars: Int) = (0, 0)
+    @State private var cachedHeadingOutline: [String] = []
+    @State private var cachedIncomingBacklinks: [NoteItem] = []
+    @State private var cachedUnlinkedMentions: [NoteItem] = []
+    @State private var cachedOutgoingWikiLinks: [String] = []
+    @State private var showWikiAutocomplete = false
+    @State private var wikiQuery = ""
+
     private var stats: (words: Int, chars: Int) {
-        calculateWordAndCharCount(localContent)
+        cachedStats
     }
 
     var headingOutline: [String] {
-        localContent.components(separatedBy: "\n").filter { $0.hasPrefix("#") }
+        cachedHeadingOutline
     }
 
     var incomingBacklinks: [NoteItem] {
-        let currentTitle = note.title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !currentTitle.isEmpty else { return [] }
-        return notes.filter { n in
-            n.id != note.id && n.content.lowercased().contains("[[\(currentTitle)]]")
-        }
+        cachedIncomingBacklinks
     }
 
     var unlinkedMentions: [NoteItem] {
-        let currentTitle = note.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard currentTitle.count > 2 else { return [] }
-        let currentLower = currentTitle.lowercased()
-        return notes.filter { n in
-            if n.id == note.id { return false }
-            let lowerContent = n.content.lowercased()
-            let hasPlain = lowerContent.contains(currentLower)
-            let hasWiki = lowerContent.contains("[[\(currentLower)]]")
-            return hasPlain && !hasWiki
-        }
+        cachedUnlinkedMentions
     }
 
     var outgoingWikiLinks: [String] {
-        let pattern = "\\[\\[(.*?)\\]\\]"
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
-        let line = note.content
-        let nsRange = NSRange(line.startIndex..<line.endIndex, in: line)
-        let matches = regex.matches(in: line, range: nsRange)
-        var links: [String] = []
-        for match in matches {
-            if let range = Range(match.range(at: 1), in: line) {
-                let link = String(line[range]).trimmingCharacters(in: .whitespacesAndNewlines)
-                if !link.isEmpty && !links.contains(link) {
-                    links.append(link)
-                }
-            }
-        }
-        return links
+        cachedOutgoingWikiLinks
+    }
+
+    var resolvedPDFURL: URL? {
+        NotesDataManager.shared.resolveAttachmentURL(note.pdfPath)
     }
 
     var body: some View {
         VStack(spacing: 0) {
             // Streamlined Markdown Formatting & Document Stats Bar
             if editMode == .edit || editMode == .split {
-                HStack(spacing: 10) {
+                HStack(spacing: 8) {
                     Group {
                         Button(action: { insertMarkdown("**", "**") }) {
                             Text("B")
@@ -192,6 +178,25 @@ struct EditorPanelView: View {
                         }
                     }
 
+                    if let pdfURL = resolvedPDFURL, editMode == .edit {
+                        HStack(spacing: 4) {
+                            Image(systemName: "doc.richtext.fill")
+                                .font(.system(size: 10))
+                                .foregroundColor(primaryAccent)
+                            Text(pdfURL.lastPathComponent)
+                                .font(.system(size: 10, weight: .medium))
+                                .lineLimit(1)
+                            Button("View PDF") { editMode = .pdf }
+                                .font(.system(size: 9, weight: .bold))
+                                .buttonStyle(.plain)
+                                .foregroundColor(primaryAccent)
+                        }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(primaryAccent.opacity(0.12))
+                        .cornerRadius(4)
+                    }
+
                     Text("\(stats.words) words • \(stats.chars) chars")
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundColor(.secondary)
@@ -204,8 +209,25 @@ struct EditorPanelView: View {
                     .background(Color.subtleBorder(isDark))
             }
             
-            // Editor Body View (Single Edit, Split View, or Full Preview)
-            if editMode == .edit {
+            // Editor Body View (Single Edit, Split View, Full Preview, or Native PDF Viewer)
+            if editMode == .pdf, let pdfURL = resolvedPDFURL {
+                PDFDocumentViewerView(
+                    pdfURL: pdfURL,
+                    note: $note,
+                    notes: $notes,
+                    isDark: isDark,
+                    primaryAccent: primaryAccent,
+                    secondaryAccent: secondaryAccent,
+                    onDetachPDF: {
+                        note.pdfPath = nil
+                        editMode = .edit
+                        NotesDataManager.shared.saveNotes(notes)
+                    },
+                    onQuoteSelection: { _ in
+                        localContent = note.content
+                    }
+                )
+            } else if editMode == .edit {
                 TextEditor(text: $localContent)
                     .font(.system(size: CGFloat(editorFontSize), design: selectedFontDesign))
                     .scrollContentBackground(.hidden)
@@ -219,39 +241,97 @@ struct EditorPanelView: View {
                         handleAutoSave(formatted)
                     }
             } else if editMode == .split {
-                HStack(spacing: 0) {
-                    TextEditor(text: $localContent)
-                        .font(.system(size: CGFloat(editorFontSize), design: selectedFontDesign))
-                        .scrollContentBackground(.hidden)
-                        .padding(16)
-                        .background(Color.panelBackground(isDark))
-                        .onChange(of: localContent) { oldContent, newContent in
-                            let formatted = processMarkdownAutoFormatting(oldText: oldContent, newText: newContent)
-                            if formatted != newContent {
-                                localContent = formatted
+                GeometryReader { splitGeo in
+                    let totalWidth = splitGeo.size.width
+                    let minPanelWidth: CGFloat = 200
+                    let effectiveLeftWidth = max(minPanelWidth, min(totalWidth - minPanelWidth, totalWidth * CGFloat(splitRatio)))
+                    let effectiveRightWidth = max(minPanelWidth, totalWidth - effectiveLeftWidth - 6)
+
+                    HStack(spacing: 0) {
+                        // Left: Markdown Text Editor
+                        TextEditor(text: $localContent)
+                            .font(.system(size: CGFloat(editorFontSize), design: selectedFontDesign))
+                            .scrollContentBackground(.hidden)
+                            .padding(16)
+                            .background(Color.panelBackground(isDark))
+                            .frame(width: effectiveLeftWidth)
+                            .onChange(of: localContent) { oldContent, newContent in
+                                let formatted = processMarkdownAutoFormatting(oldText: oldContent, newText: newContent)
+                                if formatted != newContent {
+                                    localContent = formatted
+                                }
+                                handleAutoSave(formatted)
                             }
-                            handleAutoSave(formatted)
+                        
+                        // Interactive Draggable Split Divider
+                        ZStack {
+                            Rectangle()
+                                .fill(Color.subtleBorder(isDark))
+                                .frame(width: 1)
+                            
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(Color.cardBackground(isDark))
+                                .frame(width: 6, height: 32)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 3)
+                                        .stroke(Color.subtleBorder(isDark), lineWidth: 1)
+                                )
                         }
-                    
-                    Divider()
-                        .background(Color.subtleBorder(isDark))
-                    
-                    ScrollView {
-                        VStack(alignment: .leading) {
-                            MarkdownRendererView(
-                                markdown: localContent.replacingOccurrences(of: "\\n", with: "\n"),
+                        .frame(width: 6)
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture(minimumDistance: 1)
+                                .onChanged { val in
+                                    let newRatio = Double(val.location.x + effectiveLeftWidth) / Double(totalWidth)
+                                    splitRatio = max(0.2, min(0.8, newRatio))
+                                }
+                        )
+                        .onHover { inside in
+                            if inside {
+                                NSCursor.resizeLeftRight.push()
+                            } else {
+                                NSCursor.pop()
+                            }
+                        }
+                        
+                        // Right: Native PDF Document Viewer (if attached) or Markdown Preview
+                        if let pdfURL = resolvedPDFURL {
+                            PDFDocumentViewerView(
+                                pdfURL: pdfURL,
+                                note: $note,
                                 notes: $notes,
-                                selectedNoteId: $selectedNoteId,
-                                playerVM: playerVM,
                                 isDark: isDark,
                                 primaryAccent: primaryAccent,
-                                secondaryAccent: secondaryAccent
+                                secondaryAccent: secondaryAccent,
+                                onDetachPDF: {
+                                    note.pdfPath = nil
+                                    NotesDataManager.shared.saveNotes(notes)
+                                },
+                                onQuoteSelection: { _ in
+                                    localContent = note.content
+                                }
                             )
-                            .frame(maxWidth: 720, alignment: .leading)
+                            .frame(width: effectiveRightWidth)
+                        } else {
+                            ScrollView {
+                                VStack(alignment: .leading) {
+                                    MarkdownRendererView(
+                                        markdown: localContent.replacingOccurrences(of: "\\n", with: "\n"),
+                                        notes: $notes,
+                                        selectedNoteId: $selectedNoteId,
+                                        playerVM: playerVM,
+                                        isDark: isDark,
+                                        primaryAccent: primaryAccent,
+                                        secondaryAccent: secondaryAccent
+                                    )
+                                    .frame(maxWidth: 720, alignment: .leading)
+                                }
+                                .padding(24)
+                            }
+                            .frame(width: effectiveRightWidth)
+                            .background(Color.panelBackground(isDark))
                         }
-                        .padding(24)
                     }
-                    .background(Color.panelBackground(isDark))
                 }
             } else {
                 ScrollView {
@@ -385,17 +465,36 @@ struct EditorPanelView: View {
                 .padding(.bottom, 12)
             }
         }
+        .overlay(alignment: .bottomLeading) {
+            if showWikiAutocomplete {
+                WikiLinkAutocompleteView(
+                    query: wikiQuery,
+                    notes: notes,
+                    isDark: isDark,
+                    primaryAccent: primaryAccent,
+                    onSelect: { selectedTitle in
+                        insertWikiLinkCompletion(selectedTitle)
+                    }
+                )
+                .padding(.leading, 24)
+                .padding(.bottom, 60)
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            }
+        }
         .onAppear {
             localContent = note.content.replacingOccurrences(of: "\\n", with: "\n")
+            refreshMetadataAsync()
         }
-        .onChange(of: note.id) { _, _ in
+        .task(id: note.id) {
             saveTimer?.invalidate()
             localContent = note.content.replacingOccurrences(of: "\\n", with: "\n")
+            refreshMetadataAsync()
         }
         .onChange(of: note.content) { _, externalContent in
             let clean = externalContent.replacingOccurrences(of: "\\n", with: "\n")
-            if localContent != clean {
+            if localContent != clean && saveTimer == nil {
                 localContent = clean
+                refreshMetadataAsync()
             }
         }
         .onDisappear {
@@ -406,19 +505,128 @@ struct EditorPanelView: View {
                 NotesDataManager.shared.saveNotes(notes)
             }
         }
+        .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+            handleFileDrop(providers: providers)
+        }
+    }
+
+    private func handleFileDrop(providers: [NSItemProvider]) -> Bool {
+        guard let provider = providers.first else { return false }
+        provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { (item, error) in
+            var fileURL: URL? = nil
+            if let data = item as? Data, let url = URL(dataRepresentation: data, relativeTo: nil) {
+                fileURL = url
+            } else if let url = item as? URL {
+                fileURL = url
+            }
+            
+            guard let url = fileURL else { return }
+            let ext = url.pathExtension.lowercased()
+            
+            DispatchQueue.main.async {
+                if ext == "pdf" {
+                    if let (relPath, _) = NotesDataManager.shared.importAttachment(from: url, for: note.id) {
+                        note.pdfPath = relPath
+                        editMode = .pdf
+                        NotesDataManager.shared.saveNotes(notes)
+                    }
+                } else if ["mp3", "wav", "m4a", "aac", "ogg"].contains(ext) {
+                    if let (relPath, fullURL) = NotesDataManager.shared.importAttachment(from: url, for: note.id) {
+                        note.audioPath = relPath
+                        note.isStandalone = false
+                        NotesDataManager.shared.saveNotes(notes)
+                        LocalSpeechTranscriber.transcribe(url: fullURL) { segments in
+                            note.transcript = segments
+                            NotesDataManager.shared.saveNotes(notes)
+                            playerVM.loadAudio(url: fullURL, transcript: segments)
+                        }
+                    }
+                }
+            }
+        }
+        return true
     }
 
     private func handleAutoSave(_ newContent: String) {
-        if newContent != note.content {
-            saveTimer?.invalidate()
-            saveTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
-                Task { @MainActor in
-                    let clean = newContent.replacingOccurrences(of: "\\n", with: "\n")
-                    if note.content != clean {
-                        note.content = clean
-                        NotesDataManager.shared.saveNotes(notes)
+        // Detect Wiki-Link [[ typing
+        if let match = newContent.range(of: "\\[\\[([^\\]\\n]*)$", options: .regularExpression) {
+            let sub = String(newContent[match]).dropFirst(2)
+            wikiQuery = String(sub)
+            showWikiAutocomplete = true
+        } else if showWikiAutocomplete {
+            showWikiAutocomplete = false
+        }
+
+        saveTimer?.invalidate()
+        saveTimer = Timer.scheduledTimer(withTimeInterval: 1.2, repeats: false) { _ in
+            Task { @MainActor in
+                let clean = newContent.replacingOccurrences(of: "\\n", with: "\n")
+                if note.content != clean {
+                    note.content = clean
+                    NotesDataManager.shared.saveNotes(notes)
+                }
+                refreshMetadataAsync()
+            }
+        }
+    }
+
+    private func insertWikiLinkCompletion(_ title: String) {
+        if let range = localContent.range(of: "\\[\\[([^\\]\\n]*)$", options: .regularExpression) {
+            localContent.replaceSubrange(range, with: "[[\(title)]] ")
+            showWikiAutocomplete = false
+            handleAutoSave(localContent)
+        }
+    }
+
+    private func refreshMetadataAsync() {
+        let currentText = localContent
+        let currentTitle = note.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let currentLower = currentTitle.lowercased()
+        let noteId = note.id
+        let allNotes = self.notes
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            // Stats & Outline
+            let st = calculateWordAndCharCount(currentText)
+            let ot = currentText.components(separatedBy: "\n").filter { $0.hasPrefix("#") }
+
+            // Backlinks
+            var backlinks: [NoteItem] = []
+            var unlinked: [NoteItem] = []
+            if !currentLower.isEmpty {
+                for n in allNotes {
+                    if n.id == noteId { continue }
+                    let lower = n.content.lowercased()
+                    if lower.contains("[[\(currentLower)]]") {
+                        backlinks.append(n)
+                    } else if currentTitle.count > 2 && lower.contains(currentLower) {
+                        unlinked.append(n)
                     }
                 }
+            }
+
+            // Outgoing Wiki Links
+            var outgoing: [String] = []
+            let pattern = "\\[\\[(.*?)\\]\\]"
+            if let regex = try? NSRegularExpression(pattern: pattern) {
+                let nsRange = NSRange(currentText.startIndex..<currentText.endIndex, in: currentText)
+                let matches = regex.matches(in: currentText, range: nsRange)
+                for match in matches {
+                    if let range = Range(match.range(at: 1), in: currentText) {
+                        let link = String(currentText[range]).trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !link.isEmpty && !outgoing.contains(link) {
+                            outgoing.append(link)
+                        }
+                    }
+                }
+            }
+
+            DispatchQueue.main.async {
+                self.cachedStats = st
+                self.cachedHeadingOutline = ot
+                self.cachedIncomingBacklinks = backlinks
+                self.cachedUnlinkedMentions = unlinked
+                self.cachedOutgoingWikiLinks = outgoing
             }
         }
     }

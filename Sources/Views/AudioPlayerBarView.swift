@@ -108,8 +108,8 @@ struct AudioPlayerBarView: View {
     @State private var newBookmarkTitle = ""
     @State private var showBookmarkPopover = false
 
-    var audioURL: URL {
-        URL(fileURLWithPath: audioPath)
+    var resolvedAudioURL: URL? {
+        NotesDataManager.shared.resolveAttachmentURL(audioPath)
     }
 
     var body: some View {
@@ -182,46 +182,44 @@ struct AudioPlayerBarView: View {
                     }
                     
                     Spacer()
+                    
                     Text("\(formatTime(playerVM.currentTime)) / \(formatTime(playerVM.duration))")
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(.caption2)
                         .foregroundColor(.secondary)
+                        .monospacedDigit()
                 }
                 
-                // Interactive Multi-bar Waveform Seeker
-                InteractiveWaveformView(
-                    currentTime: playerVM.currentTime,
-                    duration: playerVM.duration,
-                    isPlaying: playerVM.isPlaying,
-                    primaryAccent: primaryAccent,
-                    audioURL: audioURL,
-                    onSeek: { targetTime in
-                        playerVM.seek(to: targetTime)
-                    }
-                )
+                // Interactive Waveform Track & Bookmark Markers Overlay
+                ZStack(alignment: .leading) {
+                    InteractiveWaveformView(
+                        currentTime: playerVM.currentTime,
+                        duration: playerVM.duration,
+                        isPlaying: playerVM.isPlaying,
+                        primaryAccent: primaryAccent,
+                        audioURL: resolvedAudioURL,
+                        onSeek: { target in
+                            playerVM.seek(to: target)
+                        }
+                    )
 
-                // List of Bookmarked Timeline Flags
-                if !note.bookmarks.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 6) {
-                            ForEach(note.bookmarks) { bm in
-                                Button(action: { playerVM.seek(to: bm.time) }) {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "flag.fill")
-                                            .font(.system(size: 8))
-                                        Text("\(bm.label) [\(formatTime(bm.time))]")
-                                            .font(.system(size: 9, weight: .semibold))
-                                    }
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(primaryAccent.opacity(0.15))
+                    // Flags
+                    GeometryReader { geo in
+                        ForEach(note.bookmarks) { bm in
+                            let ratio = playerVM.duration > 0 ? bm.time / playerVM.duration : 0.0
+                            let xPos = geo.size.width * CGFloat(min(1.0, max(0.0, ratio)))
+                            
+                            Button(action: { playerVM.seek(to: bm.time) }) {
+                                Image(systemName: "flag.fill")
+                                    .font(.system(size: 10))
                                     .foregroundColor(primaryAccent)
-                                    .cornerRadius(4)
-                                }
-                                .buttonStyle(.plain)
                             }
+                            .buttonStyle(.plain)
+                            .position(x: xPos, y: geo.size.height / 2)
+                            .help("\(bm.label) (\(formatTime(bm.time)))")
                         }
                     }
                 }
+                .frame(height: 26)
             }
             .frame(maxWidth: .infinity)
             
@@ -251,7 +249,14 @@ struct AudioPlayerBarView: View {
             alignment: .top
         )
         .onAppear {
-            playerVM.loadAudio(url: audioURL, transcript: note.transcript)
+            if let url = resolvedAudioURL {
+                playerVM.loadAudio(url: url, transcript: note.transcript)
+            }
+        }
+        .onChange(of: audioPath) { _, newPath in
+            if let url = NotesDataManager.shared.resolveAttachmentURL(newPath) {
+                playerVM.loadAudio(url: url, transcript: note.transcript)
+            }
         }
     }
 

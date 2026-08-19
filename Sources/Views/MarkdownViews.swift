@@ -281,6 +281,86 @@ enum MarkdownBlockType {
     case line(String)
     case table([String])
     case code(String)
+    case callout(type: String, title: String, content: [String])
+}
+
+// MARK: - Obsidian Callout Box Component
+struct CalloutBlockView: View {
+    let type: String
+    let title: String
+    let content: [String]
+    @Binding var notes: [NoteItem]
+    @Binding var selectedNoteId: UUID?
+    @ObservedObject var playerVM: AudioPlayerViewModel
+    let currentFolder: String
+    let isDark: Bool
+    let primaryAccent: Color
+    let secondaryAccent: Color
+
+    var calloutColor: Color {
+        switch type {
+        case "NOTE", "INFO": return primaryAccent
+        case "TIP", "HINT": return Color(red: 16/255, green: 185/255, blue: 129/255)
+        case "WARNING", "CAUTION": return Color(red: 245/255, green: 158/255, blue: 11/255)
+        case "IMPORTANT", "DANGER", "BUG": return Color(red: 244/255, green: 63/255, blue: 94/255)
+        case "QUESTION", "FAQ", "HELP": return Color(red: 139/255, green: 92/255, blue: 246/255)
+        case "SUCCESS", "CHECK", "DONE": return Color(red: 34/255, green: 197/255, blue: 94/255)
+        default: return primaryAccent
+        }
+    }
+
+    var calloutIcon: String {
+        switch type {
+        case "NOTE", "INFO": return "info.circle.fill"
+        case "TIP", "HINT": return "lightbulb.fill"
+        case "WARNING", "CAUTION": return "exclamationmark.triangle.fill"
+        case "IMPORTANT", "DANGER", "BUG": return "flame.fill"
+        case "QUESTION", "FAQ", "HELP": return "questionmark.circle.fill"
+        case "SUCCESS", "CHECK", "DONE": return "checkmark.seal.fill"
+        default: return "quote.bubble.fill"
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: calloutIcon)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(calloutColor)
+                Text(title)
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundColor(calloutColor)
+                Spacer()
+            }
+
+            if !content.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(Array(content.enumerated()), id: \.offset) { _, line in
+                        FormattedTextLine(
+                            text: line,
+                            notes: $notes,
+                            selectedNoteId: $selectedNoteId,
+                            playerVM: playerVM,
+                            currentFolder: currentFolder,
+                            primaryAccent: primaryAccent,
+                            secondaryAccent: secondaryAccent
+                        )
+                        .font(.caption)
+                    }
+                }
+                .padding(.leading, 2)
+            }
+        }
+        .padding(10)
+        .background(calloutColor.opacity(0.1))
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(calloutColor.opacity(0.35), lineWidth: 1)
+        )
+        .padding(.vertical, 4)
+    }
 }
 
 func parseMarkdownBlocks(_ text: String) -> [MarkdownBlockType] {
@@ -290,6 +370,34 @@ func parseMarkdownBlocks(_ text: String) -> [MarkdownBlockType] {
     var index = 0
     while index < lines.count {
         let line = lines[index]
+        
+        // Obsidian Callout check (> [!TYPE] Title)
+        if line.hasPrefix("> [!") {
+            let pattern = "^>\\s*\\[!(.*?)\\]\\s*(.*)$"
+            if let regex = try? NSRegularExpression(pattern: pattern),
+               let match = regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)),
+               let typeRange = Range(match.range(at: 1), in: line) {
+                let calloutType = String(line[typeRange]).uppercased()
+                var calloutTitle = ""
+                if let titleRange = Range(match.range(at: 2), in: line) {
+                    calloutTitle = String(line[titleRange]).trimmingCharacters(in: .whitespaces)
+                }
+                if calloutTitle.isEmpty {
+                    calloutTitle = calloutType.capitalized
+                }
+                
+                var bodyLines: [String] = []
+                index += 1
+                while index < lines.count && lines[index].hasPrefix(">") && !lines[index].hasPrefix("> [!") {
+                    let raw = lines[index]
+                    let clean = raw.hasPrefix("> ") ? String(raw.dropFirst(2)) : String(raw.dropFirst())
+                    bodyLines.append(clean)
+                    index += 1
+                }
+                blocks.append(.callout(type: calloutType, title: calloutTitle, content: bodyLines))
+                continue
+            }
+        }
         
         // Code block check
         if line.trimmingCharacters(in: .whitespaces).hasPrefix("```") {
@@ -348,6 +456,19 @@ struct MarkdownRendererView: View {
                     MarkdownTableView(lines: tableLines, isDark: isDark)
                 case .code(let codeStr):
                     CodeBlockView(code: codeStr, isDark: isDark)
+                case .callout(let type, let title, let contentLines):
+                    CalloutBlockView(
+                        type: type,
+                        title: title,
+                        content: contentLines,
+                        notes: $notes,
+                        selectedNoteId: $selectedNoteId,
+                        playerVM: playerVM,
+                        currentFolder: currentNoteFolder,
+                        isDark: isDark,
+                        primaryAccent: primaryAccent,
+                        secondaryAccent: secondaryAccent
+                    )
                 }
             }
         }

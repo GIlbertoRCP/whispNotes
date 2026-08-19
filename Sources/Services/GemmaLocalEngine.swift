@@ -27,6 +27,9 @@ class GemmaLocalEngine: ObservableObject {
         if !note.transcript.isEmpty {
             combinedText += "\n\nTranscript Highlights:\n" + note.transcript.map { "\($0.speaker): \($0.text)" }.joined(separator: "\n")
         }
+        if let pdfPath = note.pdfPath, let pdfURL = NotesDataManager.shared.resolveAttachmentURL(pdfPath), let pdfText = NotesDataManager.shared.extractTextFromPDF(url: pdfURL, maxPages: 5) {
+            combinedText += "\n\nAttached Document Excerpts:\n" + pdfText.prefix(2000)
+        }
         combinedText = truncateToContextWindow(combinedText)
         
         let sentences = extractSentences(from: combinedText)
@@ -155,7 +158,7 @@ class GemmaLocalEngine: ObservableObject {
             answer: note.content.prefix(160).trimmingCharacters(in: .whitespacesAndNewlines)
         ))
         
-        // Card 2: Headings and Section Definitions
+        // Card 2: Headings and Section Definitions from Note
         let lines = note.content.components(separatedBy: "\n")
         for i in 0..<lines.count {
             let line = lines[i]
@@ -172,8 +175,31 @@ class GemmaLocalEngine: ObservableObject {
                 }
             }
         }
+
+        // Card 3 & 4: Concepts extracted directly from attached PDF Document
+        if let pdfPath = note.pdfPath, let pdfURL = NotesDataManager.shared.resolveAttachmentURL(pdfPath),
+           let pdfText = NotesDataManager.shared.extractTextFromPDF(url: pdfURL, maxPages: 8) {
+            let pdfLines = pdfText.components(separatedBy: "\n")
+            var currentPageNum = 1
+            for pLine in pdfLines {
+                if pLine.hasPrefix("--- Page ") {
+                    if let num = Int(pLine.replacingOccurrences(of: "--- Page ", with: "").replacingOccurrences(of: " ---", with: "")) {
+                        currentPageNum = num
+                    }
+                    continue
+                }
+                let clean = pLine.trimmingCharacters(in: .whitespaces)
+                if clean.count > 25 && clean.count < 120 && (clean.contains(":") || clean.contains(" is ") || clean.contains(" are ")) {
+                    cards.append(Flashcard(
+                        question: "What is discussed on Page \(currentPageNum) of '\(pdfURL.lastPathComponent)'?",
+                        answer: clean
+                    ))
+                    if cards.count >= 6 { break }
+                }
+            }
+        }
         
-        // Card 3: Transcript Highlight (if available)
+        // Card 5: Transcript Highlight (if available)
         if let seg = note.transcript.first {
             cards.append(Flashcard(
                 question: "What key statement was made at \(formatTime(seg.startTime))?",
@@ -181,10 +207,50 @@ class GemmaLocalEngine: ObservableObject {
             ))
         }
         
-        return Array(cards.prefix(5))
+        return Array(cards.prefix(6))
+    }
+
+    /// Generates structured executive key takeaways directly from an attached PDF document.
+    func generatePDFSummary(pdfURL: URL) async -> String {
+        isGenerating = true
+        defer { isGenerating = false }
+
+        guard let pdfText = NotesDataManager.shared.extractTextFromPDF(url: pdfURL, maxPages: 15) else {
+            return "### 📑 PDF Summary: \(pdfURL.lastPathComponent)\n- Attached document ready in vault."
+        }
+
+        let sentences = extractSentences(from: pdfText)
+        let wordCounts = calculateWordFrequencies(in: pdfText)
+        
+        var scoredSentences: [(sentence: String, score: Double)] = []
+        for (index, sentence) in sentences.enumerated() {
+            autoreleasepool {
+                if sentence.hasPrefix("--- Page") { return }
+                var score = 0.0
+                score += max(0.0, 1.5 - (Double(index) * 0.05))
+                
+                let words = sentence.lowercased().components(separatedBy: .alphanumerics.inverted)
+                for word in words where word.count > 3 {
+                    if let count = wordCounts[word] {
+                        score += min(Double(count) * 0.2, 2.0)
+                    }
+                }
+                if sentence.count > 20 && sentence.count < 220 {
+                    scoredSentences.append((sentence: sentence, score: score))
+                }
+            }
+        }
+
+        let topTakeaways = scoredSentences.sorted(by: { $0.score > $1.score }).prefix(5).map { $0.sentence }
+        
+        var output = "### 📑 AI Summary: *\(pdfURL.lastPathComponent)*\n\n"
+        for t in topTakeaways {
+            output += "- \(t)\n"
+        }
+        return output
     }
     
-    /// Custom Q&A performing semantic excerpt extraction across note and transcript.
+    /// Custom Q&A performing semantic excerpt extraction across note, transcript, and attached PDF.
     func askGemma(prompt: String, note: NoteItem) async -> String {
         isGenerating = true
         defer { isGenerating = false }
@@ -196,6 +262,7 @@ class GemmaLocalEngine: ObservableObject {
         
         var matchingSnippets: [String] = []
         
+        // 1. Search in note content
         let contentLines = note.content.components(separatedBy: "\n")
         for line in contentLines {
             let lower = line.lowercased()
@@ -209,13 +276,43 @@ class GemmaLocalEngine: ObservableObject {
             }
         }
         
+        // 2. Search in audio transcript
         for seg in note.transcript {
             let lower = seg.text.lowercased()
             for kw in keywords {
                 if lower.contains(kw) {
-                    let quote = "Transcript [\(formatTime(seg.startTime))] \(seg.speaker): \"\(seg.text)\""
+                    let quote = "Audio [\(formatTime(seg.startTime))] \(seg.speaker): \"\(seg.text)\""
                     if !matchingSnippets.contains(quote) {
                         matchingSnippets.append(quote)
+                    }
+                }
+            }
+        }
+
+        // 3. Search in attached PDF document with exact page citation
+        if let pdfPath = note.pdfPath, let pdfURL = NotesDataManager.shared.resolveAttachmentURL(pdfPath),
+           let pdfText = NotesDataManager.shared.extractTextFromPDF(url: pdfURL, maxPages: 25) {
+            let pdfLines = pdfText.components(separatedBy: "\n")
+            var currentPageNum = 1
+            
+            for line in pdfLines {
+                if line.hasPrefix("--- Page ") {
+                    if let num = Int(line.replacingOccurrences(of: "--- Page ", with: "").replacingOccurrences(of: " ---", with: "")) {
+                        currentPageNum = num
+                    }
+                    continue
+                }
+                
+                let lower = line.lowercased()
+                for kw in keywords {
+                    if lower.contains(kw) {
+                        let clean = line.trimmingCharacters(in: .whitespaces)
+                        if clean.count > 15 {
+                            let cited = "📄 PDF (*\(pdfURL.lastPathComponent)*, Page \(currentPageNum)): \"\(clean)\""
+                            if !matchingSnippets.contains(cited) {
+                                matchingSnippets.append(cited)
+                            }
+                        }
                     }
                 }
             }
@@ -225,7 +322,7 @@ class GemmaLocalEngine: ObservableObject {
             let excerpt = note.content.prefix(200)
             return "💡 **Answer regarding '\(note.title)'**:\n\nFor question: *\(cleanPrompt)*\n\nNo exact term matches found. Context summary:\n> \(excerpt)"
         } else {
-            let matchesText = matchingSnippets.prefix(3).map { "- \($0)" }.joined(separator: "\n")
+            let matchesText = matchingSnippets.prefix(4).map { "- \($0)" }.joined(separator: "\n")
             return "💡 **Answer regarding '\(note.title)'**:\n\nFor question: *\(cleanPrompt)*\n\nRelevant excerpts:\n\(matchesText)"
         }
     }

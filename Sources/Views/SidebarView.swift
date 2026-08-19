@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 // MARK: - Sidebar View (With Dynamic Accents & Trash Bin)
 struct SidebarView: View {
@@ -27,22 +28,10 @@ struct SidebarView: View {
         notes.filter { $0.folder == "Trash" }
     }
 
+    @State private var cachedTags: [String] = []
+
     var allTags: [String] {
-        var tagSet: Set<String> = []
-        let pattern = "#([a-zA-Z0-9_]+)"
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
-        
-        for note in activeNotes {
-            let text = note.content
-            let nsRange = NSRange(text.startIndex..<text.endIndex, in: text)
-            let matches = regex.matches(in: text, range: nsRange)
-            for match in matches {
-                if let range = Range(match.range(at: 1), in: text) {
-                    tagSet.insert(String(text[range]).lowercased())
-                }
-            }
-        }
-        return Array(tagSet).sorted()
+        cachedTags
     }
 
     var filteredNotes: [NoteItem] {
@@ -68,18 +57,15 @@ struct SidebarView: View {
                 if let nsImg = NSImage(named: "AppIcon") {
                     Image(nsImage: nsImg)
                         .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 22, height: 22)
-                        .cornerRadius(5)
+                        .frame(width: 20, height: 20)
                 } else {
                     Image(systemName: "leaf.fill")
-                        .font(.title3)
+                        .font(.system(size: 16))
                         .foregroundColor(primaryAccent)
                 }
                 
                 Text("whispNotes")
-                    .font(.title3)
-                    .fontWeight(.bold)
+                    .font(.system(size: 14, weight: .bold))
                     .foregroundColor(isDark ? .white : Color(red: 15/255, green: 23/255, blue: 42/255))
                 
                 Spacer()
@@ -87,9 +73,9 @@ struct SidebarView: View {
                 // + New Folder Button
                 Button(action: { showNewFolderPopover.toggle() }) {
                     Image(systemName: "folder.badge.plus")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(secondaryAccent)
-                        .padding(6)
+                        .frame(width: 26, height: 26)
                         .background(secondaryAccent.opacity(0.12))
                         .cornerRadius(6)
                 }
@@ -113,12 +99,24 @@ struct SidebarView: View {
                     .padding()
                 }
 
+                // + Import PDF Document Button
+                Button(action: importNewPDFNote) {
+                    Image(systemName: "doc.badge.plus")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(secondaryAccent)
+                        .frame(width: 26, height: 26)
+                        .background(secondaryAccent.opacity(0.12))
+                        .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+                .help("Import PDF Document Note")
+
                 // + New Note Button
                 Button(action: createNewNote) {
                     Image(systemName: "plus")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(primaryAccent)
-                        .padding(6)
+                        .frame(width: 26, height: 26)
                         .background(primaryAccent.opacity(0.12))
                         .cornerRadius(6)
                 }
@@ -126,7 +124,14 @@ struct SidebarView: View {
                 .help("New Note (⌘N)")
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 12)
+            .frame(height: 48)
+            .background(Color.sidebarBackground(isDark))
+            .overlay(
+                Rectangle()
+                    .frame(height: 1)
+                    .foregroundColor(Color.subtleBorder(isDark)),
+                alignment: .bottom
+            )
             
             // Real-Time Note Search Field
             HStack(spacing: 6) {
@@ -148,15 +153,15 @@ struct SidebarView: View {
                 }
             }
             .padding(.horizontal, 8)
-            .padding(.vertical, 5)
+            .padding(.vertical, 6)
             .background(Color.cardBackground(isDark))
             .cornerRadius(6)
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
                     .stroke(Color.subtleBorder(isDark), lineWidth: 1)
             )
-            .padding(.horizontal, 14)
-            .padding(.bottom, 8)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
 
             Divider()
                 .background(Color.subtleBorder(isDark))
@@ -222,18 +227,35 @@ struct SidebarView: View {
                             ForEach(groupedNotes[folder] ?? []) { note in
                                 NavigationLink(value: note.id) {
                                     HStack(spacing: 8) {
-                                        Image(systemName: note.isStandalone ? "doc.text" : "waveform")
-                                            .font(.caption)
-                                            .foregroundColor(note.isStandalone ? (isDark ? .secondary : Color(red: 71/255, green: 85/255, blue: 105/255)) : primaryAccent)
+                                        if note.pdfPath != nil {
+                                            Image(systemName: "doc.richtext.fill")
+                                                .font(.caption)
+                                                .foregroundColor(primaryAccent)
+                                        } else {
+                                            Image(systemName: note.isStandalone ? "doc.text" : "waveform")
+                                                .font(.caption)
+                                                .foregroundColor(note.isStandalone ? (isDark ? .secondary : Color(red: 71/255, green: 85/255, blue: 105/255)) : primaryAccent)
+                                        }
                                         
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text(note.title)
                                                 .font(.system(size: 13, weight: .semibold))
                                                 .foregroundColor(isDark ? .white : Color(red: 15/255, green: 23/255, blue: 42/255))
                                                 .lineLimit(1)
-                                            Text(note.timestamp, style: .date)
-                                                .font(.system(size: 9, weight: .medium))
-                                                .foregroundColor(isDark ? .secondary : Color(red: 100/255, green: 116/255, blue: 139/255))
+                                            HStack(spacing: 4) {
+                                                if note.pdfPath != nil {
+                                                    Text("PDF")
+                                                        .font(.system(size: 8, weight: .bold))
+                                                        .padding(.horizontal, 4)
+                                                        .padding(.vertical, 1)
+                                                        .background(primaryAccent.opacity(0.18))
+                                                        .foregroundColor(primaryAccent)
+                                                        .cornerRadius(3)
+                                                }
+                                                Text(note.timestamp, style: .date)
+                                                    .font(.system(size: 9, weight: .medium))
+                                                    .foregroundColor(isDark ? .secondary : Color(red: 100/255, green: 116/255, blue: 139/255))
+                                            }
                                         }
                                     }
                                 }
@@ -243,6 +265,21 @@ struct SidebarView: View {
                                 .contextMenu {
                                     Button(action: { duplicateNote(note) }) {
                                         Label("Duplicate Note", systemImage: "doc.on.doc")
+                                    }
+                                    
+                                    if note.pdfPath != nil {
+                                        Button(action: {
+                                            if let idx = notes.firstIndex(where: { $0.id == note.id }) {
+                                                notes[idx].pdfPath = nil
+                                                NotesDataManager.shared.saveNotes(notes)
+                                            }
+                                        }) {
+                                            Label("Detach PDF Document", systemImage: "doc.badge.ellipsis")
+                                        }
+                                    } else {
+                                        Button(action: { attachPDFToNote(note) }) {
+                                            Label("Attach PDF Document...", systemImage: "paperclip")
+                                        }
                                     }
                                     
                                     Menu("Move to Folder...") {
@@ -375,6 +412,12 @@ struct SidebarView: View {
             .scrollContentBackground(.hidden)
         }
         .background(Color.sidebarBackground(isDark))
+        .onAppear {
+            refreshTagsAsync()
+        }
+        .onChange(of: notes.count) { _, _ in
+            refreshTagsAsync()
+        }
         .popover(isPresented: Binding(
             get: { renamingFolder != nil },
             set: { if !$0 { renamingFolder = nil } }
@@ -514,5 +557,76 @@ struct SidebarView: View {
             selectedNoteId = activeNotes.first?.id
         }
         NotesDataManager.shared.saveNotes(notes)
+    }
+
+    private func importNewPDFNote() {
+        let panel = NSOpenPanel()
+        panel.title = "Import PDF Document as New Note"
+        panel.allowedContentTypes = [UTType.pdf]
+        panel.allowsMultipleSelection = false
+        panel.begin { response in
+            if response == .OK, let url = panel.url {
+                let noteId = UUID()
+                let title = (url.lastPathComponent as NSString).deletingPathExtension
+                if let (relPath, _) = NotesDataManager.shared.importAttachment(from: url, for: noteId) {
+                    let newNote = NoteItem(
+                        id: noteId,
+                        title: title,
+                        folder: "General",
+                        content: "# \(title)\n\nAttached Document: `\(url.lastPathComponent)`",
+                        timestamp: Date(),
+                        audioPath: nil,
+                        transcript: [],
+                        isStandalone: true,
+                        bookmarks: [],
+                        pdfPath: relPath
+                    )
+                    notes.insert(newNote, at: 0)
+                    selectedNoteId = newNote.id
+                    NotesDataManager.shared.saveNotes(notes)
+                }
+            }
+        }
+    }
+
+    private func attachPDFToNote(_ note: NoteItem) {
+        let panel = NSOpenPanel()
+        panel.title = "Attach PDF to Note"
+        panel.allowedContentTypes = [UTType.pdf]
+        panel.allowsMultipleSelection = false
+        panel.begin { response in
+            if response == .OK, let url = panel.url {
+                if let (relPath, _) = NotesDataManager.shared.importAttachment(from: url, for: note.id) {
+                    if let idx = notes.firstIndex(where: { $0.id == note.id }) {
+                        notes[idx].pdfPath = relPath
+                        NotesDataManager.shared.saveNotes(notes)
+                    }
+                }
+            }
+        }
+    }
+
+    private func refreshTagsAsync() {
+        DispatchQueue.global(qos: .userInitiated).async {
+            var tagSet: Set<String> = []
+            let pattern = "#([a-zA-Z0-9_]+)"
+            guard let regex = try? NSRegularExpression(pattern: pattern) else { return }
+            
+            let active = self.notes.filter { $0.folder != "Trash" }
+            for note in active {
+                let text = note.content
+                let nsRange = NSRange(text.startIndex..<text.endIndex, in: text)
+                let matches = regex.matches(in: text, range: nsRange)
+                for match in matches {
+                    if let range = Range(match.range(at: 1), in: text) {
+                        tagSet.insert(String(text[range]).lowercased())
+                    }
+                }
+            }
+            let sorted = Array(tagSet).sorted()
+            DispatchQueue.main.async {
+                self.cachedTags = sorted
+            }
+        }
     }
 }

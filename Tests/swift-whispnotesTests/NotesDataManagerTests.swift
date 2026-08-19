@@ -23,16 +23,45 @@ final class NotesDataManagerTests: XCTestCase {
         XCTAssertEqual(formatTime(3605.0), "60:05")
     }
 
-    func testAudioWaveformExtractorFallbackPeaks() {
-        let dummyURL = URL(fileURLWithPath: "/non_existent_path.wav")
-        let expectation = XCTestExpectation(description: "Waveform extraction fallback peaks")
+    func testNoteItemPDFAndAttachmentEncodingDecoding() throws {
+        let noteId = UUID()
+        let attachment = NoteAttachment(
+            fileName: "lecture_slides.pdf",
+            relativePath: "\(noteId.uuidString.prefix(8))_lecture_slides.pdf",
+            fileType: "pdf",
+            fileSize: 102400
+        )
+        let note = NoteItem(
+            id: noteId,
+            title: "Calculus Lecture 1",
+            folder: "Math",
+            content: "# Calculus\n\nIntegrals and Derivatives",
+            timestamp: Date(),
+            audioPath: "audio_1.m4a",
+            transcript: [],
+            isStandalone: true,
+            bookmarks: [],
+            pdfPath: attachment.relativePath,
+            attachments: [attachment]
+        )
         
-        AudioWaveformExtractor.shared.extractPeaks(from: dummyURL, targetSampleCount: 20) { peaks in
-            XCTAssertEqual(peaks.count, 20)
-            XCTAssertGreaterThanOrEqual(peaks.first ?? 0, 0.05)
-            expectation.fulfill()
-        }
+        let encoder = JSONEncoder()
+        let data = try encoder.encode(note)
         
-        wait(for: [expectation], timeout: 2.0)
+        let decoder = JSONDecoder()
+        let decodedNote = try decoder.decode(NoteItem.self, from: data)
+        
+        XCTAssertEqual(decodedNote.id, noteId)
+        XCTAssertEqual(decodedNote.title, "Calculus Lecture 1")
+        XCTAssertEqual(decodedNote.pdfPath, attachment.relativePath)
+        XCTAssertEqual(decodedNote.attachments.count, 1)
+        XCTAssertEqual(decodedNote.attachments.first?.fileName, "lecture_slides.pdf")
+    }
+
+    func testNotesDataManagerAttachmentResolution() {
+        let manager = NotesDataManager.shared
+        let dummyName = "test_non_existent_\(UUID().uuidString).pdf"
+        let resolved = manager.resolveAttachmentURL(dummyName)
+        XCTAssertNil(resolved)
     }
 }

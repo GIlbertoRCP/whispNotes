@@ -5,6 +5,35 @@ All notable changes to **WhispNotes** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semanticsver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-08-18
+
+### Added
+- **Native PDF Document Support & Split-Screen Reading**:
+  - Full-screen & side-by-side split reading with draggable divider ratio (`⌘\` / `⌘Option+P`).
+  - Seamless PDF document attachment, vault sandboxing, and Apple Preview.app integration (`↗`).
+  - Interactive **"Cite"** action (`💬`) to instantly insert selected text as a quoted blockquote with document & page citation.
+- **Deep PDF AI Assistant Integration**:
+  - Active PDF Document Context badge identifying attached slides/papers.
+  - **1-Click Executive PDF Summarizer**: Background document analysis with 1-click note insertion.
+  - **Page-Cited Semantic Q&A**: Gemma AI answers questions by scanning PDF pages and providing exact page citations.
+  - **PDF-Derived Study Flashcards**: Automatic generation of revision flashcards from document definitions and concepts.
+- **Obsidian Vault 1-Click Importer (`⌘⇧M`)**:
+  - Recursive migration tool parsing nested folders, markdown notes, tags, and wiki-links directly into WhispNotes.
+- **Live Wiki-Link Autocomplete Popup (`[[`)**:
+  - Floating suggestions menu when typing `[[` to instantly search and link other notes.
+- **Obsidian-Style Callout Blocks**:
+  - Rich styled boxes for `> [!NOTE]`, `> [!TIP]`, `> [!WARNING]`, `> [!IMPORTANT]`, `> [!QUESTION]`, `> [!SUCCESS]`.
+- **Interactive Checklists**:
+  - Clickable markdown checkboxes (`- [ ]` / `- [x]`) in preview mode.
+
+### Improved & Fixed
+- **60 FPS Typing Pipeline**: Decoupled autosave (1.2s debounced queue) and asynchronous background metadata extraction.
+- **Zero-Lag PDF Switching**: Resolved SwiftUI `AttributeGraph: cycle detected` by isolating PDFKit state in `PDFViewController`.
+- **Unified Window Header Baseline**: Aligned sidebar header and top toolbar height to a clean 48px baseline with unbroken horizontal divider.
+- **Cleaned Toolbars**: Eliminated duplicate PDF buttons and removed heavy text extraction in favor of instant native viewing.
+
+---
+
 ## [1.1.0] - 2026-08-11
 
 ### Added

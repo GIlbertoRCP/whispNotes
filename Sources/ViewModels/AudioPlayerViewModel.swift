@@ -16,6 +16,9 @@ class AudioPlayerViewModel: ObservableObject {
 
     func loadAudio(url: URL, transcript: [TranscriptSegment]) {
         self.transcriptSegments = transcript
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            return
+        }
         do {
             audioPlayer = try AVAudioPlayer(contentsOf: url)
             audioPlayer?.prepareToPlay()

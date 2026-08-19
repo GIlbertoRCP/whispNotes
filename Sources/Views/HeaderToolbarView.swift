@@ -132,9 +132,10 @@ struct HeaderToolbarView: View {
             Spacer()
 
             // Center Section: Mode Picker Segmented Control
-            if selectedNote != nil {
+            if let noteBinding = selectedNote {
+                let availableModes: [EditModeType] = noteBinding.wrappedValue.pdfPath != nil ? EditModeType.allCases : [.edit, .split, .preview]
                 HStack(spacing: 2) {
-                    ForEach(EditModeType.allCases, id: \.self) { mode in
+                    ForEach(availableModes, id: \.self) { mode in
                         Button(action: { editMode = mode }) {
                             Text(mode.rawValue)
                                 .font(.system(size: 11, weight: editMode == mode ? .bold : .medium))
@@ -164,6 +165,20 @@ struct HeaderToolbarView: View {
                     // Live Waveform Visualizer
                     if recorderVM.isRecording {
                         WaveformVisualizerView(level: recorderVM.audioLevel, primaryColor: primaryAccent)
+                    }
+
+                    // Attach PDF / Document Action Button
+                    ToolbarIconButton(
+                        icon: noteBinding.wrappedValue.pdfPath != nil ? "doc.richtext.fill" : "paperclip",
+                        helpText: noteBinding.wrappedValue.pdfPath != nil ? "View Attached PDF Document" : "Attach PDF Document...",
+                        isActive: noteBinding.wrappedValue.pdfPath != nil,
+                        activeColor: primaryAccent
+                    ) {
+                        if noteBinding.wrappedValue.pdfPath != nil {
+                            editMode = (editMode == .pdf ? .split : .pdf)
+                        } else {
+                            attachPDFDocument()
+                        }
                     }
 
                     // Audio Record Pill Button
@@ -275,10 +290,22 @@ struct HeaderToolbarView: View {
     
     private func toggleRecording() {
         if recorderVM.isRecording {
-            if let url = recorderVM.stopRecording() {
+            if let tempURL = recorderVM.stopRecording() {
+                if let noteBinding = selectedNote {
+                    // Import into sandbox so the recording is never lost
+                    if let (_, safeURL) = NotesDataManager.shared.importAttachment(from: tempURL, for: noteBinding.wrappedValue.id) {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                            LocalSpeechTranscriber.transcribe(url: safeURL) { segments in
+                                onAudioTranscribed(segments, safeURL.path)
+                            }
+                        }
+                        return
+                    }
+                }
+                
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                    LocalSpeechTranscriber.transcribe(url: url) { segments in
-                        onAudioTranscribed(segments, url.path)
+                    LocalSpeechTranscriber.transcribe(url: tempURL) { segments in
+                        onAudioTranscribed(segments, tempURL.path)
                     }
                 }
             }
@@ -287,15 +314,35 @@ struct HeaderToolbarView: View {
         }
     }
 
+    private func attachPDFDocument() {
+        guard let noteBinding = selectedNote else { return }
+        let panel = NSOpenPanel()
+        panel.title = "Attach PDF Document"
+        panel.allowedContentTypes = [UTType.pdf]
+        panel.allowsMultipleSelection = false
+        panel.begin { response in
+            if response == .OK, let url = panel.url {
+                if let (relPath, _) = NotesDataManager.shared.importAttachment(from: url, for: noteBinding.wrappedValue.id) {
+                    noteBinding.wrappedValue.pdfPath = relPath
+                    editMode = .pdf
+                    NotesDataManager.shared.saveNotes(notes)
+                }
+            }
+        }
+    }
+
     private func importAudioFile() {
+        guard let noteBinding = selectedNote else { return }
         let panel = NSOpenPanel()
         panel.title = "Import Lecture Audio File"
         panel.allowedContentTypes = [UTType.audio, UTType.mp3, UTType.wav, UTType.mpeg4Audio]
         panel.allowsMultipleSelection = false
         panel.begin { response in
             if response == .OK, let url = panel.url {
-                LocalSpeechTranscriber.transcribe(url: url) { segments in
-                    onAudioTranscribed(segments, url.path)
+                if let (_, safeURL) = NotesDataManager.shared.importAttachment(from: url, for: noteBinding.wrappedValue.id) {
+                    LocalSpeechTranscriber.transcribe(url: safeURL) { segments in
+                        onAudioTranscribed(segments, safeURL.path)
+                    }
                 }
             }
         }

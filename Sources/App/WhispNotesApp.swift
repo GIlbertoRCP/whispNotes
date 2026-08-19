@@ -47,6 +47,20 @@ public struct WhispNotesSwiftApp: App {
                 }
                 .keyboardShortcut("d", modifiers: .command)
 
+                Button("Import Obsidian Vault (Folder)...") {
+                    importObsidianVault()
+                }
+                .keyboardShortcut("m", modifiers: [.command, .shift])
+
+                Button("Import PDF Document as Note...") {
+                    importPDFAsNewNote()
+                }
+                .keyboardShortcut("o", modifiers: [.command, .shift])
+
+                Button("Attach PDF to Current Note...") {
+                    attachPDFToActiveNote()
+                }
+
                 Button("Import Lecture Audio File...") {
                     importAudioFile()
                 }
@@ -198,14 +212,81 @@ public struct WhispNotesSwiftApp: App {
         panel.allowsMultipleSelection = false
         panel.begin { response in
             if response == .OK, let url = panel.url {
-                LocalSpeechTranscriber.transcribe(url: url) { segments in
-                    if let id = selectedNoteId, let idx = notes.firstIndex(where: { $0.id == id }) {
-                        notes[idx].transcript = segments
-                        notes[idx].audioPath = url.path
+                if let id = selectedNoteId, let idx = notes.firstIndex(where: { $0.id == id }) {
+                    if let (relPath, safeURL) = NotesDataManager.shared.importAttachment(from: url, for: notes[idx].id) {
+                        notes[idx].audioPath = relPath
                         notes[idx].isStandalone = false
                         NotesDataManager.shared.saveNotes(notes)
-                        playerVM.loadAudio(url: url, transcript: segments)
+                        LocalSpeechTranscriber.transcribe(url: safeURL) { segments in
+                            notes[idx].transcript = segments
+                            NotesDataManager.shared.saveNotes(notes)
+                            playerVM.loadAudio(url: safeURL, transcript: segments)
+                        }
                     }
+                }
+            }
+        }
+    }
+
+    private func importPDFAsNewNote() {
+        let panel = NSOpenPanel()
+        panel.title = "Import PDF Document as New Note"
+        panel.allowedContentTypes = [.pdf]
+        panel.allowsMultipleSelection = false
+        panel.begin { response in
+            if response == .OK, let url = panel.url {
+                let noteId = UUID()
+                let title = (url.lastPathComponent as NSString).deletingPathExtension
+                if let (relPath, _) = NotesDataManager.shared.importAttachment(from: url, for: noteId) {
+                    let newNote = NoteItem(
+                        id: noteId,
+                        title: title,
+                        folder: "General",
+                        content: "# \(title)\n\nAttached Document: `\(url.lastPathComponent)`",
+                        timestamp: Date(),
+                        audioPath: nil,
+                        transcript: [],
+                        isStandalone: true,
+                        bookmarks: [],
+                        pdfPath: relPath
+                    )
+                    notes.insert(newNote, at: 0)
+                    selectedNoteId = newNote.id
+                    NotesDataManager.shared.saveNotes(notes)
+                }
+            }
+        }
+    }
+
+    private func attachPDFToActiveNote() {
+        guard let id = selectedNoteId, let idx = notes.firstIndex(where: { $0.id == id }) else { return }
+        let panel = NSOpenPanel()
+        panel.title = "Attach PDF Document to Note"
+        panel.allowedContentTypes = [.pdf]
+        panel.allowsMultipleSelection = false
+        panel.begin { response in
+            if response == .OK, let url = panel.url {
+                if let (relPath, _) = NotesDataManager.shared.importAttachment(from: url, for: notes[idx].id) {
+                    notes[idx].pdfPath = relPath
+                    NotesDataManager.shared.saveNotes(notes)
+                }
+            }
+        }
+    }
+
+    private func importObsidianVault() {
+        let panel = NSOpenPanel()
+        panel.title = "Select Obsidian Vault Folder to Import"
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.begin { response in
+            if response == .OK, let url = panel.url {
+                let imported = NotesDataManager.shared.importObsidianVault(from: url)
+                if !imported.isEmpty {
+                    notes.insert(contentsOf: imported, at: 0)
+                    selectedNoteId = imported.first?.id
+                    NotesDataManager.shared.saveNotesImmediately(notes)
                 }
             }
         }

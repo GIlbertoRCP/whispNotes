@@ -209,7 +209,19 @@ struct ContentView: View {
                 secondaryAccent: secondaryAccent
             )
         }
+        .onChange(of: selectedNoteId) { _, newId in
+            if let id = newId, let note = notes.first(where: { $0.id == id }) {
+                if note.pdfPath != nil {
+                    editMode = .pdf
+                } else if editMode == .pdf {
+                    editMode = .edit
+                }
+            }
+        }
         .onAppear {
+            if let id = selectedNoteId, let note = notes.first(where: { $0.id == id }), note.pdfPath != nil {
+                editMode = .pdf
+            }
             NSApplication.shared.setActivationPolicy(.regular)
             NSApplication.shared.activate(ignoringOtherApps: true)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
