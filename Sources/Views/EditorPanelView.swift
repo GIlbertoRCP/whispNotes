@@ -35,6 +35,7 @@ struct EditorPanelView: View {
     @State private var cachedOutgoingWikiLinks: [String] = []
     @State private var showWikiAutocomplete = false
     @State private var wikiQuery = ""
+    @State private var showImagePastedToast = false
 
     private var stats: (words: Int, chars: Int) {
         cachedStats
@@ -142,6 +143,14 @@ struct EditorPanelView: View {
                         }
                         .buttonStyle(.plain)
                         .help("Blockquote (> Quote)")
+
+                        Button(action: pasteImageFromClipboard) {
+                            Image(systemName: "photo.badge.plus")
+                                .font(.system(size: 12))
+                                .frame(width: 24, height: 24)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Paste Screenshot / Image from Clipboard (⌘⇧V)")
                     }
 
                     Spacer()
@@ -228,18 +237,28 @@ struct EditorPanelView: View {
                     }
                 )
             } else if editMode == .edit {
-                TextEditor(text: $localContent)
-                    .font(.system(size: CGFloat(editorFontSize), design: selectedFontDesign))
-                    .scrollContentBackground(.hidden)
-                    .padding(16)
-                    .background(Color.panelBackground(isDark))
-                    .onChange(of: localContent) { oldContent, newContent in
-                        let formatted = processMarkdownAutoFormatting(oldText: oldContent, newText: newContent)
-                        if formatted != newContent {
-                            localContent = formatted
+                MacMarkdownEditorView(
+                    text: $localContent,
+                    noteId: note.id,
+                    fontSize: CGFloat(editorFontSize),
+                    fontDesign: selectedFontDesign,
+                    isDark: isDark,
+                    onImagePasted: {
+                        withAnimation {
+                            showImagePastedToast = true
                         }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                            withAnimation {
+                                showImagePastedToast = false
+                            }
+                        }
+                    },
+                    onTextChanged: { formatted in
                         handleAutoSave(formatted)
                     }
+                )
+                .padding(6)
+                .background(Color.panelBackground(isDark))
             } else if editMode == .split {
                 GeometryReader { splitGeo in
                     let totalWidth = splitGeo.size.width
@@ -248,20 +267,30 @@ struct EditorPanelView: View {
                     let effectiveRightWidth = max(minPanelWidth, totalWidth - effectiveLeftWidth - 6)
 
                     HStack(spacing: 0) {
-                        // Left: Markdown Text Editor
-                        TextEditor(text: $localContent)
-                            .font(.system(size: CGFloat(editorFontSize), design: selectedFontDesign))
-                            .scrollContentBackground(.hidden)
-                            .padding(16)
-                            .background(Color.panelBackground(isDark))
-                            .frame(width: effectiveLeftWidth)
-                            .onChange(of: localContent) { oldContent, newContent in
-                                let formatted = processMarkdownAutoFormatting(oldText: oldContent, newText: newContent)
-                                if formatted != newContent {
-                                    localContent = formatted
+                        // Left: Native Markdown Text Editor
+                        MacMarkdownEditorView(
+                            text: $localContent,
+                            noteId: note.id,
+                            fontSize: CGFloat(editorFontSize),
+                            fontDesign: selectedFontDesign,
+                            isDark: isDark,
+                            onImagePasted: {
+                                withAnimation {
+                                    showImagePastedToast = true
                                 }
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                                    withAnimation {
+                                        showImagePastedToast = false
+                                    }
+                                }
+                            },
+                            onTextChanged: { formatted in
                                 handleAutoSave(formatted)
                             }
+                        )
+                        .padding(6)
+                        .background(Color.panelBackground(isDark))
+                        .frame(width: effectiveLeftWidth)
                         
                         // Interactive Draggable Split Divider
                         ZStack {
@@ -481,6 +510,27 @@ struct EditorPanelView: View {
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
         }
+        .overlay(alignment: .topTrailing) {
+            if showImagePastedToast {
+                HStack(spacing: 6) {
+                    Image(systemName: "photo.fill")
+                        .foregroundColor(primaryAccent)
+                    Text("Image Pasted into Vault")
+                        .font(.system(size: 11, weight: .bold))
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.panelBackground(isDark))
+                .cornerRadius(8)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(primaryAccent.opacity(0.3), lineWidth: 1)
+                )
+                .shadow(color: Color.black.opacity(0.25), radius: 6, x: 0, y: 3)
+                .padding(16)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
         .onAppear {
             localContent = note.content.replacingOccurrences(of: "\\n", with: "\n")
             refreshMetadataAsync()
@@ -505,8 +555,28 @@ struct EditorPanelView: View {
                 NotesDataManager.shared.saveNotes(notes)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .pasteImageAsAttachment)) { _ in
+            pasteImageFromClipboard()
+        }
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             handleFileDrop(providers: providers)
+        }
+    }
+
+    private func pasteImageFromClipboard() {
+        if let res = NotesDataManager.shared.saveClipboardImage(for: note.id) {
+            localContent += "\n\n" + res.markdown + "\n"
+            handleAutoSave(localContent)
+            withAnimation {
+                showImagePastedToast = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                withAnimation {
+                    showImagePastedToast = false
+                }
+            }
+        } else {
+            NSSound.beep()
         }
     }
 
@@ -539,6 +609,20 @@ struct EditorPanelView: View {
                             note.transcript = segments
                             NotesDataManager.shared.saveNotes(notes)
                             playerVM.loadAudio(url: fullURL, transcript: segments)
+                        }
+                    }
+                } else if ["png", "jpg", "jpeg", "gif", "webp", "tiff", "bmp", "heic"].contains(ext) {
+                    if let image = NSImage(contentsOf: url),
+                       let res = NotesDataManager.shared.saveImageAttachment(image: image, originalFilename: url.lastPathComponent, for: note.id) {
+                        localContent += "\n\n" + res.markdown + "\n"
+                        handleAutoSave(localContent)
+                        withAnimation {
+                            showImagePastedToast = true
+                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                            withAnimation {
+                                showImagePastedToast = false
+                            }
                         }
                     }
                 }
@@ -718,5 +802,163 @@ struct EditorPanelView: View {
             notes[idx].content = regex.stringByReplacingMatches(in: notes[idx].content, range: nsRange, withTemplate: "[[$1]]")
             NotesDataManager.shared.saveNotes(notes)
         }
+    }
+}
+
+// MARK: - Native Mac Markdown Text Editor with Deep Image Paste Interception
+struct MacMarkdownEditorView: NSViewRepresentable {
+    @Binding var text: String
+    let noteId: UUID
+    let fontSize: CGFloat
+    let fontDesign: Font.Design
+    let isDark: Bool
+    var onImagePasted: (() -> Void)? = nil
+    var onTextChanged: ((String) -> Void)? = nil
+
+    class Coordinator: NSObject, NSTextViewDelegate {
+        var parent: MacMarkdownEditorView
+        var isUpdating = false
+
+        init(_ parent: MacMarkdownEditorView) {
+            self.parent = parent
+        }
+
+        func textDidChange(_ notification: Notification) {
+            guard !isUpdating, let textView = notification.object as? NSTextView else { return }
+            let newText = textView.string
+            if parent.text != newText {
+                parent.text = newText
+                parent.onTextChanged?(newText)
+            }
+        }
+    }
+
+    class CustomNSTextView: NSTextView {
+        var noteId: UUID?
+        var onImagePasted: (() -> Void)?
+
+        override func performKeyEquivalent(with event: NSEvent) -> Bool {
+            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            // Intercept ⌘V keyboard shortcut
+            if flags == .command && event.charactersIgnoringModifiers == "v" {
+                self.paste(self)
+                return true
+            }
+            return super.performKeyEquivalent(with: event)
+        }
+
+        override func paste(_ sender: Any?) {
+            // Check if clipboard contains image data (e.g. from ⌘⌃⇧4 screenshot or copied image)
+            if let noteId = noteId, let res = NotesDataManager.shared.saveClipboardImage(for: noteId) {
+                let markdownTag = "\n\n" + res.markdown + "\n\n"
+                self.insertText(markdownTag, replacementRange: self.selectedRange())
+                self.didChangeText()
+                onImagePasted?()
+                return
+            }
+            // Normal text paste
+            super.paste(sender)
+        }
+
+        override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+            let pboard = sender.draggingPasteboard
+            if let noteId = noteId {
+                if let image = NSImage(pasteboard: pboard) {
+                    if let res = NotesDataManager.shared.saveImageAttachment(image: image, originalFilename: nil, for: noteId) {
+                        let markdownTag = "\n\n" + res.markdown + "\n\n"
+                        self.insertText(markdownTag, replacementRange: self.selectedRange())
+                        self.didChangeText()
+                        onImagePasted?()
+                        return true
+                    }
+                }
+                if let urls = pboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL] {
+                    let imageExtensions = ["png", "jpg", "jpeg", "gif", "webp", "tiff", "bmp", "heic"]
+                    for fileURL in urls {
+                        if imageExtensions.contains(fileURL.pathExtension.lowercased()) {
+                            if let img = NSImage(contentsOf: fileURL),
+                               let res = NotesDataManager.shared.saveImageAttachment(image: img, originalFilename: fileURL.lastPathComponent, for: noteId) {
+                                let markdownTag = "\n\n" + res.markdown + "\n\n"
+                                self.insertText(markdownTag, replacementRange: self.selectedRange())
+                                self.didChangeText()
+                                onImagePasted?()
+                                return true
+                            }
+                        }
+                    }
+                }
+            }
+            return super.performDragOperation(sender)
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSScrollView()
+        scrollView.drawsBackground = false
+        scrollView.borderType = .noBorder
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+        scrollView.autohidesScrollers = true
+
+        let contentSize = scrollView.contentSize
+        let textView = CustomNSTextView(frame: NSRect(x: 0, y: 0, width: contentSize.width, height: contentSize.height))
+        textView.minSize = NSSize(width: 0.0, height: contentSize.height)
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+        textView.autoresizingMask = [.width]
+        textView.textContainer?.containerSize = NSSize(width: contentSize.width, height: CGFloat.greatestFiniteMagnitude)
+        textView.textContainer?.widthTracksTextView = true
+        textView.textContainerInset = NSSize(width: 14, height: 14)
+        
+        textView.isRichText = false
+        textView.allowsUndo = true
+        textView.drawsBackground = false
+        textView.delegate = context.coordinator
+        textView.noteId = noteId
+        textView.onImagePasted = onImagePasted
+        
+        applyFontAndColors(to: textView)
+        textView.string = text
+
+        scrollView.documentView = textView
+        return scrollView
+    }
+
+    func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        guard let textView = scrollView.documentView as? CustomNSTextView else { return }
+        context.coordinator.parent = self
+        textView.noteId = noteId
+        textView.onImagePasted = onImagePasted
+
+        if textView.string != text {
+            context.coordinator.isUpdating = true
+            let selectedRange = textView.selectedRange()
+            textView.string = text
+            if selectedRange.location + selectedRange.length <= text.count {
+                textView.setSelectedRange(selectedRange)
+            }
+            context.coordinator.isUpdating = false
+        }
+        applyFontAndColors(to: textView)
+    }
+
+    private func applyFontAndColors(to textView: NSTextView) {
+        let nsFont: NSFont
+        switch fontDesign {
+        case .serif:
+            nsFont = NSFont(name: "Georgia", size: fontSize) ?? NSFont.systemFont(ofSize: fontSize)
+        case .monospaced:
+            nsFont = NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        default:
+            nsFont = NSFont.systemFont(ofSize: fontSize)
+        }
+        textView.font = nsFont
+        textView.textColor = isDark ? NSColor(red: 226/255, green: 232/255, blue: 240/255, alpha: 1.0) : NSColor(red: 15/255, green: 23/255, blue: 42/255, alpha: 1.0)
+        textView.insertionPointColor = isDark ? NSColor.white : NSColor.black
     }
 }

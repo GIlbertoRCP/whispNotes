@@ -282,6 +282,183 @@ enum MarkdownBlockType {
     case table([String])
     case code(String)
     case callout(type: String, title: String, content: [String])
+    case image(alt: String, path: String)
+}
+
+// MARK: - Inline Markdown Image Viewer Component
+struct MarkdownImageView: View {
+    let alt: String
+    let pathOrURL: String
+    let isDark: Bool
+    let primaryAccent: Color
+    
+    @State private var loadedImage: NSImage? = nil
+    @State private var resolvedURL: URL? = nil
+    @State private var isHovered = false
+    @State private var copied = false
+    @State private var loadFailed = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ZStack(alignment: .topTrailing) {
+                if let image = loadedImage {
+                    Image(nsImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: 680, maxHeight: 480, alignment: .leading)
+                        .cornerRadius(8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.subtleBorder(isDark), lineWidth: 1)
+                        )
+                        .shadow(color: Color.black.opacity(0.12), radius: 6, x: 0, y: 3)
+                } else if loadFailed {
+                    HStack(spacing: 8) {
+                        Image(systemName: "photo.badge.exclamationmark")
+                            .font(.system(size: 16))
+                            .foregroundColor(.orange)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Image not found")
+                                .font(.caption)
+                                .fontWeight(.bold)
+                            Text(pathOrURL)
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(12)
+                    .background(Color.cardBackground(isDark))
+                    .cornerRadius(8)
+                } else {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .controlSize(.small)
+                            .scaleEffect(0.8)
+                        Text("Loading image...")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(12)
+                    .background(Color.cardBackground(isDark))
+                    .cornerRadius(8)
+                }
+
+                // Hover Actions: Open in Preview ↗, Copy Image 📋, Reveal in Finder 📁
+                if isHovered && loadedImage != nil {
+                    HStack(spacing: 4) {
+                        if let url = resolvedURL {
+                            Button(action: { NSWorkspace.shared.open(url) }) {
+                                Image(systemName: "arrow.up.forward.app")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .padding(5)
+                                    .background(Color.black.opacity(0.65))
+                                    .cornerRadius(5)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Open in Preview.app")
+
+                            Button(action: { NSWorkspace.shared.activateFileViewerSelecting([url]) }) {
+                                Image(systemName: "folder")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .padding(5)
+                                    .background(Color.black.opacity(0.65))
+                                    .cornerRadius(5)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Reveal in Finder")
+                        }
+
+                        Button(action: {
+                            if let img = loadedImage {
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.writeObjects([img])
+                                copied = true
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                                    copied = false
+                                }
+                            }
+                        }) {
+                            Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(copied ? .emerald : .white)
+                                .padding(5)
+                                .background(Color.black.opacity(0.65))
+                                .cornerRadius(5)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Copy Image to Clipboard")
+                    }
+                    .padding(8)
+                    .transition(.opacity)
+                }
+            }
+            .onHover { inside in
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    isHovered = inside
+                }
+            }
+
+            // Optional Alt Text Caption
+            if !alt.isEmpty && alt != "Pasted image" && !alt.hasPrefix("Pasted image 20") {
+                Text(alt)
+                    .font(.caption2)
+                    .italic()
+                    .foregroundColor(.secondary)
+                    .padding(.leading, 2)
+            }
+        }
+        .padding(.vertical, 4)
+        .onAppear {
+            loadImage()
+        }
+    }
+
+    private func loadImage() {
+        let cleanPath = pathOrURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // 1. Web Image (http:// or https://)
+        if cleanPath.hasPrefix("http://") || cleanPath.hasPrefix("https://") {
+            if let webURL = URL(string: cleanPath) {
+                resolvedURL = webURL
+                DispatchQueue.global(qos: .userInitiated).async {
+                    if let data = try? Data(contentsOf: webURL), let img = NSImage(data: data) {
+                        DispatchQueue.main.async {
+                            self.loadedImage = img
+                        }
+                    } else {
+                        DispatchQueue.main.async {
+                            self.loadFailed = true
+                        }
+                    }
+                }
+                return
+            }
+        }
+
+        // 2. Attachment / Vault relative path (attachment:filename.png or filename.png)
+        let stripped = cleanPath.replacingOccurrences(of: "attachment:", with: "")
+        if let targetURL = NotesDataManager.shared.resolveAttachmentURL(stripped) {
+            resolvedURL = targetURL
+            if let img = NSImage(contentsOf: targetURL) {
+                self.loadedImage = img
+                return
+            }
+        }
+
+        // 3. Absolute local file path (file:///...)
+        let fileURL = cleanPath.hasPrefix("file://") ? URL(string: cleanPath) : URL(fileURLWithPath: cleanPath)
+        if let fURL = fileURL, FileManager.default.fileExists(atPath: fURL.path) {
+            resolvedURL = fURL
+            if let img = NSImage(contentsOf: fURL) {
+                self.loadedImage = img
+                return
+            }
+        }
+
+        self.loadFailed = true
+    }
 }
 
 // MARK: - Obsidian Callout Box Component
@@ -370,6 +547,35 @@ func parseMarkdownBlocks(_ text: String) -> [MarkdownBlockType] {
     var index = 0
     while index < lines.count {
         let line = lines[index]
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+
+        // Standard Markdown Image check (![alt](path))
+        if trimmed.hasPrefix("![") && trimmed.contains("](") && trimmed.hasSuffix(")") {
+            let imgPattern = "^!\\[(.*?)\\]\\((.*?)\\)$"
+            if let regex = try? NSRegularExpression(pattern: imgPattern),
+               let match = regex.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)),
+               let altRange = Range(match.range(at: 1), in: trimmed),
+               let pathRange = Range(match.range(at: 2), in: trimmed) {
+                let alt = String(trimmed[altRange])
+                let path = String(trimmed[pathRange])
+                blocks.append(.image(alt: alt, path: path))
+                index += 1
+                continue
+            }
+        }
+
+        // Obsidian Transclusion Image check (![[image.png]] or ![[image.png|300]])
+        if trimmed.hasPrefix("![[") && trimmed.hasSuffix("]]") {
+            let obsPattern = "^!\\[\\[(.*?)(?:\\|.*)?\\]\\]$"
+            if let regex = try? NSRegularExpression(pattern: obsPattern),
+               let match = regex.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)),
+               let pathRange = Range(match.range(at: 1), in: trimmed) {
+                let path = String(trimmed[pathRange])
+                blocks.append(.image(alt: "", path: path))
+                index += 1
+                continue
+            }
+        }
         
         // Obsidian Callout check (> [!TYPE] Title)
         if line.hasPrefix("> [!") {
@@ -456,6 +662,13 @@ struct MarkdownRendererView: View {
                     MarkdownTableView(lines: tableLines, isDark: isDark)
                 case .code(let codeStr):
                     CodeBlockView(code: codeStr, isDark: isDark)
+                case .image(let alt, let path):
+                    MarkdownImageView(
+                        alt: alt,
+                        pathOrURL: path,
+                        isDark: isDark,
+                        primaryAccent: primaryAccent
+                    )
                 case .callout(let type, let title, let contentLines):
                     CalloutBlockView(
                         type: type,

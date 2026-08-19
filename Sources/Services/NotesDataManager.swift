@@ -1,6 +1,11 @@
 import Foundation
 import Combine
 import PDFKit
+import AppKit
+
+extension Notification.Name {
+    static let pasteImageAsAttachment = Notification.Name("pasteImageAsAttachment")
+}
 
 // MARK: - Data Manager (JSON Persistence, Rolling Backups & Vault Export)
 class NotesDataManager: ObservableObject {
@@ -123,26 +128,114 @@ class NotesDataManager: ObservableObject {
         }
     }
 
+    /// Saves an NSImage to the vault attachments directory as PNG and returns markdown reference tag.
+    func saveImageAttachment(image: NSImage, originalFilename: String? = nil, for noteId: UUID) -> (relativePath: String, fullURL: URL, markdown: String)? {
+        // Try getting PNG data via CGImage first
+        if let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+            let bitmapRep = NSBitmapImageRep(cgImage: cgImage)
+            if let pngData = bitmapRep.representation(using: .png, properties: [:]) {
+                return saveImageDataAttachment(data: pngData, originalFilename: originalFilename, for: noteId)
+            }
+        }
+        // Fallback to TIFF representation
+        if let tiffData = image.tiffRepresentation,
+           let bitmap = NSBitmapImageRep(data: tiffData),
+           let pngData = bitmap.representation(using: .png, properties: [:]) {
+            return saveImageDataAttachment(data: pngData, originalFilename: originalFilename, for: noteId)
+        }
+        return nil
+    }
+
+    /// Saves raw image data into the persistent vault attachments folder.
+    func saveImageDataAttachment(data: Data, originalFilename: String? = nil, for noteId: UUID) -> (relativePath: String, fullURL: URL, markdown: String)? {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd_HHmmss"
+        let timestamp = formatter.string(from: Date())
+        
+        let baseName = originalFilename ?? "pasted_image_\(timestamp)"
+        let sanitized = (baseName as NSString).deletingPathExtension.replacingOccurrences(of: " ", with: "_").filter { $0.isLetter || $0.isNumber || $0 == "_" || $0 == "-" }
+        let fileName = "\(noteId.uuidString.prefix(8))_\(sanitized.isEmpty ? "image" : sanitized).png"
+        let destinationURL = attachmentsDir.appendingPathComponent(fileName)
+        
+        do {
+            try data.write(to: destinationURL, options: .atomic)
+            let markdown = "![Pasted image \(timestamp)](attachment:\(fileName))"
+            return (relativePath: fileName, fullURL: destinationURL, markdown: markdown)
+        } catch {
+            print("Failed to save image attachment: \(error)")
+            return nil
+        }
+    }
+
+    /// Inspects NSPasteboard.general for screenshots, copied images, or image files, saves to vault, and returns markdown.
+    func saveClipboardImage(for noteId: UUID) -> (relativePath: String, fullURL: URL, markdown: String)? {
+        let pasteboard = NSPasteboard.general
+
+        // 1. Check for raw PNG data directly on clipboard (e.g. from macOS ⌘⌃⇧4 screenshot)
+        if let pngData = pasteboard.data(forType: .png) ?? pasteboard.data(forType: NSPasteboard.PasteboardType("public.png")) {
+            return saveImageDataAttachment(data: pngData, originalFilename: nil, for: noteId)
+        }
+
+        // 2. Check for TIFF data
+        if let tiffData = pasteboard.data(forType: .tiff) ?? pasteboard.data(forType: NSPasteboard.PasteboardType("public.tiff")) {
+            if let bitmap = NSBitmapImageRep(data: tiffData), let pngData = bitmap.representation(using: .png, properties: [:]) {
+                return saveImageDataAttachment(data: pngData, originalFilename: nil, for: noteId)
+            }
+        }
+
+        // 3. Check for JPEG data
+        if let jpegData = pasteboard.data(forType: NSPasteboard.PasteboardType("public.jpeg")) {
+            return saveImageDataAttachment(data: jpegData, originalFilename: nil, for: noteId)
+        }
+
+        // 4. Check for direct NSImage objects
+        if let images = pasteboard.readObjects(forClasses: [NSImage.self], options: nil) as? [NSImage], let firstImg = images.first {
+            return saveImageAttachment(image: firstImg, originalFilename: nil, for: noteId)
+        }
+
+        if let img = NSImage(pasteboard: pasteboard) {
+            return saveImageAttachment(image: img, originalFilename: nil, for: noteId)
+        }
+        
+        // 5. File URLs on pasteboard (e.g. copied image file from Finder)
+        if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL] {
+            let imageExtensions = ["png", "jpg", "jpeg", "gif", "webp", "tiff", "bmp", "heic"]
+            for fileURL in urls {
+                if imageExtensions.contains(fileURL.pathExtension.lowercased()) {
+                    if let data = try? Data(contentsOf: fileURL) {
+                        return saveImageDataAttachment(data: data, originalFilename: fileURL.lastPathComponent, for: noteId)
+                    }
+                }
+            }
+        }
+        
+        return nil
+    }
+
     /// Resolves an attachment filename or legacy path into a valid, secure URL within the persistent sandbox.
     func resolveAttachmentURL(_ pathOrName: String?) -> URL? {
-        guard let pathOrName = pathOrName, !pathOrName.isEmpty else { return nil }
+        guard let raw = pathOrName, !raw.isEmpty else { return nil }
+        let clean = raw.replacingOccurrences(of: "attachment://", with: "")
+                       .replacingOccurrences(of: "attachment:", with: "")
+                       .replacingOccurrences(of: "file://", with: "")
+                       .trimmingCharacters(in: .whitespacesAndNewlines)
         let fileManager = FileManager.default
         
         // 1. Direct match in persistent Attachments folder
-        let inAttachments = attachmentsDir.appendingPathComponent(pathOrName)
+        let inAttachments = attachmentsDir.appendingPathComponent(clean)
         if fileManager.fileExists(atPath: inAttachments.path) {
             return inAttachments
         }
         
         // 2. Strip any directory components and check if just the filename exists in Attachments
-        let fileNameOnly = (pathOrName as NSString).lastPathComponent
+        let fileNameOnly = (clean as NSString).lastPathComponent
         let strippedInAttachments = attachmentsDir.appendingPathComponent(fileNameOnly)
         if fileManager.fileExists(atPath: strippedInAttachments.path) {
             return strippedInAttachments
         }
         
         // 3. Check if absolute path exists on disk (legacy path) -> auto-migrate into Attachments!
-        let directURL = URL(fileURLWithPath: pathOrName)
+        let directURL = URL(fileURLWithPath: clean)
         if fileManager.fileExists(atPath: directURL.path) {
             let targetURL = attachmentsDir.appendingPathComponent(fileNameOnly)
             if !fileManager.fileExists(atPath: targetURL.path) {

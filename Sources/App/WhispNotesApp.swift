@@ -91,6 +91,13 @@ public struct WhispNotesSwiftApp: App {
                 .keyboardShortcut(",", modifiers: .command)
             }
 
+            CommandMenu("Edit Note") {
+                Button("Paste Screenshot / Image") {
+                    NotificationCenter.default.post(name: .pasteImageAsAttachment, object: nil)
+                }
+                .keyboardShortcut("v", modifiers: [.command, .shift])
+            }
+
             CommandMenu("Export Note") {
                 Button("Export as PDF Document...") {
                     if let current = activeSelectedNote {
