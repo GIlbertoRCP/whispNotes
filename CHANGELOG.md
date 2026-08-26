@@ -5,6 +5,37 @@ All notable changes to **WhispNotes** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semanticsver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-08-25
+
+### Added
+- **"Classic Minimal" Default Monochrome Theme**:
+  - Ultra-clean Apple-inspired monochrome palette in both Dark (`#121214` pitch canvas, `#F1F5F9` slate-white accents) and Light (`#FFFFFF` canvas, `#0F172A` deep charcoal accents) modes.
+  - Set as the default theme across the entire application.
+- **Clean Neutral Slate PDF Badges & Icons**:
+  - Eliminated yellow/amber tint on PDF tags and icons across sidebar rows, tab bars, and toolbars, replacing them with crisp Apple slate (`#64748B`).
+- **Pro Note Templates Engine (`⌘T`)**:
+  - Built-in note templates for Meeting Notes, Cornell Academic Lecture, Technical Architecture RFC, Podcast/Interview, and Daily Log with live placeholder substitution (`{{title}}`, `{{date}}`, `{{time}}`, `{{folder}}`).
+- **Real-Time Streaming AI Assistant**:
+  - Integrated `askGemmaStreaming` with token-by-token streaming animation (~16ms token dispatch) in the AI Study Assistant.
+- **Subtitle & Document Exporters**:
+  - Added SubRip (`.srt`) and WebVTT (`.vtt`) exporters with millisecond timecodes and speaker tags for recorded lectures/interviews.
+- **Unified `os.Logger` & System Diagnostics Exporter**:
+  - High-performance Apple OS logging and 1-click diagnostics bundle export in Settings for rapid troubleshooting.
+- **First-Launch Interactive Tutorial Vault**:
+  - Enriched initial vault seeds with interactive KaTeX math, Mermaid diagrams, and wiki-links.
+
+### Improved & Fixed
+- **Settings Modal & Sidebar Readability Overhaul**:
+  - Fixed white-on-white text contrast on action buttons (`Download`, `Done`, `Check for Updates Now`, `Export Vault Backup`) and active sidebar rows in light-accent themes.
+  - Upgraded subtitles, descriptions, timestamps, and excerpts to high-clarity Slate 300 (`#CBD5E1`) / Slate 600 (`#475569`).
+  - Added clean monospaced uppercase section headers and refined translucent secondary action buttons.
+- **Clustered Top Toolbar & Proportional Typography**:
+  - 5 logical toolbar clusters with dividers, proportional typography with 5pt line spacing, and centered 760pt measure.
+- **Resolved SwiftUI `AttributeGraph: cycle detected` Terminal Warning**:
+  - Decoupled bidirectional state sync between tab manager and selected note ID.
+
+---
+
 ## [1.3.0] - 2026-08-25
 
 ### Added
