@@ -64,7 +64,7 @@ public struct WhispLogger {
             - Total RAM: \(physicalMemory) GB
             - CPU Cores: \(processorCount)
             - Notes in Vault: \(notesCount)
-            - App Version: 1.3.0
+            - App Version: 1.4.0
             
             [RECENT DIAGNOSTIC EVENT LOGS]
             """
