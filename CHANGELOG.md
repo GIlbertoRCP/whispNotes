@@ -5,6 +5,31 @@ All notable changes to **WhispNotes** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semanticsver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-08-26
+
+### Added
+- **Native PowerPoint Presentation (`.pptx`) Support**:
+  - Full native support for `.pptx` presentations to complement existing PDF support.
+  - Zero external dependencies: OpenXML slide parsing, metadata extraction, and presenter notes extraction powered natively in Swift.
+- **Interactive Presentation Slide Viewer (`PPTXDocumentViewer`)**:
+  - Pixel-perfect macOS slide preview with native transitions and zooming using `QuickLookUI`.
+  - Slide Navigation toolbar with slide counter (`1 / 24 Slides`), previous/next steppers, and interactive jump-to-slide popover.
+  - Real-time in-presentation text search with matching slide indicators.
+- **Slide Outline & Speaker Notes Drawer**:
+  - Collapsible drawer showing slide titles, bullet summaries, tables, and speaker/presenter notes.
+- **One-Click Markdown Citations & Outline Export**:
+  - "Quote Slide" button to paste formatted slide quotes with presenter notes (`> 📊 **Slide 3: ...**`) directly into your active note.
+  - "Insert Outline" button to generate a structured markdown outline for the entire presentation.
+- **AI Study Assistant Presentation Awareness**:
+  - Gemma 3 AI automatically analyzes slide text and speaker notes to generate study summaries, interactive flashcards, and Q&A citations.
+- **Global Vault Search for Presentations**:
+  - Full-text indexing of slide titles, bullet points, and speaker notes with a dedicated `Slides` filter tab.
+- **Experimental Labs & Calendar Hub**:
+  - Emacs keybindings, M-x command minibuffer, Org-Mode table alignment and task cycle engine.
+  - Interactive Visual Calendar Hub modal with date-based note tracking and review timelines.
+
+---
+
 ## [1.4.0] - 2026-08-25
 
 ### Added
