@@ -85,22 +85,22 @@ struct EditorPanelView: View {
                 HStack(spacing: 6) {
                     if editMode == .edit || editMode == .split {
                         HStack(spacing: 2) {
-                            MarkdownToolbarButton(icon: "bold", help: "Bold (**text**)") { insertMarkdown("**", "**") }
-                            MarkdownToolbarButton(icon: "italic", help: "Italic (*text*)") { insertMarkdown("*", "*") }
-                            MarkdownToolbarButton(icon: "number", help: "Heading (# Heading)") { insertMarkdown("\n# ", "") }
+                            MarkdownToolbarButton(icon: "bold", help: "Bold", shortcut: "⌘B") { insertMarkdown("**", "**") }
+                            MarkdownToolbarButton(icon: "italic", help: "Italic", shortcut: "⌘I") { insertMarkdown("*", "*") }
+                            MarkdownToolbarButton(icon: "number", help: "Heading (#)") { insertMarkdown("\n# ", "") }
 
                             Rectangle()
                                 .fill(Color.subtleBorder(isDark))
                                 .frame(width: 1, height: 14)
                                 .padding(.horizontal, 4)
 
-                            MarkdownToolbarButton(icon: "list.bullet", help: "Bullet List (- Item)") { insertMarkdown("\n- ", "") }
+                            MarkdownToolbarButton(icon: "list.bullet", help: "Bullet List (* Item)") { insertMarkdown("\n* ", "") }
                             MarkdownToolbarButton(icon: "checklist", help: "Checklist Task (- [ ] Task)") { insertMarkdown("\n- [ ] ", "") }
                             MarkdownToolbarButton(icon: "chevron.left.forwardslash.chevron.right", help: "Code Snippet (`code`)") { insertMarkdown("`", "`") }
                             MarkdownToolbarButton(icon: "link", help: "Wiki Link ([[Note Title]])") { insertMarkdown("[[", "]]") }
                             MarkdownToolbarButton(icon: "tablecells", help: "Insert Table Template") { insertMarkdown("\n| Header 1 | Header 2 |\n| --- | --- |\n| Item 1 | Item 2 |\n", "") }
                             MarkdownToolbarButton(icon: "quote.opening", help: "Blockquote (> Quote)") { insertMarkdown("\n> ", "") }
-                            MarkdownToolbarButton(icon: "photo.badge.plus", help: "Paste Screenshot / Image (⌘⇧V)") { pasteImageFromClipboard() }
+                            MarkdownToolbarButton(icon: "photo.badge.plus", help: "Paste Screenshot / Image", shortcut: "⌘⇧V") { pasteImageFromClipboard() }
                         }
                     }
 
@@ -123,6 +123,7 @@ struct EditorPanelView: View {
                             .cornerRadius(AppRadius.sm)
                         }
                         .buttonStyle(.plain)
+                        .obsidianTooltip("Table of Contents Outline")
                         .popover(isPresented: $showTOCDrawer) {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Table of Contents")
@@ -1126,6 +1127,202 @@ struct MacMarkdownEditorView: NSViewRepresentable {
             scrollView.reflectScrolledClipView(clipView)
         }
 
+        // MARK: - Smart Markdown List & Bullet Point Engine
+        override func insertNewline(_ sender: Any?) {
+            let currentText = self.string as NSString
+            let selectedRange = self.selectedRange()
+            guard selectedRange.length == 0, currentText.length > 0 else {
+                super.insertNewline(sender)
+                return
+            }
+            
+            let lineRange = currentText.lineRange(for: NSRange(location: selectedRange.location, length: 0))
+            let currentLine = currentText.substring(with: lineRange)
+            
+            // 1. Checklist: ^([ \t]*)([-*+]) \[( |x|X)\] (.*)$
+            if let regex = try? NSRegularExpression(pattern: "^([ \\t]*)([-*+]) \\[( |x|X)\\] (.*)$", options: [.anchorsMatchLines]),
+               let match = regex.firstMatch(in: currentLine, options: [], range: NSRange(location: 0, length: currentLine.utf16.count)) {
+                let indentRange = match.range(at: 1)
+                let markerRange = match.range(at: 2)
+                let contentRange = match.range(at: 4)
+                
+                let indent = (currentLine as NSString).substring(with: indentRange)
+                let marker = (currentLine as NSString).substring(with: markerRange)
+                let content = (currentLine as NSString).substring(with: contentRange).trimmingCharacters(in: .whitespacesAndNewlines)
+                
+                if content.isEmpty {
+                    let repRange = lineRange
+                    if self.shouldChangeText(in: repRange, replacementString: "\n") {
+                        self.replaceCharacters(in: repRange, with: "\n")
+                        self.didChangeText()
+                        return
+                    }
+                } else {
+                    let nextItem = "\n\(indent)\(marker) [ ] "
+                    if self.shouldChangeText(in: selectedRange, replacementString: nextItem) {
+                        self.insertText(nextItem, replacementRange: selectedRange)
+                        self.didChangeText()
+                        return
+                    }
+                }
+            }
+            
+            // 2. Numbered List: ^([ \t]*)(\d+)\. (.*)$
+            if let regex = try? NSRegularExpression(pattern: "^([ \\t]*)(\\d+)\\. (.*)$", options: [.anchorsMatchLines]),
+               let match = regex.firstMatch(in: currentLine, options: [], range: NSRange(location: 0, length: currentLine.utf16.count)) {
+                let indentRange = match.range(at: 1)
+                let numRange = match.range(at: 2)
+                let contentRange = match.range(at: 3)
+                
+                let indent = (currentLine as NSString).substring(with: indentRange)
+                let numStr = (currentLine as NSString).substring(with: numRange)
+                let content = (currentLine as NSString).substring(with: contentRange).trimmingCharacters(in: .whitespacesAndNewlines)
+                let num = Int(numStr) ?? 1
+                
+                if content.isEmpty {
+                    let repRange = lineRange
+                    if self.shouldChangeText(in: repRange, replacementString: "\n") {
+                        self.replaceCharacters(in: repRange, with: "\n")
+                        self.didChangeText()
+                        return
+                    }
+                } else {
+                    let nextItem = "\n\(indent)\(num + 1). "
+                    if self.shouldChangeText(in: selectedRange, replacementString: nextItem) {
+                        self.insertText(nextItem, replacementRange: selectedRange)
+                        self.didChangeText()
+                        return
+                    }
+                }
+            }
+            
+            // 3. Bullet List: ^([ \t]*)([-*+]) (.*)$
+            if let regex = try? NSRegularExpression(pattern: "^([ \\t]*)([-*+]) (.*)$", options: [.anchorsMatchLines]),
+               let match = regex.firstMatch(in: currentLine, options: [], range: NSRange(location: 0, length: currentLine.utf16.count)) {
+                let indentRange = match.range(at: 1)
+                let markerRange = match.range(at: 2)
+                let contentRange = match.range(at: 3)
+                
+                let indent = (currentLine as NSString).substring(with: indentRange)
+                let marker = (currentLine as NSString).substring(with: markerRange)
+                let content = (currentLine as NSString).substring(with: contentRange).trimmingCharacters(in: .whitespacesAndNewlines)
+                
+                if content.isEmpty {
+                    let repRange = lineRange
+                    if self.shouldChangeText(in: repRange, replacementString: "\n") {
+                        self.replaceCharacters(in: repRange, with: "\n")
+                        self.didChangeText()
+                        return
+                    }
+                } else {
+                    let nextItem = "\n\(indent)\(marker) "
+                    if self.shouldChangeText(in: selectedRange, replacementString: nextItem) {
+                        self.insertText(nextItem, replacementRange: selectedRange)
+                        self.didChangeText()
+                        return
+                    }
+                }
+            }
+            
+            // 4. Blockquote: ^([ \t]*)(>+) (.*)$
+            if let regex = try? NSRegularExpression(pattern: "^([ \\t]*)(>+) (.*)$", options: [.anchorsMatchLines]),
+               let match = regex.firstMatch(in: currentLine, options: [], range: NSRange(location: 0, length: currentLine.utf16.count)) {
+                let indentRange = match.range(at: 1)
+                let markerRange = match.range(at: 2)
+                let contentRange = match.range(at: 3)
+                
+                let indent = (currentLine as NSString).substring(with: indentRange)
+                let marker = (currentLine as NSString).substring(with: markerRange)
+                let content = (currentLine as NSString).substring(with: contentRange).trimmingCharacters(in: .whitespacesAndNewlines)
+                
+                if content.isEmpty {
+                    let repRange = lineRange
+                    if self.shouldChangeText(in: repRange, replacementString: "\n") {
+                        self.replaceCharacters(in: repRange, with: "\n")
+                        self.didChangeText()
+                        return
+                    }
+                } else {
+                    let nextItem = "\n\(indent)\(marker) "
+                    if self.shouldChangeText(in: selectedRange, replacementString: nextItem) {
+                        self.insertText(nextItem, replacementRange: selectedRange)
+                        self.didChangeText()
+                        return
+                    }
+                }
+            }
+            
+            super.insertNewline(sender)
+        }
+        
+        override func insertTab(_ sender: Any?) {
+            let currentText = self.string as NSString
+            let selectedRange = self.selectedRange()
+            guard currentText.length > 0 else {
+                super.insertTab(sender)
+                return
+            }
+            let lineRange = currentText.lineRange(for: NSRange(location: selectedRange.location, length: 0))
+            let currentLine = currentText.substring(with: lineRange)
+            
+            if currentLine.range(of: "^[ \\t]*([\\*\\-\\+]|\\d+\\.|- \\[[ xX]\\]) ", options: .regularExpression) != nil {
+                let insertRange = NSRange(location: lineRange.location, length: 0)
+                if self.shouldChangeText(in: insertRange, replacementString: "  ") {
+                    self.replaceCharacters(in: insertRange, with: "  ")
+                    self.didChangeText()
+                    return
+                }
+            }
+            super.insertTab(sender)
+        }
+        
+        override func insertBacktab(_ sender: Any?) {
+            let currentText = self.string as NSString
+            let selectedRange = self.selectedRange()
+            guard currentText.length > 0 else {
+                super.insertBacktab(sender)
+                return
+            }
+            let lineRange = currentText.lineRange(for: NSRange(location: selectedRange.location, length: 0))
+            let currentLine = currentText.substring(with: lineRange)
+            
+            if currentLine.hasPrefix("  ") {
+                let removeRange = NSRange(location: lineRange.location, length: 2)
+                if self.shouldChangeText(in: removeRange, replacementString: "") {
+                    self.replaceCharacters(in: removeRange, with: "")
+                    self.didChangeText()
+                    return
+                }
+            } else if currentLine.hasPrefix(" ") || currentLine.hasPrefix("\t") {
+                let removeRange = NSRange(location: lineRange.location, length: 1)
+                if self.shouldChangeText(in: removeRange, replacementString: "") {
+                    self.replaceCharacters(in: removeRange, with: "")
+                    self.didChangeText()
+                    return
+                }
+            }
+            super.insertBacktab(sender)
+        }
+        
+        override func deleteBackward(_ sender: Any?) {
+            let currentText = self.string as NSString
+            let selectedRange = self.selectedRange()
+            if selectedRange.length == 0 && selectedRange.location > 0 && currentText.length > 0 {
+                let lineRange = currentText.lineRange(for: NSRange(location: selectedRange.location, length: 0))
+                let textBeforeCursor = currentText.substring(with: NSRange(location: lineRange.location, length: selectedRange.location - lineRange.location))
+                
+                if textBeforeCursor.range(of: "^[ \\t]*([\\*\\-\\+]|- \\[[ xX]\\]|\\d+\\.) $", options: .regularExpression) != nil {
+                    let deleteRange = NSRange(location: lineRange.location, length: selectedRange.location - lineRange.location)
+                    if self.shouldChangeText(in: deleteRange, replacementString: "") {
+                        self.replaceCharacters(in: deleteRange, with: "")
+                        self.didChangeText()
+                        return
+                    }
+                }
+            }
+            super.deleteBackward(sender)
+        }
+
         override func paste(_ sender: Any?) {
             // Check if clipboard contains image data (e.g. from ⌘⌃⇧4 screenshot or copied image)
             if let noteId = noteId, let res = NotesDataManager.shared.saveClipboardImage(for: noteId) {
@@ -1197,6 +1394,9 @@ struct MacMarkdownEditorView: NSViewRepresentable {
         textView.isRichText = false
         textView.allowsUndo = true
         textView.drawsBackground = false
+        textView.isAutomaticDashSubstitutionEnabled = false
+        textView.isAutomaticQuoteSubstitutionEnabled = false
+        textView.isAutomaticTextReplacementEnabled = false
         textView.delegate = context.coordinator
         textView.noteId = noteId
         textView.enableVimMode = enableVimMode
@@ -1331,6 +1531,7 @@ struct VimBottomStatusBar: View {
 struct MarkdownToolbarButton: View {
     let icon: String
     let help: String
+    var shortcut: String? = nil
     let action: () -> Void
     @State private var isHovered = false
 
@@ -1344,7 +1545,7 @@ struct MarkdownToolbarButton: View {
                 .cornerRadius(AppRadius.sm)
         }
         .buttonStyle(.plain)
-        .help(help)
+        .obsidianTooltip(help, shortcut: shortcut)
         .onHover { isHovered = $0 }
     }
 }

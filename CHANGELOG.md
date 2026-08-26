@@ -26,7 +26,17 @@ and this project adheres to [Semantic Versioning](https://semanticsver.org/spec/
   - Full-text indexing of slide titles, bullet points, and speaker notes with a dedicated `Slides` filter tab.
 - **Experimental Labs & Calendar Hub**:
   - Emacs keybindings, M-x command minibuffer, Org-Mode table alignment and task cycle engine.
-  - Interactive Visual Calendar Hub modal with date-based note tracking and review timelines.
+- **Obsidian-Style Floating Hover Tooltips**:
+  - Dark rounded tooltip bubbles (`#18181B`) with callout arrows and keyboard shortcut badges on all sidebar, toolbar, and editor formatting icons.
+  - Snappy 250ms hover delay with smooth spring animations.
+- **Smart Markdown Bullet & List Continuation Engine**:
+  - Native auto-continuation for bullet points (`*`, `-`, `+`), checklists (`- [ ]`), numbered lists (`1.`), and blockquotes (`>`).
+  - Automatic cleanup when pressing Enter or Backspace on empty bullet lines.
+  - Indent (`Tab`) and outdent (`Shift+Tab`) support for list items.
+  - Disabled macOS automatic dash/quote substitutions to preserve exact markdown syntax.
+- **Repaired AI Model Downloader**:
+  - Fixed Gemma 2B download URL with verified public un-gated Hugging Face mirror (`bartowski/gemma-2-2b-it-GGUF`).
+  - Added HTTP status code validation (verifying `200 OK`) and complete error callbacks across Whisper and Gemma download managers.
 
 ---
 

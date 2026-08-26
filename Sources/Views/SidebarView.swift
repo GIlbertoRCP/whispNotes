@@ -100,7 +100,7 @@ struct SidebarView: View {
                         .cornerRadius(AppRadius.sm)
                 }
                 .buttonStyle(.plain)
-                .help("New Folder")
+                .obsidianTooltip("New Folder")
                 .popover(isPresented: $showNewFolderPopover) {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Create New Folder")
@@ -119,7 +119,7 @@ struct SidebarView: View {
                     .padding()
                 }
 
-                // + Import PDF Document Button
+                // + Import PDF / Presentation Document Button
                 Button(action: importNewPDFNote) {
                     Image(systemName: "doc.badge.plus")
                         .font(.system(size: 12, weight: .medium))
@@ -129,7 +129,7 @@ struct SidebarView: View {
                         .cornerRadius(AppRadius.sm)
                 }
                 .buttonStyle(.plain)
-                .help("Import PDF Document Note")
+                .obsidianTooltip("Import Document (PDF / PPTX)")
 
                 // + New Note from Template Button
                 Button(action: {
@@ -143,7 +143,7 @@ struct SidebarView: View {
                         .cornerRadius(AppRadius.sm)
                 }
                 .buttonStyle(.plain)
-                .help("New Note from Template (⌘T)")
+                .obsidianTooltip("New Note from Template", shortcut: "⌘T")
 
                 // Calendar & Daily Notes Hub Button
                 Button(action: {
@@ -157,7 +157,7 @@ struct SidebarView: View {
                         .cornerRadius(AppRadius.sm)
                 }
                 .buttonStyle(.plain)
-                .help("Calendar & Daily Journal Hub (⌘⌥C)")
+                .obsidianTooltip("Calendar & Daily Journal Hub", shortcut: "⌘⌥C")
 
                 // + New Note Button
                 Button(action: createNewNote) {
@@ -169,7 +169,7 @@ struct SidebarView: View {
                         .cornerRadius(AppRadius.sm)
                 }
                 .buttonStyle(.plain)
-                .help("New Note (⌘N)")
+                .obsidianTooltip("New Note", shortcut: "⌘N")
             }
             .padding(.horizontal, 14)
             .frame(height: 44)

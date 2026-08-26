@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 struct ToolbarIconButton: View {
     let icon: String
     let helpText: String
+    var shortcut: String? = nil
     var isActive: Bool = false
     var activeColor: Color = .blue
     let action: () -> Void
@@ -21,7 +22,7 @@ struct ToolbarIconButton: View {
                 .cornerRadius(AppRadius.sm)
         }
         .buttonStyle(.plain)
-        .help(helpText)
+        .obsidianTooltip(helpText, shortcut: shortcut)
         .accessibilityLabel(helpText)
         .onHover { isHovered = $0 }
     }
@@ -406,17 +407,17 @@ struct HeaderToolbarView: View {
                     // Group 5: Tools & Window Utilities
                     HStack(spacing: 4) {
                         // Calendar & Daily Notes Hub Toggle
-                        ToolbarIconButton(icon: "calendar", helpText: "Calendar & Daily Journal Hub (⌘⌥C)", isActive: false, activeColor: primaryAccent) {
+                        ToolbarIconButton(icon: "calendar", helpText: "Calendar & Daily Journal Hub (⌘⌥C)", shortcut: "⌘⌥C", isActive: false, activeColor: primaryAccent) {
                             NotificationCenter.default.post(name: .openCalendarHub, object: nil)
                         }
 
                         // Knowledge Graph Canvas Toggle
-                        ToolbarIconButton(icon: "circle.hexagonpath", helpText: "Knowledge Graph Canvas (⌘G)", isActive: isGraphViewOpen, activeColor: secondaryAccent) {
+                        ToolbarIconButton(icon: "circle.hexagonpath", helpText: "Knowledge Graph Canvas (⌘G)", shortcut: "⌘G", isActive: isGraphViewOpen, activeColor: secondaryAccent) {
                             isGraphViewOpen = true
                         }
 
                         // Zen Focus Mode Toggle
-                        ToolbarIconButton(icon: isFocusMode ? "viewfinder.circle.fill" : "viewfinder", helpText: "Zen Focus Mode (⌘Shift+F)", isActive: isFocusMode, activeColor: primaryAccent) {
+                        ToolbarIconButton(icon: isFocusMode ? "viewfinder.circle.fill" : "viewfinder", helpText: "Zen Focus Mode (⌘Shift+F)", shortcut: "⌘⇧F", isActive: isFocusMode, activeColor: primaryAccent) {
                             isFocusMode.toggle()
                         }
 
@@ -445,13 +446,13 @@ struct HeaderToolbarView: View {
                         }
 
                         // Settings Toggle Button
-                        ToolbarIconButton(icon: "gearshape", helpText: "Preferences & Settings (⌘,)", isActive: isSettingsOpen, activeColor: primaryAccent) {
+                        ToolbarIconButton(icon: "gearshape", helpText: "Preferences & Settings (⌘,)", shortcut: "⌘,", isActive: isSettingsOpen, activeColor: primaryAccent) {
                             isSettingsOpen = true
                         }
                     }
                 } else {
                     // When no note is selected, still provide settings button
-                    ToolbarIconButton(icon: "gearshape", helpText: "Preferences & Settings (⌘,)", isActive: isSettingsOpen, activeColor: primaryAccent) {
+                    ToolbarIconButton(icon: "gearshape", helpText: "Preferences & Settings (⌘,)", shortcut: "⌘,", isActive: isSettingsOpen, activeColor: primaryAccent) {
                         isSettingsOpen = true
                     }
                 }
