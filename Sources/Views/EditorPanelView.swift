@@ -7,6 +7,7 @@ struct EditorPanelView: View {
     @Binding var selectedNoteId: UUID?
     @ObservedObject var playerVM: AudioPlayerViewModel
     @Binding var editMode: EditModeType
+    var isFocusMode: Bool = false
     let isDark: Bool
     let primaryAccent: Color
     let secondaryAccent: Color
@@ -14,6 +15,10 @@ struct EditorPanelView: View {
     @AppStorage("editorFontSize") private var editorFontSize: Double = 14.0
     @AppStorage("editorFontDesign") private var editorFontDesign: String = "Monospaced"
     @AppStorage("editorSplitRatio") private var splitRatio: Double = 0.5
+    @AppStorage("enableVimMode") private var enableVimMode = false
+    
+    @ObservedObject private var vimController = VimController.shared
+    @State private var showVimHelpModal = false
     
     @State private var localContent: String = ""
     @State private var saveTimer: Timer? = nil
@@ -28,7 +33,8 @@ struct EditorPanelView: View {
         }
     }
 
-    @State private var cachedStats: (words: Int, chars: Int) = (0, 0)
+    @State private var docStats: DocumentStats = .zero
+    @State private var showStatsPopover = false
     @State private var cachedHeadingOutline: [String] = []
     @State private var cachedIncomingBacklinks: [NoteItem] = []
     @State private var cachedUnlinkedMentions: [NoteItem] = []
@@ -38,7 +44,7 @@ struct EditorPanelView: View {
     @State private var showImagePastedToast = false
 
     private var stats: (words: Int, chars: Int) {
-        cachedStats
+        (docStats.words, docStats.characters)
     }
 
     var headingOutline: [String] {
@@ -63,113 +69,47 @@ struct EditorPanelView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Streamlined Markdown Formatting & Document Stats Bar
-            if editMode == .edit || editMode == .split {
-                HStack(spacing: 8) {
-                    Group {
-                        Button(action: { insertMarkdown("**", "**") }) {
-                            Text("B")
-                                .font(.system(size: 13, weight: .bold, design: .serif))
-                                .frame(width: 24, height: 24)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Bold (**text**)")
+            // Streamlined Markdown Formatting & Document Stats Bar (Hidden in Zen Focus Mode)
+            if !isFocusMode {
+                HStack(spacing: 6) {
+                    if editMode == .edit || editMode == .split {
+                        HStack(spacing: 2) {
+                            MarkdownToolbarButton(icon: "bold", help: "Bold (**text**)") { insertMarkdown("**", "**") }
+                            MarkdownToolbarButton(icon: "italic", help: "Italic (*text*)") { insertMarkdown("*", "*") }
+                            MarkdownToolbarButton(icon: "number", help: "Heading (# Heading)") { insertMarkdown("\n# ", "") }
 
-                        Button(action: { insertMarkdown("*", "*") }) {
-                            Text("I")
-                                .font(.system(size: 13, weight: .semibold, design: .serif))
-                                .italic()
-                                .frame(width: 24, height: 24)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Italic (*text*)")
+                            Rectangle()
+                                .fill(Color.subtleBorder(isDark))
+                                .frame(width: 1, height: 14)
+                                .padding(.horizontal, 4)
 
-                        Button(action: { insertMarkdown("\n# ", "") }) {
-                            Text("#")
-                                .font(.system(size: 13, weight: .bold, design: .monospaced))
-                                .frame(width: 24, height: 24)
+                            MarkdownToolbarButton(icon: "list.bullet", help: "Bullet List (- Item)") { insertMarkdown("\n- ", "") }
+                            MarkdownToolbarButton(icon: "checklist", help: "Checklist Task (- [ ] Task)") { insertMarkdown("\n- [ ] ", "") }
+                            MarkdownToolbarButton(icon: "chevron.left.forwardslash.chevron.right", help: "Code Snippet (`code`)") { insertMarkdown("`", "`") }
+                            MarkdownToolbarButton(icon: "link", help: "Wiki Link ([[Note Title]])") { insertMarkdown("[[", "]]") }
+                            MarkdownToolbarButton(icon: "tablecells", help: "Insert Table Template") { insertMarkdown("\n| Header 1 | Header 2 |\n| --- | --- |\n| Item 1 | Item 2 |\n", "") }
+                            MarkdownToolbarButton(icon: "quote.opening", help: "Blockquote (> Quote)") { insertMarkdown("\n> ", "") }
+                            MarkdownToolbarButton(icon: "photo.badge.plus", help: "Paste Screenshot / Image (⌘⇧V)") { pasteImageFromClipboard() }
                         }
-                        .buttonStyle(.plain)
-                        .help("Heading (# Heading)")
-
-                        Rectangle()
-                            .fill(Color.subtleBorder(isDark))
-                            .frame(width: 1, height: 16)
-
-                        Button(action: { insertMarkdown("\n- ", "") }) {
-                            Image(systemName: "list.bullet")
-                                .font(.system(size: 12))
-                                .frame(width: 24, height: 24)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Bullet List (- Item)")
-
-                        Button(action: { insertMarkdown("\n- [ ] ", "") }) {
-                            Image(systemName: "checkmark.square")
-                                .font(.system(size: 12))
-                                .frame(width: 24, height: 24)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Checklist Task (- [ ] Task)")
-
-                        Button(action: { insertMarkdown("`", "`") }) {
-                            Image(systemName: "chevron.left.forwardslash.chevron.right")
-                                .font(.system(size: 11))
-                                .frame(width: 24, height: 24)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Code Snippet (`code`)")
-
-                        Button(action: { insertMarkdown("[[", "]]") }) {
-                            Text("[ [ ] ]")
-                                .font(.system(size: 10, weight: .bold))
-                                .frame(width: 28, height: 24)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Wiki Link ([[Note Title]])")
-
-                        Button(action: { insertMarkdown("\n| Header 1 | Header 2 |\n| --- | --- |\n| Item 1 | Item 2 |\n", "") }) {
-                            Image(systemName: "tablecells")
-                                .font(.system(size: 12))
-                                .frame(width: 24, height: 24)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Insert Table Template")
-
-                        Button(action: { insertMarkdown("\n> ", "") }) {
-                            Image(systemName: "text.quote")
-                                .font(.system(size: 12))
-                                .frame(width: 24, height: 24)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Blockquote (> Quote)")
-
-                        Button(action: pasteImageFromClipboard) {
-                            Image(systemName: "photo.badge.plus")
-                                .font(.system(size: 12))
-                                .frame(width: 24, height: 24)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Paste Screenshot / Image from Clipboard (⌘⇧V)")
                     }
 
                     Spacer()
 
-                    // Document Outline & Word Counter
+                    // Document Outline Indicator
                     if !headingOutline.isEmpty {
                         Button(action: { showTOCDrawer.toggle() }) {
                             HStack(spacing: 4) {
                                 Image(systemName: "list.bullet.indent")
-                                    .font(.caption2)
+                                    .font(.system(size: 10, weight: .medium))
                                     .foregroundColor(secondaryAccent)
                                 Text("Outline (\(headingOutline.count))")
-                                    .font(.system(size: 10, weight: .bold))
+                                    .font(.system(size: 10, weight: .semibold))
                                     .foregroundColor(secondaryAccent)
                             }
-                            .padding(.horizontal, 6)
+                            .padding(.horizontal, 7)
                             .padding(.vertical, 3)
-                            .background(secondaryAccent.opacity(0.15))
-                            .cornerRadius(5)
+                            .background(secondaryAccent.opacity(0.12))
+                            .cornerRadius(AppRadius.sm)
                         }
                         .buttonStyle(.plain)
                         .popover(isPresented: $showTOCDrawer) {
@@ -206,12 +146,29 @@ struct EditorPanelView: View {
                         .cornerRadius(4)
                     }
 
-                    Text("\(stats.words) words • \(stats.chars) chars")
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(.secondary)
+                    // Interactive Document Live Word & Character Stats Inspector
+                    Button(action: { showStatsPopover.toggle() }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "character.cursor.ibeam")
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundColor(.secondary.opacity(0.8))
+                            Text("\(docStats.words) words • \(docStats.characters) chars")
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Color.primary.opacity(0.04))
+                        .cornerRadius(AppRadius.sm)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Click for detailed document statistics and reading time")
+                    .popover(isPresented: $showStatsPopover) {
+                        DocumentStatsPopoverView(stats: docStats, isDark: isDark, primaryAccent: primaryAccent)
+                    }
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 6)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 5)
                 .background(Color.sidebarBackground(isDark))
 
                 Divider()
@@ -237,43 +194,17 @@ struct EditorPanelView: View {
                     }
                 )
             } else if editMode == .edit {
-                MacMarkdownEditorView(
-                    text: $localContent,
-                    noteId: note.id,
-                    fontSize: CGFloat(editorFontSize),
-                    fontDesign: selectedFontDesign,
-                    isDark: isDark,
-                    onImagePasted: {
-                        withAnimation {
-                            showImagePastedToast = true
-                        }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                            withAnimation {
-                                showImagePastedToast = false
-                            }
-                        }
-                    },
-                    onTextChanged: { formatted in
-                        handleAutoSave(formatted)
-                    }
-                )
-                .padding(6)
-                .background(Color.panelBackground(isDark))
-            } else if editMode == .split {
-                GeometryReader { splitGeo in
-                    let totalWidth = splitGeo.size.width
-                    let minPanelWidth: CGFloat = 200
-                    let effectiveLeftWidth = max(minPanelWidth, min(totalWidth - minPanelWidth, totalWidth * CGFloat(splitRatio)))
-                    let effectiveRightWidth = max(minPanelWidth, totalWidth - effectiveLeftWidth - 6)
-
+                VStack(spacing: 0) {
                     HStack(spacing: 0) {
-                        // Left: Native Markdown Text Editor
+                        Spacer()
                         MacMarkdownEditorView(
                             text: $localContent,
                             noteId: note.id,
                             fontSize: CGFloat(editorFontSize),
                             fontDesign: selectedFontDesign,
                             isDark: isDark,
+                            enableVimMode: enableVimMode,
+                            onVimAction: handleVimAction,
                             onImagePasted: {
                                 withAnimation {
                                     showImagePastedToast = true
@@ -288,60 +219,90 @@ struct EditorPanelView: View {
                                 handleAutoSave(formatted)
                             }
                         )
-                        .padding(6)
-                        .background(Color.panelBackground(isDark))
-                        .frame(width: effectiveLeftWidth)
-                        
-                        // Interactive Draggable Split Divider
-                        ZStack {
-                            Rectangle()
-                                .fill(Color.subtleBorder(isDark))
-                                .frame(width: 1)
-                            
-                            RoundedRectangle(cornerRadius: 3)
-                                .fill(Color.cardBackground(isDark))
-                                .frame(width: 6, height: 32)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 3)
-                                        .stroke(Color.subtleBorder(isDark), lineWidth: 1)
-                                )
-                        }
-                        .frame(width: 6)
-                        .contentShape(Rectangle())
-                        .gesture(
-                            DragGesture(minimumDistance: 1)
-                                .onChanged { val in
-                                    let newRatio = Double(val.location.x + effectiveLeftWidth) / Double(totalWidth)
-                                    splitRatio = max(0.2, min(0.8, newRatio))
-                                }
+                        .frame(maxWidth: isFocusMode ? 750 : .infinity)
+                        Spacer()
+                    }
+                    .padding(.horizontal, isFocusMode ? 20 : 6)
+                    .padding(.top, isFocusMode ? 16 : 6)
+                    .background(Color.panelBackground(isDark))
+                    
+                    if enableVimMode {
+                        VimBottomStatusBar(
+                            vimController: vimController,
+                            isDark: isDark,
+                            primaryAccent: primaryAccent,
+                            onHelpRequested: { showVimHelpModal = true }
                         )
-                        .onHover { inside in
-                            if inside {
-                                NSCursor.resizeLeftRight.push()
-                            } else {
-                                NSCursor.pop()
-                            }
-                        }
-                        
-                        // Right: Native PDF Document Viewer (if attached) or Markdown Preview
-                        if let pdfURL = resolvedPDFURL {
-                            PDFDocumentViewerView(
-                                pdfURL: pdfURL,
-                                note: $note,
-                                notes: $notes,
+                    }
+                }
+            } else if editMode == .split {
+                VStack(spacing: 0) {
+                    GeometryReader { splitGeo in
+                        let totalWidth = splitGeo.size.width
+                        let minPanelWidth: CGFloat = 200
+                        let effectiveLeftWidth = max(minPanelWidth, min(totalWidth - minPanelWidth, totalWidth * CGFloat(splitRatio)))
+                        let effectiveRightWidth = max(minPanelWidth, totalWidth - effectiveLeftWidth - 6)
+
+                        HStack(spacing: 0) {
+                            // Left: Native Markdown Text Editor
+                            MacMarkdownEditorView(
+                                text: $localContent,
+                                noteId: note.id,
+                                fontSize: CGFloat(editorFontSize),
+                                fontDesign: selectedFontDesign,
                                 isDark: isDark,
-                                primaryAccent: primaryAccent,
-                                secondaryAccent: secondaryAccent,
-                                onDetachPDF: {
-                                    note.pdfPath = nil
-                                    NotesDataManager.shared.saveNotes(notes)
+                                enableVimMode: enableVimMode,
+                                onVimAction: handleVimAction,
+                                onImagePasted: {
+                                    withAnimation {
+                                        showImagePastedToast = true
+                                    }
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                                        withAnimation {
+                                            showImagePastedToast = false
+                                        }
+                                    }
                                 },
-                                onQuoteSelection: { _ in
-                                    localContent = note.content
+                                onTextChanged: { formatted in
+                                    handleAutoSave(formatted)
                                 }
                             )
-                            .frame(width: effectiveRightWidth)
-                        } else {
+                            .padding(6)
+                            .background(Color.panelBackground(isDark))
+                            .frame(width: effectiveLeftWidth)
+                            
+                            // Interactive Draggable Split Divider
+                            ZStack {
+                                Rectangle()
+                                    .fill(Color.subtleBorder(isDark))
+                                    .frame(width: 1)
+                                
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(Color.cardBackground(isDark))
+                                    .frame(width: 6, height: 32)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 3)
+                                            .stroke(Color.subtleBorder(isDark), lineWidth: 1)
+                                    )
+                            }
+                            .frame(width: 6)
+                            .contentShape(Rectangle())
+                            .gesture(
+                                DragGesture(minimumDistance: 1)
+                                    .onChanged { value in
+                                        let newRatio = Double((effectiveLeftWidth + value.translation.width) / totalWidth)
+                                        splitRatio = max(0.2, min(0.8, newRatio))
+                                    }
+                            )
+                            .onHover { inside in
+                                if inside {
+                                    NSCursor.resizeLeftRight.push()
+                                } else {
+                                    NSCursor.pop()
+                                }
+                            }
+                            
+                            // Right: Real-Time Markdown & Diagram Live Preview
                             ScrollView {
                                 VStack(alignment: .leading) {
                                     MarkdownRendererView(
@@ -353,36 +314,49 @@ struct EditorPanelView: View {
                                         primaryAccent: primaryAccent,
                                         secondaryAccent: secondaryAccent
                                     )
-                                    .frame(maxWidth: 720, alignment: .leading)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                                 }
-                                .padding(24)
+                                .padding(16)
                             }
-                            .frame(width: effectiveRightWidth)
                             .background(Color.panelBackground(isDark))
+                            .frame(width: effectiveRightWidth)
                         }
+                    }
+                    
+                    if enableVimMode {
+                        VimBottomStatusBar(
+                            vimController: vimController,
+                            isDark: isDark,
+                            primaryAccent: primaryAccent,
+                            onHelpRequested: { showVimHelpModal = true }
+                        )
                     }
                 }
             } else {
-                ScrollView {
-                    VStack(alignment: .leading) {
-                        MarkdownRendererView(
-                            markdown: localContent.replacingOccurrences(of: "\\n", with: "\n"),
-                            notes: $notes,
-                            selectedNoteId: $selectedNoteId,
-                            playerVM: playerVM,
-                            isDark: isDark,
-                            primaryAccent: primaryAccent,
-                            secondaryAccent: secondaryAccent
-                        )
-                        .frame(maxWidth: 720, alignment: .leading)
+                HStack(spacing: 0) {
+                    Spacer()
+                    ScrollView {
+                        VStack(alignment: .leading) {
+                            MarkdownRendererView(
+                                markdown: localContent.replacingOccurrences(of: "\\n", with: "\n"),
+                                notes: $notes,
+                                selectedNoteId: $selectedNoteId,
+                                playerVM: playerVM,
+                                isDark: isDark,
+                                primaryAccent: primaryAccent,
+                                secondaryAccent: secondaryAccent
+                            )
+                            .frame(maxWidth: isFocusMode ? 750 : 720, alignment: .leading)
+                        }
+                        .padding(isFocusMode ? 36 : 32)
                     }
-                    .padding(32)
+                    Spacer()
                 }
                 .background(Color.panelBackground(isDark))
             }
 
-            // Collapsible Obsidian-Style Backlinks Drawer
-            if !incomingBacklinks.isEmpty || !unlinkedMentions.isEmpty || !outgoingWikiLinks.isEmpty {
+            // Collapsible Obsidian-Style Backlinks Drawer (Hidden in Zen Focus Mode)
+            if !isFocusMode && (!incomingBacklinks.isEmpty || !unlinkedMentions.isEmpty || !outgoingWikiLinks.isEmpty) {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
                         Image(systemName: "network")
@@ -533,17 +507,23 @@ struct EditorPanelView: View {
         }
         .onAppear {
             localContent = note.content.replacingOccurrences(of: "\\n", with: "\n")
+            docStats = calculateDocumentStats(localContent)
+            cachedHeadingOutline = localContent.components(separatedBy: "\n").filter { $0.hasPrefix("#") }
             refreshMetadataAsync()
         }
         .task(id: note.id) {
             saveTimer?.invalidate()
             localContent = note.content.replacingOccurrences(of: "\\n", with: "\n")
+            docStats = calculateDocumentStats(localContent)
+            cachedHeadingOutline = localContent.components(separatedBy: "\n").filter { $0.hasPrefix("#") }
             refreshMetadataAsync()
         }
         .onChange(of: note.content) { _, externalContent in
             let clean = externalContent.replacingOccurrences(of: "\\n", with: "\n")
             if localContent != clean && saveTimer == nil {
                 localContent = clean
+                docStats = calculateDocumentStats(clean)
+                cachedHeadingOutline = clean.components(separatedBy: "\n").filter { $0.hasPrefix("#") }
                 refreshMetadataAsync()
             }
         }
@@ -560,6 +540,86 @@ struct EditorPanelView: View {
         }
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             handleFileDrop(providers: providers)
+        }
+        .sheet(isPresented: $showVimHelpModal) {
+            VimHelpModalView(
+                isPresented: $showVimHelpModal,
+                isDark: isDark,
+                primaryAccent: primaryAccent
+            )
+        }
+    }
+
+    private func handleVimAction(_ action: VimAction) {
+        switch action {
+        case .none, .message:
+            break
+        case .save:
+            if let idx = notes.firstIndex(where: { $0.id == note.id }) {
+                notes[idx].content = localContent
+                NotesDataManager.shared.saveNotes(notes)
+            }
+        case .closeTab:
+            TabNavigationManager.shared.closeTab(note.id)
+            if let first = TabNavigationManager.shared.openTabIds.first {
+                selectedNoteId = first
+            }
+        case .saveAndClose:
+            if let idx = notes.firstIndex(where: { $0.id == note.id }) {
+                notes[idx].content = localContent
+                NotesDataManager.shared.saveNotes(notes)
+            }
+            TabNavigationManager.shared.closeTab(note.id)
+            if let first = TabNavigationManager.shared.openTabIds.first {
+                selectedNoteId = first
+            }
+        case .nextTab:
+            TabNavigationManager.shared.nextTab()
+            selectedNoteId = TabNavigationManager.shared.activeTabId
+        case .prevTab:
+            TabNavigationManager.shared.previousTab()
+            selectedNoteId = TabNavigationManager.shared.activeTabId
+        case .newTab:
+            let newNote = NoteItem(
+                title: "Untitled Note",
+                folder: note.folder,
+                content: "",
+                timestamp: Date(),
+                audioPath: nil,
+                transcript: [],
+                isStandalone: true,
+                bookmarks: []
+            )
+            notes.insert(newNote, at: 0)
+            selectedNoteId = newNote.id
+            TabNavigationManager.shared.openNote(newNote.id)
+            NotesDataManager.shared.saveNotes(notes)
+        case .toggleLineNumbers:
+            break
+        case .openGraph:
+            NotificationCenter.default.post(name: NSNotification.Name("ToggleGraphView"), object: nil)
+        case .toggleFocus:
+            break
+        case .openTOC:
+            withAnimation { showTOCDrawer.toggle() }
+        case .openAI:
+            NotificationCenter.default.post(name: NSNotification.Name("OpenAIAssistant"), object: nil)
+        case .showHelp:
+            showVimHelpModal = true
+        case .replaceText(let find, let replace, let isGlobal):
+            if isGlobal {
+                localContent = localContent.replacingOccurrences(of: find, with: replace)
+                handleAutoSave(localContent)
+                vimController.setStatus("Substituted all occurrences of '\(find)'")
+            } else {
+                if let range = localContent.range(of: find) {
+                    localContent.replaceSubrange(range, with: replace)
+                    handleAutoSave(localContent)
+                    vimController.setStatus("Substituted 1 occurrence of '\(find)'")
+                } else {
+                    vimController.setStatus("Pattern not found: \(find)")
+                }
+            }
         }
     }
 
@@ -632,6 +692,10 @@ struct EditorPanelView: View {
     }
 
     private func handleAutoSave(_ newContent: String) {
+        // Real-time synchronous calculation of live word/char count and headings
+        docStats = calculateDocumentStats(newContent)
+        cachedHeadingOutline = newContent.components(separatedBy: "\n").filter { $0.hasPrefix("#") }
+
         // Detect Wiki-Link [[ typing
         if let match = newContent.range(of: "\\[\\[([^\\]\\n]*)$", options: .regularExpression) {
             let sub = String(newContent[match]).dropFirst(2)
@@ -657,6 +721,8 @@ struct EditorPanelView: View {
     private func insertWikiLinkCompletion(_ title: String) {
         if let range = localContent.range(of: "\\[\\[([^\\]\\n]*)$", options: .regularExpression) {
             localContent.replaceSubrange(range, with: "[[\(title)]] ")
+            docStats = calculateDocumentStats(localContent)
+            cachedHeadingOutline = localContent.components(separatedBy: "\n").filter { $0.hasPrefix("#") }
             showWikiAutocomplete = false
             handleAutoSave(localContent)
         }
@@ -670,8 +736,7 @@ struct EditorPanelView: View {
         let allNotes = self.notes
 
         DispatchQueue.global(qos: .userInitiated).async {
-            // Stats & Outline
-            let st = calculateWordAndCharCount(currentText)
+            // Outline
             let ot = currentText.components(separatedBy: "\n").filter { $0.hasPrefix("#") }
 
             // Backlinks
@@ -706,7 +771,6 @@ struct EditorPanelView: View {
             }
 
             DispatchQueue.main.async {
-                self.cachedStats = st
                 self.cachedHeadingOutline = ot
                 self.cachedIncomingBacklinks = backlinks
                 self.cachedUnlinkedMentions = unlinked
@@ -717,6 +781,8 @@ struct EditorPanelView: View {
 
     private func insertMarkdown(_ prefix: String, _ suffix: String) {
         localContent += "\(prefix)text\(suffix)"
+        docStats = calculateDocumentStats(localContent)
+        cachedHeadingOutline = localContent.components(separatedBy: "\n").filter { $0.hasPrefix("#") }
         let clean = localContent.replacingOccurrences(of: "\\n", with: "\n")
         note.content = clean
         NotesDataManager.shared.saveNotes(notes)
@@ -794,24 +860,32 @@ struct EditorPanelView: View {
     }
 
     private func linkUnlinkedMention(in targetNote: NoteItem) {
-        let currentTitle = note.title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let idx = notes.firstIndex(where: { $0.id == targetNote.id }) else { return }
+        let currentTitle = note.title.trimmingCharacters(in: .whitespacesAndNewlines)
         let pattern = "(?<!\\[\\[)(" + NSRegularExpression.escapedPattern(for: currentTitle) + ")(?!\\]\\])"
         if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
             let nsRange = NSRange(notes[idx].content.startIndex..., in: notes[idx].content)
             notes[idx].content = regex.stringByReplacingMatches(in: notes[idx].content, range: nsRange, withTemplate: "[[$1]]")
             NotesDataManager.shared.saveNotes(notes)
+            refreshMetadataAsync()
         }
+    }
+
+    private func insertMarkdown(prefix: String, suffix: String = "") {
+        localContent += "\(prefix)\(suffix)"
+        handleAutoSave(localContent)
     }
 }
 
-// MARK: - Native Mac Markdown Text Editor with Deep Image Paste Interception
+// MARK: - Native Mac Markdown Text Editor with Deep Image Paste & Vim Interception
 struct MacMarkdownEditorView: NSViewRepresentable {
     @Binding var text: String
     let noteId: UUID
     let fontSize: CGFloat
     let fontDesign: Font.Design
     let isDark: Bool
+    var enableVimMode: Bool = false
+    var onVimAction: ((VimAction) -> Void)? = nil
     var onImagePasted: (() -> Void)? = nil
     var onTextChanged: ((String) -> Void)? = nil
 
@@ -830,11 +904,23 @@ struct MacMarkdownEditorView: NSViewRepresentable {
                 parent.text = newText
                 parent.onTextChanged?(newText)
             }
+            if parent.enableVimMode {
+                VimController.shared.updateCursorPosition(in: textView)
+            }
+        }
+
+        func textViewDidChangeSelection(_ notification: Notification) {
+            guard let textView = notification.object as? NSTextView else { return }
+            if parent.enableVimMode {
+                VimController.shared.updateCursorPosition(in: textView)
+            }
         }
     }
 
     class CustomNSTextView: NSTextView {
         var noteId: UUID?
+        var enableVimMode: Bool = false
+        var onVimAction: ((VimAction) -> Void)?
         var onImagePasted: (() -> Void)?
 
         override func performKeyEquivalent(with event: NSEvent) -> Bool {
@@ -845,6 +931,19 @@ struct MacMarkdownEditorView: NSViewRepresentable {
                 return true
             }
             return super.performKeyEquivalent(with: event)
+        }
+
+        override func keyDown(with event: NSEvent) {
+            if enableVimMode {
+                let handled = VimController.shared.handleKeyDown(event: event, in: self) { [weak self] action in
+                    self?.onVimAction?(action)
+                }
+                if handled {
+                    self.didChangeText()
+                    return
+                }
+            }
+            super.keyDown(with: event)
         }
 
         override func paste(_ sender: Any?) {
@@ -920,6 +1019,8 @@ struct MacMarkdownEditorView: NSViewRepresentable {
         textView.drawsBackground = false
         textView.delegate = context.coordinator
         textView.noteId = noteId
+        textView.enableVimMode = enableVimMode
+        textView.onVimAction = onVimAction
         textView.onImagePasted = onImagePasted
         
         applyFontAndColors(to: textView)
@@ -933,6 +1034,8 @@ struct MacMarkdownEditorView: NSViewRepresentable {
         guard let textView = scrollView.documentView as? CustomNSTextView else { return }
         context.coordinator.parent = self
         textView.noteId = noteId
+        textView.enableVimMode = enableVimMode
+        textView.onVimAction = onVimAction
         textView.onImagePasted = onImagePasted
 
         if textView.string != text {
@@ -960,5 +1063,149 @@ struct MacMarkdownEditorView: NSViewRepresentable {
         textView.font = nsFont
         textView.textColor = isDark ? NSColor(red: 226/255, green: 232/255, blue: 240/255, alpha: 1.0) : NSColor(red: 15/255, green: 23/255, blue: 42/255, alpha: 1.0)
         textView.insertionPointColor = isDark ? NSColor.white : NSColor.black
+    }
+}
+
+// MARK: - Vim Bottom Status Bar
+struct VimBottomStatusBar: View {
+    @ObservedObject var vimController: VimController
+    let isDark: Bool
+    let primaryAccent: Color
+    let onHelpRequested: () -> Void
+    
+    var body: some View {
+        HStack(spacing: 8) {
+            // Mode Badge
+            Text("-- \(vimController.mode.rawValue) --")
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundColor(.white)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(vimController.mode.accentColor)
+                .cornerRadius(4)
+            
+            // Command Line Input or Status Message
+            if vimController.mode == .command {
+                HStack(spacing: 2) {
+                    Text(":")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundColor(primaryAccent)
+                    Text(vimController.commandText)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.primary)
+                    Rectangle()
+                        .fill(primaryAccent)
+                        .frame(width: 2, height: 12)
+                }
+            } else if !vimController.statusMessage.isEmpty {
+                Text(vimController.statusMessage)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.secondary)
+            }
+            
+            Spacer()
+            
+            // Line and Column tracker
+            Text("Ln \(vimController.cursorLine), Col \(vimController.cursorColumn)")
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .foregroundColor(.secondary)
+            
+            // Help Button
+            Button(action: onHelpRequested) {
+                Image(systemName: "questionmark.circle")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("Vim Keybindings & Commands (:help)")
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 4)
+        .background(Color.sidebarBackground(isDark).opacity(0.9))
+        .overlay(
+            Rectangle()
+                .fill(Color.subtleBorder(isDark))
+                .frame(height: 1),
+            alignment: .top
+        )
+    }
+}
+
+// MARK: - Dedicated Sleek Markdown Toolbar Button
+struct MarkdownToolbarButton: View {
+    let icon: String
+    let help: String
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(isHovered ? .primary : .secondary)
+                .frame(width: 26, height: 24)
+                .background(isHovered ? Color.primary.opacity(0.08) : Color.clear)
+                .cornerRadius(AppRadius.sm)
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .onHover { isHovered = $0 }
+    }
+}
+
+// MARK: - Document Statistics Popover View
+struct DocumentStatsPopoverView: View {
+    let stats: DocumentStats
+    let isDark: Bool
+    let primaryAccent: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "chart.bar.doc.horizontal")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(primaryAccent)
+                Text("Document Inspector")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(isDark ? .white : .black)
+            }
+
+            Divider()
+
+            VStack(spacing: 6) {
+                statsRow(label: "Words", value: "\(stats.words)")
+                statsRow(label: "Characters (with spaces)", value: "\(stats.characters)")
+                statsRow(label: "Characters (no spaces)", value: "\(stats.charactersNoSpaces)")
+                statsRow(label: "Paragraphs", value: "\(stats.paragraphs)")
+                statsRow(label: "Lines", value: "\(stats.lines)")
+                
+                Divider()
+                    .padding(.vertical, 2)
+                
+                HStack {
+                    Text("Reading Time")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Text("~\(stats.readingTimeMinutes) min")
+                        .font(.caption.weight(.bold))
+                        .foregroundColor(primaryAccent)
+                }
+            }
+        }
+        .padding(14)
+        .frame(minWidth: 230)
+    }
+
+    private func statsRow(label: String, value: String) -> some View {
+        HStack {
+            Text(label)
+                .font(.caption)
+                .foregroundColor(.secondary)
+            Spacer()
+            Text(value)
+                .font(.caption.weight(.semibold).monospacedDigit())
+                .foregroundColor(isDark ? .white : .black)
+        }
     }
 }

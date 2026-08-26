@@ -1,14 +1,64 @@
 import SwiftUI
 
-// MARK: - Word & Character Count Helper
-func calculateWordAndCharCount(_ text: String) -> (words: Int, chars: Int) {
-    let cleanText = text.replacingOccurrences(of: "\\n", with: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-    let chars = text.replacingOccurrences(of: "\\n", with: "\n").count
-    if cleanText.isEmpty {
-        return (0, 0)
+// MARK: - Word & Character Count Helper & Document Stats
+public struct DocumentStats: Equatable {
+    public let words: Int
+    public let characters: Int
+    public let charactersNoSpaces: Int
+    public let lines: Int
+    public let paragraphs: Int
+    public let readingTimeMinutes: Int
+    
+    public static let zero = DocumentStats(words: 0, characters: 0, charactersNoSpaces: 0, lines: 0, paragraphs: 0, readingTimeMinutes: 0)
+}
+
+public func calculateDocumentStats(_ rawText: String) -> DocumentStats {
+    let text = rawText.replacingOccurrences(of: "\\n", with: "\n")
+    if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        return .zero
     }
-    let words = cleanText.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.count
-    return (words, chars)
+    
+    let characters = text.count
+    let charactersNoSpaces = text.filter { !$0.isWhitespace && !$0.isNewline }.count
+    
+    // Clean Markdown markup tokens to get accurate word count
+    var cleaned = text
+    cleaned = cleaned.replacingOccurrences(of: "```[\\s\\S]*?```", with: " ", options: .regularExpression)
+    cleaned = cleaned.replacingOccurrences(of: "`[^`]*`", with: " ", options: .regularExpression)
+    cleaned = cleaned.replacingOccurrences(of: "\\[([^\\]]+)\\]\\([^\\)]+\\)", with: "$1", options: .regularExpression)
+    cleaned = cleaned.replacingOccurrences(of: "\\[\\[([^\\]]+)\\]\\]", with: "$1", options: .regularExpression)
+    cleaned = cleaned.replacingOccurrences(of: "!\\[[^\\]]*\\]\\([^\\)]*\\)", with: " ", options: .regularExpression)
+    cleaned = cleaned.replacingOccurrences(of: "(?m)^#{1,6}\\s+", with: "", options: .regularExpression)
+    cleaned = cleaned.replacingOccurrences(of: "(?m)^>\\s+", with: "", options: .regularExpression)
+    cleaned = cleaned.replacingOccurrences(of: "(?m)^[\\s]*[-*+]\\s+", with: "", options: .regularExpression)
+    cleaned = cleaned.replacingOccurrences(of: "(?m)^[\\s]*\\d+\\.\\s+", with: "", options: .regularExpression)
+
+    var wordCount = 0
+    cleaned.enumerateSubstrings(in: cleaned.startIndex..<cleaned.endIndex, options: [.byWords, .localized]) { (_, _, _, _) in
+        wordCount += 1
+    }
+    
+    if wordCount == 0 && !cleaned.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        wordCount = cleaned.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.count
+    }
+    
+    let lines = text.components(separatedBy: "\n").count
+    let paragraphs = text.components(separatedBy: "\n\n").filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count
+    let readingTime = max(1, Int(ceil(Double(wordCount) / 200.0)))
+    
+    return DocumentStats(
+        words: wordCount,
+        characters: characters,
+        charactersNoSpaces: charactersNoSpaces,
+        lines: lines,
+        paragraphs: max(1, paragraphs),
+        readingTimeMinutes: readingTime
+    )
+}
+
+public func calculateWordAndCharCount(_ text: String) -> (words: Int, chars: Int) {
+    let stats = calculateDocumentStats(text)
+    return (stats.words, stats.characters)
 }
 
 // MARK: - Code Block Card Component
@@ -20,10 +70,16 @@ struct CodeBlockView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text("CODE")
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .foregroundColor(.secondary)
+                HStack(spacing: 4) {
+                    Image(systemName: "chevron.left.forwardslash.chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                    Text("CODE")
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                }
+                .foregroundColor(.secondary.opacity(0.8))
+                
                 Spacer()
+                
                 Button(action: {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(code, forType: .string)
@@ -34,11 +90,15 @@ struct CodeBlockView: View {
                 }) {
                     HStack(spacing: 4) {
                         Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                            .font(.system(size: 10))
-                        Text(copied ? "Copied!" : "Copy")
-                            .font(.caption2)
+                            .font(.system(size: 10, weight: .medium))
+                        Text(copied ? "Copied" : "Copy")
+                            .font(.system(size: 10, weight: .medium))
                     }
                     .foregroundColor(copied ? .emerald : .secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+                    .cornerRadius(4)
                 }
                 .buttonStyle(.plain)
             }
@@ -50,9 +110,9 @@ struct CodeBlockView: View {
         }
         .padding(12)
         .background(Color.cardBackground(isDark))
-        .cornerRadius(8)
+        .cornerRadius(AppRadius.sm)
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: AppRadius.sm)
                 .stroke(Color.subtleBorder(isDark), lineWidth: 1)
         )
         .padding(.vertical, 4)
@@ -128,6 +188,7 @@ struct TextToken: Identifiable {
         case wikiLink(String)
         case hashtag(String)
         case playLink(timeLabel: String, seconds: Double)
+        case inlineMath(String)
     }
     let type: TokenType
 }
@@ -136,7 +197,7 @@ func parseLineTokens(_ line: String) -> [TextToken] {
     var tokens: [TextToken] = []
     var currentIndex = line.startIndex
 
-    let pattern = "\\[\\[(.*?)\\]\\]|\\[(.*?)\\]\\(play://([0-9.]+)\\)|#([a-zA-Z0-9_]+)"
+    let pattern = "\\[\\[(.*?)\\]\\]|\\[(.*?)\\]\\(play://([0-9.]+)\\)|#([a-zA-Z0-9_]+)|\\$([^$\\n]+)\\$"
     guard let regex = try? NSRegularExpression(pattern: pattern) else {
         return [.init(type: .text(line))]
     }
@@ -165,6 +226,9 @@ func parseLineTokens(_ line: String) -> [TextToken] {
         } else if let tagRange = Range(match.range(at: 4), in: line), !line[tagRange].isEmpty {
             let tag = String(line[tagRange])
             tokens.append(.init(type: .hashtag(tag)))
+        } else if let mathRange = Range(match.range(at: 5), in: line), !line[mathRange].isEmpty {
+            let latexFormula = String(line[mathRange])
+            tokens.append(.init(type: .inlineMath(latexFormula)))
         }
 
         currentIndex = matchRange.upperBound
@@ -188,6 +252,7 @@ struct FormattedTextLine: View {
     let currentFolder: String
     let primaryAccent: Color
     let secondaryAccent: Color
+    var isDark: Bool = true
 
     var tokens: [TextToken] {
         parseLineTokens(text)
@@ -199,15 +264,27 @@ struct FormattedTextLine: View {
                 switch token.type {
                 case .text(let plainStr):
                     Text(plainStr)
+                case .inlineMath(let formula):
+                    InlineMathView(latex: formula, isDark: isDark)
                 case .hashtag(let tag):
-                    Text("#\(tag)")
-                        .font(.subheadline)
-                        .fontWeight(.bold)
-                        .foregroundColor(primaryAccent)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1)
-                        .background(primaryAccent.opacity(0.12))
-                        .cornerRadius(4)
+                    Button(action: {
+                        NotificationCenter.default.post(name: .filterNotesByTag, object: tag)
+                    }) {
+                        Text("#\(tag)")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundColor(primaryAccent)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 1.5)
+                            .background(primaryAccent.opacity(0.14))
+                            .cornerRadius(5)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 5)
+                                    .stroke(primaryAccent.opacity(0.35), lineWidth: 0.8)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .help("Filter notes by #\(tag)")
                 case .wikiLink(let targetTitle):
                     Button(action: {
                         openOrCreateWikiLinkNote(targetTitle)
@@ -283,6 +360,8 @@ enum MarkdownBlockType {
     case code(String)
     case callout(type: String, title: String, content: [String])
     case image(alt: String, path: String)
+    case mermaid(String)
+    case mathBlock(String)
 }
 
 // MARK: - Inline Markdown Image Viewer Component
@@ -605,6 +684,58 @@ func parseMarkdownBlocks(_ text: String) -> [MarkdownBlockType] {
             }
         }
         
+        // Block Math check ($$ ... $$)
+        if trimmed.hasPrefix("$$") {
+            if trimmed.hasSuffix("$$") && trimmed.count > 4 {
+                let mathContent = String(trimmed.dropFirst(2).dropLast(2)).trimmingCharacters(in: .whitespaces)
+                blocks.append(.mathBlock(mathContent))
+                index += 1
+                continue
+            }
+            var mathLines: [String] = []
+            let firstLineMath = String(trimmed.dropFirst(2)).trimmingCharacters(in: .whitespaces)
+            if !firstLineMath.isEmpty { mathLines.append(firstLineMath) }
+            index += 1
+            while index < lines.count && !lines[index].trimmingCharacters(in: .whitespaces).hasSuffix("$$") {
+                mathLines.append(lines[index])
+                index += 1
+            }
+            if index < lines.count {
+                let lastTrimmed = lines[index].trimmingCharacters(in: .whitespaces)
+                let lastLineMath = String(lastTrimmed.dropLast(2)).trimmingCharacters(in: .whitespaces)
+                if !lastLineMath.isEmpty { mathLines.append(lastLineMath) }
+                index += 1
+            }
+            blocks.append(.mathBlock(mathLines.joined(separator: "\n")))
+            continue
+        }
+
+        // Mermaid Block check (```mermaid ... ```)
+        if trimmed.hasPrefix("```mermaid") {
+            var mermaidLines: [String] = []
+            index += 1
+            while index < lines.count && !lines[index].trimmingCharacters(in: .whitespaces).hasPrefix("```") {
+                mermaidLines.append(lines[index])
+                index += 1
+            }
+            blocks.append(.mermaid(mermaidLines.joined(separator: "\n")))
+            index += 1
+            continue
+        }
+
+        // Math/LaTeX Code block check (```math or ```latex)
+        if trimmed.hasPrefix("```math") || trimmed.hasPrefix("```latex") {
+            var mathLines: [String] = []
+            index += 1
+            while index < lines.count && !lines[index].trimmingCharacters(in: .whitespaces).hasPrefix("```") {
+                mathLines.append(lines[index])
+                index += 1
+            }
+            blocks.append(.mathBlock(mathLines.joined(separator: "\n")))
+            index += 1
+            continue
+        }
+
         // Code block check
         if line.trimmingCharacters(in: .whitespaces).hasPrefix("```") {
             var codeLines: [String] = []
@@ -681,6 +812,18 @@ struct MarkdownRendererView: View {
                         isDark: isDark,
                         primaryAccent: primaryAccent,
                         secondaryAccent: secondaryAccent
+                    )
+                case .mermaid(let mermaidCode):
+                    MermaidRendererView(
+                        code: mermaidCode,
+                        isDark: isDark,
+                        primaryAccent: primaryAccent
+                    )
+                case .mathBlock(let latex):
+                    MathEquationBlockView(
+                        latex: latex,
+                        isDark: isDark,
+                        primaryAccent: primaryAccent
                     )
                 }
             }

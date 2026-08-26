@@ -8,6 +8,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     case aiProvider = "AI Provider"
     case cloudSync = "Cloud Sync & Vault"
     case audioDevices = "Audio Devices"
+    case updates = "Updates & About"
     
     var id: String { rawValue }
     
@@ -18,6 +19,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .aiProvider: return "sparkles"
         case .cloudSync: return "folder.badge.gearshape"
         case .audioDevices: return "mic"
+        case .updates: return "arrow.triangle.2.circlepath.circle"
         }
     }
 }
@@ -36,11 +38,14 @@ struct SettingsModalView: View {
     @AppStorage("activeWhisperModel") private var activeWhisperModel = "ggml-base.bin"
     @AppStorage("selectedInputMicrophone") private var selectedInputMicrophone = "Default System Microphone"
     @AppStorage("selectedOutputSpeaker") private var selectedOutputSpeaker = "Default System Speaker"
+    @AppStorage("enableVimMode") private var enableVimMode = false
     
+    @State private var showVimHelpSheet = false
     @State private var selectedTab: SettingsTab = .preferences
     @StateObject private var deviceManager = AudioDeviceManager.shared
     @StateObject private var downloader = WhisperModelDownloader.shared
     @StateObject private var gemmaDownloader = GemmaModelDownloader.shared
+    @StateObject private var updater = GitHubReleaseUpdater.shared
 
     var primaryAccent: Color {
         ThemeColors.primary(colorTheme)
@@ -153,6 +158,8 @@ struct SettingsModalView: View {
                             cloudSyncTabContent
                         case .audioDevices:
                             audioDevicesTabContent
+                        case .updates:
+                            updatesTabContent
                         }
                     }
                     .padding(20)
@@ -195,6 +202,13 @@ struct SettingsModalView: View {
             RoundedRectangle(cornerRadius: 16)
                 .stroke(Color.subtleBorder(isDarkMode), lineWidth: 1)
         )
+        .sheet(isPresented: $showVimHelpSheet) {
+            VimHelpModalView(
+                isPresented: $showVimHelpSheet,
+                isDark: isDarkMode,
+                primaryAccent: primaryAccent
+            )
+        }
         .onAppear {
             deviceManager.refreshDevices()
             downloader.checkDownloadedModels()
@@ -208,6 +222,7 @@ struct SettingsModalView: View {
         case .aiProvider: return "AI Speech & Transcriber Engine"
         case .cloudSync: return "Vault Storage & Backup"
         case .audioDevices: return "Audio Capture & Hardware"
+        case .updates: return "Software Updates & About"
         }
     }
     
@@ -218,6 +233,7 @@ struct SettingsModalView: View {
         case .aiProvider: return "Download offline Whisper GGUF models for local execution."
         case .cloudSync: return "Manage vault storage backup and JSON export."
         case .audioDevices: return "Select active input microphone and speaker hardware."
+        case .updates: return "Check for new versions, changelogs, and manage release updates."
         }
     }
     
@@ -248,19 +264,36 @@ struct SettingsModalView: View {
             .background(Color.cardBackground(isDarkMode))
             .cornerRadius(12)
             
-            // Card 2: Color Theme Presets
-            VStack(alignment: .leading, spacing: 10) {
-                Text("COLOR THEME PALETTE")
-                    .font(.caption2)
-                    .fontWeight(.bold)
-                    .foregroundColor(.secondary)
+            // Card 2: Color Theme Presets with Live Swatches
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("COLOR THEME PALETTE")
+                        .font(.caption2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.secondary)
+                    
+                    Spacer()
+                    
+                    Text(colorTheme)
+                        .font(.caption2)
+                        .fontWeight(.bold)
+                        .foregroundColor(primaryAccent)
+                }
                 
-                Picker("", selection: $colorTheme) {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                     ForEach(AppColorTheme.allCases) { theme in
-                        Text(theme.rawValue).tag(theme.rawValue)
+                        ThemeSwatchButton(
+                            theme: theme,
+                            isSelected: colorTheme == theme.rawValue,
+                            isDark: isDarkMode,
+                            onSelect: {
+                                withAnimation(.easeInOut(duration: 0.18)) {
+                                    colorTheme = theme.rawValue
+                                }
+                            }
+                        )
                     }
                 }
-                .pickerStyle(.segmented)
             }
             .padding(16)
             .background(Color.cardBackground(isDarkMode))
@@ -279,6 +312,62 @@ struct SettingsModalView: View {
                     }
                 }
                 .pickerStyle(.menu)
+            }
+            .padding(16)
+            .background(Color.cardBackground(isDarkMode))
+            .cornerRadius(12)
+
+            // Card 4: Vim Keybindings & Modal Editing
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 14) {
+                    Image(systemName: "keyboard.badge.ellipsis")
+                        .font(.title2)
+                        .foregroundColor(primaryAccent)
+                        .frame(width: 32)
+                    
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Vim Keybindings & Modal Editing")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                        Text("Navigate and edit notes using Vim Normal, Insert, Visual modes, and : command-line shortcuts.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    Toggle("", isOn: $enableVimMode)
+                        .toggleStyle(.switch)
+                }
+                
+                if enableVimMode {
+                    Divider()
+                        .background(Color.subtleBorder(isDarkMode))
+                    
+                    HStack {
+                        Text("Includes :w (save), :q (close tab), :wq (save & close), :tabn, :set nu, and modal motions (h/j/k/l, w, b, dd, yy, p).")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        Spacer()
+                        
+                        Button(action: { showVimHelpSheet = true }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "book.pages")
+                                    .font(.caption)
+                                Text("Cheat Sheet")
+                                    .font(.caption)
+                                    .fontWeight(.bold)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(primaryAccent.opacity(0.15))
+                            .foregroundColor(primaryAccent)
+                            .cornerRadius(6)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
             }
             .padding(16)
             .background(Color.cardBackground(isDarkMode))
@@ -650,5 +739,265 @@ struct SettingsModalView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Updates & About Tab
+    private var updatesTabContent: some View {
+        VStack(spacing: 20) {
+            // App Branding & Version Card
+            HStack(spacing: 16) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(primaryAccent.opacity(0.15))
+                        .frame(width: 56, height: 56)
+                    
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundColor(primaryAccent)
+                }
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Text("WhispNotes")
+                            .font(.title3)
+                            .fontWeight(.heavy)
+                        
+                        Text("v\(updater.currentVersion)")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(primaryAccent.opacity(0.15))
+                            .foregroundColor(primaryAccent)
+                            .cornerRadius(4)
+                    }
+                    
+                    Text("Native Intelligent Lecture & Document Notes with Local AI & Vault Sync.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+            }
+            .padding(16)
+            .background(Color.cardBackground(isDarkMode))
+            .cornerRadius(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.subtleBorder(isDarkMode), lineWidth: 1)
+            )
+
+            // Auto-Update Configuration & Status Card
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Automatic Update Checks")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                        Text("Silently check for new versions on GitHub releases when WhispNotes launches.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    Toggle("", isOn: $updater.autoCheckForUpdates)
+                        .toggleStyle(SwitchToggleStyle(tint: primaryAccent))
+                }
+                
+                Divider()
+                    .background(Color.subtleBorder(isDarkMode))
+                
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Release Channel")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                        Text("Public Stable Releases (GitHub: GIlbertoRCP/whispNotes)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    Button(action: {
+                        updater.checkForUpdates(silent: false)
+                    }) {
+                        HStack(spacing: 6) {
+                            if case .checking = updater.status {
+                                ProgressView()
+                                    .scaleEffect(0.7)
+                            } else {
+                                Image(systemName: "arrow.triangle.2.circlepath")
+                            }
+                            Text(isCheckingForUpdates ? "Checking..." : "Check for Updates Now")
+                        }
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(primaryAccent)
+                        .cornerRadius(8)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isCheckingForUpdates)
+                }
+                
+                if let lastCheck = updater.lastCheckDate {
+                    HStack(spacing: 6) {
+                        Image(systemName: "clock")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Text("Last checked: \(lastCheck.formatted(date: .abbreviated, time: .standard))")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.top, 2)
+                }
+            }
+            .padding(16)
+            .background(Color.cardBackground(isDarkMode))
+            .cornerRadius(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.subtleBorder(isDarkMode), lineWidth: 1)
+            )
+
+            // Links Card
+            HStack(spacing: 12) {
+                Button(action: { updater.openReleaseInBrowser() }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "link")
+                        Text("GitHub Releases")
+                    }
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                
+                Spacer()
+                
+                Text("Created with ❤️ for Mac")
+                    .font(.caption2)
+                    .foregroundColor(.secondary.opacity(0.8))
+            }
+            .padding(.horizontal, 4)
+        }
+    }
+    
+    private var isCheckingForUpdates: Bool {
+        if case .checking = updater.status { return true }
+        return false
+    }
+}
+
+// MARK: - Theme Swatch Button Component
+struct ThemeSwatchButton: View {
+    let theme: AppColorTheme
+    let isSelected: Bool
+    let isDark: Bool
+    let onSelect: () -> Void
+    
+    var definition: ThemeDefinition {
+        ThemeLibrary.getDefinition(name: theme.rawValue, isDark: isDark)
+    }
+    
+    var subtitle: String {
+        switch theme {
+        case .midnightRose: return "Indigo & Crimson"
+        case .obsidianBlack: return "Pitch & Cold Cyan"
+        case .nordArctic: return "Polar Frost & Ice"
+        case .rosePine: return "Lavender & Rose"
+        case .slateMinimal: return "Sky & Emerald"
+        }
+    }
+    
+    var body: some View {
+        Button(action: onSelect) {
+            VStack(alignment: .leading, spacing: 8) {
+                // Swatch Palette Preview Box
+                ZStack {
+                    // Mini Window Base
+                    RoundedRectangle(cornerRadius: AppRadius.sm)
+                        .fill(definition.appBackground)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: AppRadius.sm)
+                                .stroke(definition.border, lineWidth: 1)
+                        )
+                    
+                    // Elevated Card Preview with Accents
+                    HStack(spacing: 6) {
+                        // Diagonal split preview badge
+                        ZStack {
+                            Circle()
+                                .fill(definition.primary)
+                                .frame(width: 18, height: 18)
+                            
+                            Circle()
+                                .fill(definition.secondary)
+                                .frame(width: 12, height: 12)
+                                .offset(x: 3, y: 3)
+                        }
+                        
+                        // Mini preview lines
+                        VStack(alignment: .leading, spacing: 3) {
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(definition.primary.opacity(0.85))
+                                .frame(width: 32, height: 4)
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(definition.secondary.opacity(0.65))
+                                .frame(width: 20, height: 3)
+                        }
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 5)
+                    .background(definition.cardBackgroundElevated)
+                    .cornerRadius(4)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(definition.border, lineWidth: 0.5)
+                    )
+                    .padding(5)
+                    
+                    // Checkmark badge if selected
+                    if isSelected {
+                        VStack {
+                            HStack {
+                                Spacer()
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundColor(definition.primary)
+                                    .background(Circle().fill(Color.black.opacity(0.65)))
+                            }
+                            Spacer()
+                        }
+                        .padding(3)
+                    }
+                }
+                .frame(height: 48)
+                
+                // Theme Name & Subtitle
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(theme.rawValue)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(isSelected ? definition.primary : (isDark ? .white : .black))
+                        .lineLimit(1)
+                    
+                    Text(subtitle)
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            .padding(8)
+            .background(isSelected ? definition.primary.opacity(0.1) : Color.cardBackground(isDark))
+            .cornerRadius(AppRadius.md)
+            .overlay(
+                RoundedRectangle(cornerRadius: AppRadius.md)
+                    .stroke(isSelected ? definition.primary : Color.subtleBorder(isDark), lineWidth: isSelected ? 1.5 : 1)
+            )
+        }
+        .buttonStyle(.plain)
     }
 }

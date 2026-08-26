@@ -39,9 +39,11 @@ struct NoteItem: Identifiable, Codable, Hashable {
     var bookmarks: [AudioBookmark] = []
     var pdfPath: String?
     var attachments: [NoteAttachment] = []
+    var isPinned: Bool = false
+    var originalFolder: String? = nil
     
     enum CodingKeys: String, CodingKey {
-        case id, title, folder, content, timestamp, audioPath, transcript, isStandalone, bookmarks, pdfPath, attachments
+        case id, title, folder, content, timestamp, audioPath, transcript, isStandalone, bookmarks, pdfPath, attachments, isPinned, originalFolder
     }
 
     init(
@@ -55,7 +57,9 @@ struct NoteItem: Identifiable, Codable, Hashable {
         isStandalone: Bool = true,
         bookmarks: [AudioBookmark] = [],
         pdfPath: String? = nil,
-        attachments: [NoteAttachment] = []
+        attachments: [NoteAttachment] = [],
+        isPinned: Bool = false,
+        originalFolder: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -68,6 +72,8 @@ struct NoteItem: Identifiable, Codable, Hashable {
         self.bookmarks = bookmarks
         self.pdfPath = pdfPath
         self.attachments = attachments
+        self.isPinned = isPinned
+        self.originalFolder = originalFolder
     }
 
     init(from decoder: Decoder) throws {
@@ -83,6 +89,8 @@ struct NoteItem: Identifiable, Codable, Hashable {
         bookmarks = try container.decodeIfPresent([AudioBookmark].self, forKey: .bookmarks) ?? []
         pdfPath = try container.decodeIfPresent(String.self, forKey: .pdfPath)
         attachments = try container.decodeIfPresent([NoteAttachment].self, forKey: .attachments) ?? []
+        isPinned = try container.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
+        originalFolder = try container.decodeIfPresent(String.self, forKey: .originalFolder)
     }
 }
 

@@ -5,6 +5,7 @@ import AppKit
 
 extension Notification.Name {
     static let pasteImageAsAttachment = Notification.Name("pasteImageAsAttachment")
+    static let notesRestoredFromUndo = Notification.Name("notesRestoredFromUndo")
 }
 
 // MARK: - Data Manager (JSON Persistence, Rolling Backups & Vault Export)
@@ -14,8 +15,27 @@ class NotesDataManager: ObservableObject {
     @Published var isSaving = false
     @Published var lastSavedAt: Date? = Date()
     
+    /// Global UndoManager wired from the AppKit / SwiftUI environment
+    public weak var undoManager: UndoManager?
+    
     private var pendingSaveWorkItem: DispatchWorkItem?
     private let ioQueue = DispatchQueue(label: "com.whispnotes.datamanager.io", qos: .userInitiated)
+    
+    /// Register a structural operation (Delete, Move, Rename, Pin, Restore) on the native undo stack
+    func registerStructuralUndo(
+        actionName: String,
+        previousState: [NoteItem]
+    ) {
+        guard let undoManager = self.undoManager else { return }
+        let snapshot = previousState
+        undoManager.registerUndo(withTarget: self) { target in
+            target.saveNotes(snapshot, debounce: false)
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .notesRestoredFromUndo, object: snapshot)
+            }
+        }
+        undoManager.setActionName(actionName)
+    }
     
     var appSupportDir: URL {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]

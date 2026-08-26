@@ -121,6 +121,8 @@ struct AudioPlayerBarView: View {
                         .font(.title3)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Rewind 5 Seconds")
+                .accessibilityHint("Jumps playback back by 5 seconds")
                 
                 Button(action: { playerVM.togglePlayPause() }) {
                     Image(systemName: playerVM.isPlaying ? "pause.circle.fill" : "play.circle.fill")
@@ -128,12 +130,16 @@ struct AudioPlayerBarView: View {
                         .foregroundColor(primaryAccent)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(playerVM.isPlaying ? "Pause Audio" : "Play Audio")
+                .accessibilityHint("Toggles audio playback")
 
                 Button(action: { playerVM.forward5Seconds() }) {
                     Image(systemName: "goforward.5")
                         .font(.title3)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Fast Forward 5 Seconds")
+                .accessibilityHint("Jumps playback forward by 5 seconds")
             }
             
             // Middle Interactive Waveform Track & Bookmark Markers

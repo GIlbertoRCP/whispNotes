@@ -42,6 +42,18 @@ public struct WhispNotesSwiftApp: App {
                 }
                 .keyboardShortcut("n", modifiers: .command)
 
+                Button("New Tab") {
+                    createNewNote()
+                }
+                .keyboardShortcut("t", modifiers: .command)
+
+                Button("Close Tab") {
+                    if let active = TabNavigationManager.shared.activeTabId {
+                        TabNavigationManager.shared.closeTab(active)
+                    }
+                }
+                .keyboardShortcut("w", modifiers: .command)
+
                 Button("Today's Daily Note") {
                     openOrCreateDailyNote()
                 }
@@ -66,6 +78,11 @@ public struct WhispNotesSwiftApp: App {
                 }
                 .keyboardShortcut("i", modifiers: .command)
                 
+                Button("Find in Vault (Full-Text)...") {
+                    NotificationCenter.default.post(name: .openVaultSearch, object: nil)
+                }
+                .keyboardShortcut("f", modifiers: [.command, .shift])
+
                 Button("Quick Search Palette...") {
                     isCommandPaletteOpen = true
                 }
@@ -85,13 +102,78 @@ public struct WhispNotesSwiftApp: App {
 
                 Divider()
 
+                Button("Check for Updates...") {
+                    GitHubReleaseUpdater.shared.checkForUpdates(silent: false)
+                }
+                .keyboardShortcut("u", modifiers: [.command, .shift])
+
                 Button("Preferences...") {
                     isSettingsOpen = true
                 }
                 .keyboardShortcut(",", modifiers: .command)
             }
 
+            CommandGroup(replacing: .undoRedo) {
+                Button("Undo") {
+                    NotesDataManager.shared.undoManager?.undo()
+                }
+                .keyboardShortcut("z", modifiers: .command)
+
+                Button("Redo") {
+                    NotesDataManager.shared.undoManager?.redo()
+                }
+                .keyboardShortcut("z", modifiers: [.command, .shift])
+            }
+
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates...") {
+                    GitHubReleaseUpdater.shared.checkForUpdates(silent: false)
+                }
+            }
+
+            CommandMenu("Navigate") {
+                Button("Back") {
+                    TabNavigationManager.shared.goBack()
+                }
+                .keyboardShortcut("[", modifiers: .command)
+
+                Button("Forward") {
+                    TabNavigationManager.shared.goForward()
+                }
+                .keyboardShortcut("]", modifiers: .command)
+
+                Divider()
+
+                Button("Select Next Tab") {
+                    TabNavigationManager.shared.nextTab()
+                }
+                .keyboardShortcut(.tab, modifiers: .control)
+
+                Button("Select Previous Tab") {
+                    TabNavigationManager.shared.previousTab()
+                }
+                .keyboardShortcut(.tab, modifiers: [.control, .shift])
+
+                Divider()
+
+                ForEach(1...9, id: \.self) { i in
+                    Button("Select Tab \(i)") {
+                        TabNavigationManager.shared.selectTab(at: i - 1)
+                    }
+                    .keyboardShortcut(KeyEquivalent(Character("\(i)")), modifiers: .command)
+                }
+            }
+
             CommandMenu("Edit Note") {
+                Button("Pin / Unpin Note") {
+                    if let activeId = TabNavigationManager.shared.activeTabId,
+                       let idx = notes.firstIndex(where: { $0.id == activeId }) {
+                        notes[idx].isPinned.toggle()
+                        NotesDataManager.shared.saveNotes(notes)
+                    }
+                }
+                .keyboardShortcut("p", modifiers: [.command, .shift])
+
                 Button("Paste Screenshot / Image") {
                     NotificationCenter.default.post(name: .pasteImageAsAttachment, object: nil)
                 }
@@ -104,7 +186,7 @@ public struct WhispNotesSwiftApp: App {
                         NoteExporter.shared.exportPDF(current)
                     }
                 }
-                .keyboardShortcut("p", modifiers: [.command, .shift])
+                .keyboardShortcut("p", modifiers: [.command, .option])
 
                 Button("Export as Markdown (.md)...") {
                     if let current = activeSelectedNote {

@@ -86,13 +86,12 @@ struct AIStudyAssistantView: View {
                             .foregroundColor(.secondary)
                         
                         if gemmaDownloader.isDownloading {
-                            VStack(alignment: .leading, spacing: 4) {
-                                ProgressView(value: gemmaDownloader.downloadProgress)
-                                    .accentColor(primaryAccent)
-                                Text(gemmaDownloader.statusMessage)
-                                    .font(.system(size: 8, design: .monospaced))
-                                    .foregroundColor(.secondary)
-                            }
+                            AppLoadingIndicatorView(
+                                title: "Downloading Gemma 3 Model...",
+                                subtitle: gemmaDownloader.statusMessage,
+                                progress: gemmaDownloader.downloadProgress,
+                                accentColor: primaryAccent
+                            )
                         } else {
                             Button(action: { gemmaDownloader.startDownload() }) {
                                 HStack(spacing: 4) {
@@ -105,14 +104,14 @@ struct AIStudyAssistantView: View {
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 6)
                                 .background(primaryAccent)
-                                .cornerRadius(6)
+                                .cornerRadius(AppRadius.sm)
                             }
                             .buttonStyle(.plain)
                         }
                     }
                     .padding(12)
                     .background(primaryAccent.opacity(0.08))
-                    .cornerRadius(10)
+                    .cornerRadius(AppRadius.md)
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
                             .stroke(primaryAccent.opacity(0.25), lineWidth: 1)

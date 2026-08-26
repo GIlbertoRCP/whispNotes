@@ -13,13 +13,14 @@ struct GraphViewModal: View {
     @State private var nodeVelocities: [UUID: CGVector] = [:]
     @State private var zoomScale: CGFloat = 1.0
     @State private var panOffset: CGSize = .zero
+    @State private var basePanOffset: CGSize = .zero
     @State private var searchQuery: String = ""
     @State private var hoveredNodeId: UUID? = nil
     @State private var simulationTimer: Timer? = nil
     @State private var isPhysicsPaused: Bool = false
     @State private var draggedNodeId: UUID? = nil
-    @State private var dragInitialPos: CGPoint = .zero
-    @State private var basePanOffset: CGSize = .zero
+    @State private var dragInitialNodePos: CGPoint = .zero
+    @State private var lastCanvasSize: CGSize = CGSize(width: 720, height: 500)
 
     var edges: [GraphEdge] {
         var result: [GraphEdge] = []
@@ -34,15 +35,11 @@ struct GraphViewModal: View {
         return result
     }
     
-    private func getPosition(for noteId: UUID, totalCount: Int, index: Int, canvasSize: CGSize) -> CGPoint {
+    private func getPosition(for noteId: UUID) -> CGPoint {
         if let pos = nodePositions[noteId] {
             return pos
         }
-        let radius: CGFloat = min(canvasSize.width, canvasSize.height) * 0.3
-        let centerX = canvasSize.width / 2.0
-        let centerY = canvasSize.height / 2.0
-        let angle = (2.0 * .pi / Double(max(1, totalCount))) * Double(index)
-        return CGPoint(x: centerX + radius * CGFloat(cos(angle)), y: centerY + radius * CGFloat(sin(angle)))
+        return CGPoint(x: lastCanvasSize.width / 2.0, y: lastCanvasSize.height / 2.0)
     }
 
     var body: some View {
@@ -76,12 +73,13 @@ struct GraphViewModal: View {
                 .cornerRadius(6)
                 .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.subtleBorder(isDark), lineWidth: 1))
                 
-                // Freeze Physics Toggle Button
+                // Freeze / Resume Physics Toggle
                 Button(action: {
                     isPhysicsPaused.toggle()
                     if isPhysicsPaused {
-                        simulationTimer?.invalidate()
-                        simulationTimer = nil
+                        stopSimulation()
+                    } else {
+                        startSimulation()
                     }
                 }) {
                     HStack(spacing: 4) {
@@ -92,7 +90,7 @@ struct GraphViewModal: View {
                             .font(.system(size: 10, weight: .bold))
                             .foregroundColor(isPhysicsPaused ? .emerald : secondaryAccent)
                     }
-                    .padding(.horizontal, 6)
+                    .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background(isPhysicsPaused ? Color.emerald.opacity(0.15) : secondaryAccent.opacity(0.12))
                     .cornerRadius(6)
@@ -100,23 +98,33 @@ struct GraphViewModal: View {
                 .buttonStyle(.plain)
                 .help("Toggle physics animation / reduced motion")
 
-                // Zoom & Physics Controls
+                // Zoom & Layout Controls
                 HStack(spacing: 4) {
-                    Button(action: { zoomScale = min(zoomScale + 0.2, 2.5) }) {
+                    Button(action: { zoomScale = min(zoomScale + 0.15, 2.5) }) {
                         Image(systemName: "plus.magnifyingglass")
                             .font(.caption)
                             .foregroundColor(primaryAccent)
                     }
                     .buttonStyle(.plain)
                     
-                    Button(action: { zoomScale = max(zoomScale - 0.2, 0.5) }) {
+                    Button(action: { zoomScale = max(zoomScale - 0.15, 0.4) }) {
                         Image(systemName: "minus.magnifyingglass")
                             .font(.caption)
                             .foregroundColor(primaryAccent)
                     }
                     .buttonStyle(.plain)
                     
-                    Button(action: { stepPhysicsSimulation(canvasSize: CGSize(width: 600, height: 450)) }) {
+                    Text("\(Int(zoomScale * 100))%")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        .frame(width: 32)
+                    
+                    Divider().frame(height: 12)
+                    
+                    Button(action: {
+                        rearrangeCircleLayout(canvasSize: lastCanvasSize)
+                        startSimulation()
+                    }) {
                         HStack(spacing: 2) {
                             Image(systemName: "sparkles")
                                 .font(.system(size: 9))
@@ -127,7 +135,13 @@ struct GraphViewModal: View {
                     }
                     .buttonStyle(.plain)
 
-                    Button(action: { zoomScale = 1.0; panOffset = .zero }) {
+                    Button(action: {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            zoomScale = 1.0
+                            panOffset = .zero
+                            basePanOffset = .zero
+                        }
+                    }) {
                         Text("Reset")
                             .font(.system(size: 9, weight: .bold))
                             .foregroundColor(.secondary)
@@ -141,7 +155,10 @@ struct GraphViewModal: View {
                 .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.subtleBorder(isDark), lineWidth: 1))
                 
                 // Close Button
-                Button(action: { isOpen = false }) {
+                Button(action: {
+                    stopSimulation()
+                    isOpen = false
+                }) {
                     Image(systemName: "xmark")
                         .font(.title3)
                         .foregroundColor(.secondary)
@@ -155,143 +172,177 @@ struct GraphViewModal: View {
                 .background(Color.subtleBorder(isDark))
 
             // Main Interactive Canvas
-            GeometryReader { geo in
-                let canvasSize = geo.size
-                
-                ZStack {
-                    Color.panelBackground(isDark)
-                        .gesture(
-                            DragGesture()
-                                .onChanged { value in
-                                    panOffset = CGSize(
-                                        width: basePanOffset.width + value.translation.width,
-                                        height: basePanOffset.height + value.translation.height
-                                    )
-                                }
-                                .onEnded { _ in
-                                    basePanOffset = panOffset
-                                }
-                        )
+            if notes.isEmpty {
+                WhispEmptyStateView(
+                    icon: "circle.hexagonpath",
+                    title: "No Notes in Vault",
+                    description: "Create notes and connect them using [[WikiLinks]] to explore your interactive knowledge graph.",
+                    actionTitle: "Close",
+                    action: { isOpen = false }
+                )
+                .frame(height: 500)
+            } else {
+                GeometryReader { geo in
+                    let canvasSize = geo.size
                     
-                    // Background Blueprint Grid
-                    Canvas { context, size in
-                        let gridSize: CGFloat = 30.0
-                        var path = Path()
-                        for x in stride(from: 0, to: size.width, by: gridSize) {
-                            path.move(to: CGPoint(x: x, y: 0))
-                            path.addLine(to: CGPoint(x: x, y: size.height))
-                        }
-                        for y in stride(from: 0, to: size.height, by: gridSize) {
-                            path.move(to: CGPoint(x: 0, y: y))
-                            path.addLine(to: CGPoint(x: size.width, y: y))
-                        }
-                        context.stroke(path, with: .color(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.04)), lineWidth: 1)
-                    }
-                    .allowsHitTesting(false)
-                    
-                    // Connected Edge Lines
-                    Canvas { context, size in
-                        for edge in edges {
-                            if let srcNote = notes.first(where: { $0.id == edge.sourceId }),
-                               let dstNote = notes.first(where: { $0.id == edge.targetId }),
-                               let srcIdx = notes.firstIndex(where: { $0.id == edge.sourceId }),
-                               let dstIdx = notes.firstIndex(where: { $0.id == edge.targetId }) {
-                                
-                                let srcPos = getPosition(for: srcNote.id, totalCount: notes.count, index: srcIdx, canvasSize: size)
-                                let dstPos = getPosition(for: dstNote.id, totalCount: notes.count, index: dstIdx, canvasSize: size)
-                                
-                                let isHighlighted = hoveredNodeId == edge.sourceId || hoveredNodeId == edge.targetId || selectedNoteId == edge.sourceId || selectedNoteId == edge.targetId
-                                
-                                var path = Path()
-                                path.move(to: srcPos)
-                                path.addLine(to: dstPos)
-                                
-                                let strokeColor = isHighlighted ? primaryAccent : secondaryAccent.opacity(0.4)
-                                let lineWidth: CGFloat = isHighlighted ? 3.0 : 1.5
-                                context.stroke(path, with: .color(strokeColor), lineWidth: lineWidth)
-                            }
-                        }
-                    }
-                    .allowsHitTesting(false)
-                    
-                    // Interactive Node Pills
-                    ForEach(Array(notes.enumerated()), id: \.element.id) { index, note in
-                        let pos = getPosition(for: note.id, totalCount: notes.count, index: index, canvasSize: canvasSize)
-                        let isSelected = note.id == selectedNoteId
-                        let isHovered = note.id == hoveredNodeId
-                        let isMatched = searchQuery.isEmpty || note.title.localizedCaseInsensitiveContains(searchQuery)
-                        let linkCount = edges.filter { $0.sourceId == note.id || $0.targetId == note.id }.count
+                    ZStack {
+                        // Background Grid & Pan Surface
+                        Color.panelBackground(isDark)
+                            .contentShape(Rectangle())
+                            .gesture(
+                                DragGesture()
+                                    .onChanged { value in
+                                        if draggedNodeId == nil {
+                                            panOffset = CGSize(
+                                                width: basePanOffset.width + value.translation.width,
+                                                height: basePanOffset.height + value.translation.height
+                                            )
+                                        }
+                                    }
+                                    .onEnded { _ in
+                                        basePanOffset = panOffset
+                                    }
+                            )
                         
-                        HStack(spacing: 6) {
-                            if note.audioPath != nil {
-                                Image(systemName: "waveform")
-                                    .font(.system(size: 10))
-                                    .foregroundColor(primaryAccent)
-                            } else {
-                                Circle()
-                                    .fill(isSelected ? primaryAccent : secondaryAccent)
-                                    .frame(width: 8, height: 8)
+                        // Scaled & Panned Content Container
+                        ZStack {
+                            // Background Blueprint Grid
+                            Canvas { context, size in
+                                let gridSize: CGFloat = 32.0
+                                var path = Path()
+                                for x in stride(from: -size.width, to: size.width * 2, by: gridSize) {
+                                    path.move(to: CGPoint(x: x, y: -size.height))
+                                    path.addLine(to: CGPoint(x: x, y: size.height * 2))
+                                }
+                                for y in stride(from: -size.height, to: size.height * 2, by: gridSize) {
+                                    path.move(to: CGPoint(x: -size.width, y: y))
+                                    path.addLine(to: CGPoint(x: size.width * 2, y: y))
+                                }
+                                context.stroke(path, with: .color(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.04)), lineWidth: 1)
                             }
+                            .allowsHitTesting(false)
                             
-                            Text(note.title)
-                                .font(.caption)
-                                .fontWeight(isSelected || isHovered ? .bold : .medium)
+                            // Connected Edge Lines
+                            Canvas { context, size in
+                                for edge in edges {
+                                    guard let posSrc = nodePositions[edge.sourceId],
+                                          let posDst = nodePositions[edge.targetId] else { continue }
+                                    
+                                    let isHighlighted = hoveredNodeId == edge.sourceId || hoveredNodeId == edge.targetId || selectedNoteId == edge.sourceId || selectedNoteId == edge.targetId
+                                    
+                                    var path = Path()
+                                    path.move(to: posSrc)
+                                    path.addLine(to: posDst)
+                                    
+                                    let strokeColor = isHighlighted ? primaryAccent : secondaryAccent.opacity(0.45)
+                                    let lineWidth: CGFloat = isHighlighted ? 2.5 : 1.2
+                                    context.stroke(path, with: .color(strokeColor), lineWidth: lineWidth)
+                                }
+                            }
+                            .allowsHitTesting(false)
                             
-                            if linkCount > 0 {
-                                Text("\(linkCount)")
-                                    .font(.system(size: 8, weight: .bold))
-                                    .padding(.horizontal, 4)
-                                    .padding(.vertical, 1)
-                                    .background(primaryAccent.opacity(0.2))
-                                    .foregroundColor(primaryAccent)
-                                    .cornerRadius(4)
+                            // Interactive Draggable Node Pills
+                            ForEach(notes) { note in
+                                let pos = getPosition(for: note.id)
+                                let isSelected = note.id == selectedNoteId
+                                let isHovered = note.id == hoveredNodeId
+                                let isMatched = searchQuery.isEmpty || note.title.localizedCaseInsensitiveContains(searchQuery)
+                                let linkCount = edges.filter { $0.sourceId == note.id || $0.targetId == note.id }.count
+                                
+                                HStack(spacing: 6) {
+                                    if note.audioPath != nil {
+                                        Image(systemName: "waveform")
+                                            .font(.system(size: 10))
+                                            .foregroundColor(isSelected ? .white : primaryAccent)
+                                    } else {
+                                        Circle()
+                                            .fill(isSelected ? .white : (linkCount > 0 ? primaryAccent : secondaryAccent))
+                                            .frame(width: 7, height: 7)
+                                    }
+                                    
+                                    Text(note.title.isEmpty ? "Untitled Note" : note.title)
+                                        .font(.system(size: 11.5, weight: isSelected || isHovered ? .bold : .medium))
+                                        .foregroundColor(isSelected ? .white : (isDark ? .white : Color(red: 15/255, green: 23/255, blue: 42/255)))
+                                        .lineLimit(1)
+                                    
+                                    if linkCount > 0 {
+                                        Text("\(linkCount)")
+                                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                            .padding(.horizontal, 4)
+                                            .padding(.vertical, 1)
+                                            .background(isSelected ? Color.white.opacity(0.25) : primaryAccent.opacity(0.2))
+                                            .foregroundColor(isSelected ? .white : primaryAccent)
+                                            .cornerRadius(4)
+                                    }
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(
+                                            isSelected
+                                                ? primaryAccent
+                                                : (isHovered ? (isDark ? Color.white.opacity(0.12) : Color.black.opacity(0.08)) : Color.cardBackground(isDark))
+                                        )
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(isSelected ? primaryAccent : (isHovered ? primaryAccent.opacity(0.8) : secondaryAccent.opacity(0.4)), lineWidth: isSelected ? 2 : 1)
+                                )
+                                .shadow(color: isSelected ? primaryAccent.opacity(0.4) : (isHovered ? Color.black.opacity(0.2) : Color.clear), radius: 6, x: 0, y: 2)
+                                .opacity(isMatched ? 1.0 : 0.25)
+                                .position(x: pos.x, y: pos.y)
+                                .onHover { over in
+                                    hoveredNodeId = over ? note.id : nil
+                                }
+                                .onTapGesture {
+                                    selectedNoteId = note.id
+                                    TabNavigationManager.shared.openNote(note.id)
+                                    stopSimulation()
+                                    isOpen = false
+                                }
+                                .highPriorityGesture(
+                                    DragGesture(minimumDistance: 1)
+                                        .onChanged { value in
+                                            if draggedNodeId != note.id {
+                                                draggedNodeId = note.id
+                                                dragInitialNodePos = nodePositions[note.id] ?? pos
+                                            }
+                                            let newX = dragInitialNodePos.x + value.translation.width / zoomScale
+                                            let newY = dragInitialNodePos.y + value.translation.height / zoomScale
+                                            nodePositions[note.id] = CGPoint(x: newX, y: newY)
+                                            nodeVelocities[note.id] = .zero
+                                            
+                                            // Wake up simulation while dragging so connected nodes smoothly react
+                                            if simulationTimer == nil && !isPhysicsPaused {
+                                                startSimulation()
+                                            }
+                                        }
+                                        .onEnded { _ in
+                                            draggedNodeId = nil
+                                        }
+                                )
                             }
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .background(isSelected ? primaryAccent.opacity(0.2) : Color.cardBackground(isDark))
-                        .foregroundColor(isSelected ? primaryAccent : (isDark ? .white : Color(red: 15/255, green: 23/255, blue: 42/255)))
-                        .cornerRadius(14)
-                        .opacity(isMatched ? 1.0 : 0.3)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14)
-                                .stroke(isSelected ? primaryAccent : (isHovered ? primaryAccent.opacity(0.7) : secondaryAccent.opacity(0.4)), lineWidth: isSelected ? 2 : 1)
-                        )
-                        .shadow(color: isSelected ? primaryAccent.opacity(0.4) : Color.clear, radius: 8)
-                        .position(x: pos.x, y: pos.y)
-                        .onHover { over in
-                            hoveredNodeId = over ? note.id : nil
-                        }
-                        .gesture(
-                            DragGesture(minimumDistance: 2)
-                                .onChanged { value in
-                                    if draggedNodeId != note.id {
-                                        draggedNodeId = note.id
-                                        dragInitialPos = getPosition(for: note.id, totalCount: notes.count, index: index, canvasSize: canvasSize)
-                                    }
-                                    let newX = dragInitialPos.x + value.translation.width / zoomScale
-                                    let newY = dragInitialPos.y + value.translation.height / zoomScale
-                                    nodePositions[note.id] = CGPoint(x: newX, y: newY)
-                                    nodeVelocities[note.id] = .zero
-                                }
-                                .onEnded { value in
-                                    if hypot(value.translation.width, value.translation.height) < 5 {
-                                        selectedNoteId = note.id
-                                        isOpen = false
-                                    }
-                                    draggedNodeId = nil
-                                }
-                        )
+                        .scaleEffect(zoomScale)
+                        .offset(panOffset)
+                    }
+                    .clipped()
+                    .onAppear {
+                        lastCanvasSize = canvasSize
+                        initializePositionsIfNeeded(canvasSize: canvasSize)
+                        startSimulation()
+                    }
+                    .onChange(of: geo.size) { _, newSize in
+                        lastCanvasSize = newSize
                     }
                 }
-                .scaleEffect(zoomScale)
-                .offset(panOffset)
-                .onAppear {
-                    runInitialPhysicsSimulation(canvasSize: canvasSize)
-                }
+                .frame(height: 500)
             }
-            .frame(height: 480)
             
+            Divider()
+                .background(Color.subtleBorder(isDark))
+
             // Footer Stats Bar
             HStack {
                 Text("\(notes.count) Notes")
@@ -304,7 +355,7 @@ struct GraphViewModal: View {
                     .font(.caption2)
                     .foregroundColor(primaryAccent)
                 Spacer()
-                Text("💡 Force-directed layout active • Drag nodes to reposition")
+                Text("💡 Drag nodes smoothly • Click any note to open • Pan canvas background")
                     .font(.caption2)
                     .italic()
                     .foregroundColor(.secondary)
@@ -313,32 +364,48 @@ struct GraphViewModal: View {
             .padding(.vertical, 8)
             .background(Color.sidebarBackground(isDark))
         }
-        .frame(width: 640, height: 570)
+        .frame(width: 760, height: 590)
         .cornerRadius(16)
         .overlay(
             RoundedRectangle(cornerRadius: 16)
                 .stroke(Color.subtleBorder(isDark), lineWidth: 1)
         )
+        .onDisappear {
+            stopSimulation()
+        }
     }
 
-    /// Force-Directed Physics Engine Iteration
+    // MARK: - Physics Simulation Engine
+    private func startSimulation() {
+        guard !isPhysicsPaused else { return }
+        stopSimulation()
+        simulationTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { _ in
+            stepPhysicsSimulation(canvasSize: lastCanvasSize)
+        }
+    }
+
+    private func stopSimulation() {
+        simulationTimer?.invalidate()
+        simulationTimer = nil
+    }
+
     private func stepPhysicsSimulation(canvasSize: CGSize) {
         guard !notes.isEmpty && !isPhysicsPaused else { return }
         
         let centerX = canvasSize.width / 2.0
         let centerY = canvasSize.height / 2.0
-        let repulsionK: CGFloat = 8000.0
+        let repulsionK: CGFloat = 6500.0
         let springK: CGFloat = 0.04
-        let springLength: CGFloat = 110.0
-        let gravityK: CGFloat = 0.015
-        let damping: CGFloat = 0.85
+        let springLength: CGFloat = 100.0
+        let gravityK: CGFloat = 0.012
+        let damping: CGFloat = 0.86
 
         var forces: [UUID: CGVector] = [:]
         for note in notes {
             forces[note.id] = .zero
         }
 
-        // 1. Repulsion forces between all node pairs
+        // 1. Repulsion between all node pairs
         for i in 0..<notes.count {
             let idA = notes[i].id
             guard let posA = nodePositions[idA] else { continue }
@@ -350,8 +417,8 @@ struct GraphViewModal: View {
                 let dx = posB.x - posA.x
                 let dy = posB.y - posA.y
                 let distSq = dx * dx + dy * dy
-                if distSq > 122500.0 { continue } // Skip nodes further than 350pt
-                let dist = max(15.0, sqrt(distSq))
+                if distSq > 160000.0 { continue } // Skip nodes further than 400pt
+                let dist = max(20.0, sqrt(distSq))
                 let forceMagnitude = repulsionK / (dist * dist)
 
                 let fx = (dx / dist) * forceMagnitude
@@ -362,7 +429,7 @@ struct GraphViewModal: View {
             }
         }
 
-        // 2. Hooke's Spring attraction forces along connected edges
+        // 2. Hooke's Spring attraction along connected edges
         for edge in edges {
             guard let posSrc = nodePositions[edge.sourceId],
                   let posDst = nodePositions[edge.targetId] else { continue }
@@ -381,6 +448,7 @@ struct GraphViewModal: View {
         }
 
         // 3. Center gravity & Velocity update
+        var totalKineticEnergy: CGFloat = 0.0
         for note in notes {
             let id = note.id
             if id == draggedNodeId { continue }
@@ -397,16 +465,22 @@ struct GraphViewModal: View {
             vel.dy = (vel.dy + totalFy) * damping
 
             nodeVelocities[id] = vel
+            totalKineticEnergy += abs(vel.dx) + abs(vel.dy)
 
             let newX = max(40.0, min(canvasSize.width - 40.0, pos.x + vel.dx))
             let newY = max(40.0, min(canvasSize.height - 40.0, pos.y + vel.dy))
 
             nodePositions[id] = CGPoint(x: newX, y: newY)
         }
+
+        // Auto-pause physics when settled to conserve battery/CPU
+        if totalKineticEnergy < 0.08 && draggedNodeId == nil {
+            stopSimulation()
+        }
     }
 
-    private func runInitialPhysicsSimulation(canvasSize: CGSize) {
-        let radius: CGFloat = min(canvasSize.width, canvasSize.height) * 0.3
+    private func initializePositionsIfNeeded(canvasSize: CGSize) {
+        let radius: CGFloat = min(canvasSize.width, canvasSize.height) * 0.32
         let centerX = canvasSize.width / 2.0
         let centerY = canvasSize.height / 2.0
         for (index, note) in notes.enumerated() {
@@ -416,8 +490,16 @@ struct GraphViewModal: View {
                 nodeVelocities[note.id] = .zero
             }
         }
-        for _ in 0..<20 {
-            stepPhysicsSimulation(canvasSize: canvasSize)
+    }
+
+    private func rearrangeCircleLayout(canvasSize: CGSize) {
+        let radius: CGFloat = min(canvasSize.width, canvasSize.height) * 0.32
+        let centerX = canvasSize.width / 2.0
+        let centerY = canvasSize.height / 2.0
+        for (index, note) in notes.enumerated() {
+            let angle = (2.0 * .pi / Double(max(1, notes.count))) * Double(index)
+            nodePositions[note.id] = CGPoint(x: centerX + radius * CGFloat(cos(angle)), y: centerY + radius * CGFloat(sin(angle)))
+            nodeVelocities[note.id] = .zero
         }
     }
     

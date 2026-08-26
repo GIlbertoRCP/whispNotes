@@ -19,6 +19,8 @@ struct SidebarView: View {
     @State private var renameFolderInput = ""
     @State private var expandedFolders: [String: Bool] = [:]
     @State private var showEmptyTrashAlert = false
+    @State private var targetedFolder: String? = nil
+    @State private var isTrashTargeted = false
 
     var activeNotes: [NoteItem] {
         notes.filter { $0.folder != "Trash" }
@@ -28,10 +30,8 @@ struct SidebarView: View {
         notes.filter { $0.folder == "Trash" }
     }
 
-    @State private var cachedTags: [String] = []
-
-    var allTags: [String] {
-        cachedTags
+    var allTagsWithCount: [(tag: String, count: Int)] {
+        VaultSearchEngine.extractAllTags(from: notes)
     }
 
     var filteredNotes: [NoteItem] {
@@ -46,8 +46,16 @@ struct SidebarView: View {
         return result
     }
 
+    var pinnedNotes: [NoteItem] {
+        filteredNotes.filter { $0.isPinned }
+    }
+
+    var unpinnedNotes: [NoteItem] {
+        filteredNotes.filter { !$0.isPinned }
+    }
+
     var groupedNotes: [String: [NoteItem]] {
-        Dictionary(grouping: filteredNotes, by: { $0.folder })
+        Dictionary(grouping: unpinnedNotes, by: { $0.folder })
     }
 
     var body: some View {
@@ -57,15 +65,27 @@ struct SidebarView: View {
                 if let nsImg = NSImage(named: "AppIcon") {
                     Image(nsImage: nsImg)
                         .resizable()
-                        .frame(width: 20, height: 20)
+                        .frame(width: 22, height: 22)
+                        .cornerRadius(5)
                 } else {
-                    Image(systemName: "leaf.fill")
-                        .font(.system(size: 16))
-                        .foregroundColor(primaryAccent)
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(
+                                LinearGradient(
+                                    colors: [primaryAccent, primaryAccent.opacity(0.8)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 22, height: 22)
+                        Image(systemName: "note.text")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(.white)
+                    }
                 }
                 
                 Text("whispNotes")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.system(size: 13, weight: .bold))
                     .foregroundColor(isDark ? .white : Color(red: 15/255, green: 23/255, blue: 42/255))
                 
                 Spacer()
@@ -73,11 +93,11 @@ struct SidebarView: View {
                 // + New Folder Button
                 Button(action: { showNewFolderPopover.toggle() }) {
                     Image(systemName: "folder.badge.plus")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(secondaryAccent)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.secondary)
                         .frame(width: 26, height: 26)
-                        .background(secondaryAccent.opacity(0.12))
-                        .cornerRadius(6)
+                        .background(Color.primary.opacity(0.05))
+                        .cornerRadius(AppRadius.sm)
                 }
                 .buttonStyle(.plain)
                 .help("New Folder")
@@ -102,29 +122,29 @@ struct SidebarView: View {
                 // + Import PDF Document Button
                 Button(action: importNewPDFNote) {
                     Image(systemName: "doc.badge.plus")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(secondaryAccent)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.secondary)
                         .frame(width: 26, height: 26)
-                        .background(secondaryAccent.opacity(0.12))
-                        .cornerRadius(6)
+                        .background(Color.primary.opacity(0.05))
+                        .cornerRadius(AppRadius.sm)
                 }
                 .buttonStyle(.plain)
                 .help("Import PDF Document Note")
 
                 // + New Note Button
                 Button(action: createNewNote) {
-                    Image(systemName: "plus")
+                    Image(systemName: "square.and.pencil")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(primaryAccent)
                         .frame(width: 26, height: 26)
                         .background(primaryAccent.opacity(0.12))
-                        .cornerRadius(6)
+                        .cornerRadius(AppRadius.sm)
                 }
                 .buttonStyle(.plain)
                 .help("New Note (⌘N)")
             }
             .padding(.horizontal, 14)
-            .frame(height: 48)
+            .frame(height: 44)
             .background(Color.sidebarBackground(isDark))
             .overlay(
                 Rectangle()
@@ -136,7 +156,7 @@ struct SidebarView: View {
             // Real-Time Note Search Field
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.secondary)
                 
                 TextField("Search notes...", text: $searchText)
@@ -153,12 +173,12 @@ struct SidebarView: View {
                 }
             }
             .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .background(Color.cardBackground(isDark))
-            .cornerRadius(6)
+            .padding(.vertical, 5)
+            .background(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.04))
+            .cornerRadius(AppRadius.sm)
             .overlay(
-                RoundedRectangle(cornerRadius: 6)
-                    .stroke(Color.subtleBorder(isDark), lineWidth: 1)
+                RoundedRectangle(cornerRadius: AppRadius.sm)
+                    .stroke(Color.subtleBorder(isDark), lineWidth: 0.5)
             )
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -167,13 +187,17 @@ struct SidebarView: View {
                 .background(Color.subtleBorder(isDark))
 
             // Tags Cloud Selector
-            if !allTags.isEmpty {
+            if !allTagsWithCount.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
-                        Text("TAGS")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .foregroundColor(.secondary)
+                        HStack(spacing: 4) {
+                            Image(systemName: "tag")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundColor(.secondary)
+                            Text("TAGS")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(.secondary)
+                        }
                         Spacer()
                         if selectedTag != nil {
                             Button("Clear") { selectedTag = nil }
@@ -182,41 +206,114 @@ struct SidebarView: View {
                                 .buttonStyle(.plain)
                         }
                     }
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, 14)
                     
                     ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 6) {
-                            ForEach(allTags, id: \.self) { tag in
+                        HStack(spacing: 5) {
+                            ForEach(allTagsWithCount, id: \.tag) { item in
                                 Button(action: {
-                                    if selectedTag == tag {
+                                    if selectedTag == item.tag {
                                         selectedTag = nil
                                     } else {
-                                        selectedTag = tag
+                                        selectedTag = item.tag
                                     }
                                 }) {
-                                    Text("#\(tag)")
-                                        .font(.caption2)
-                                        .fontWeight(.bold)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(selectedTag == tag ? primaryAccent : Color.cardBackground(isDark))
-                                        .foregroundColor(selectedTag == tag ? .white : primaryAccent)
-                                        .cornerRadius(6)
+                                    HStack(spacing: 3) {
+                                        Text("#\(item.tag)")
+                                            .font(.system(size: 11, weight: .medium))
+                                        Text("\(item.count)")
+                                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                            .foregroundColor(selectedTag == item.tag ? .white.opacity(0.8) : .secondary)
+                                    }
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 3)
+                                    .background(selectedTag == item.tag ? primaryAccent : (isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04)))
+                                    .foregroundColor(selectedTag == item.tag ? .white : .primary)
+                                    .cornerRadius(AppRadius.sm)
                                 }
                                 .buttonStyle(.plain)
                             }
                         }
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, 14)
                     }
                 }
-                .padding(.vertical, 8)
+                .padding(.vertical, 6)
 
                 Divider()
                     .background(Color.subtleBorder(isDark))
             }
 
             // Sidebar accordion files list
-            List(selection: $selectedNoteId) {
+            List {
+                // 📌 Pinned Notes Section
+                if !pinnedNotes.isEmpty {
+                    Section(header:
+                        HStack(spacing: 4) {
+                            Image(systemName: "pin.fill")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundColor(primaryAccent)
+                            Text("PINNED")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Text("\(pinnedNotes.count)")
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.vertical, 2)
+                    ) {
+                        ForEach(pinnedNotes) { note in
+                            SidebarNoteRowView(
+                                note: note,
+                                isSelected: selectedNoteId == note.id,
+                                isDark: isDark,
+                                primaryAccent: primaryAccent,
+                                secondaryAccent: secondaryAccent,
+                                isPinned: true,
+                                onSelect: {
+                                    selectedNoteId = note.id
+                                    TabNavigationManager.shared.openNote(note.id)
+                                }
+                            )
+                            .listRowInsets(EdgeInsets(top: 1, leading: 6, bottom: 1, trailing: 6))
+                            .listRowBackground(Color.clear)
+                            .onDrag {
+                                NSItemProvider(object: note.id.uuidString as NSString)
+                            }
+                            .contextMenu {
+                                Button(action: { togglePin(note) }) {
+                                    Label("Unpin Note", systemImage: "pin.slash")
+                                }
+
+                                Button(action: {
+                                    TabNavigationManager.shared.openNote(note.id, inNewTab: true)
+                                }) {
+                                    Label("Open in New Tab", systemImage: "plus.rectangle.on.rectangle")
+                                }
+
+                                Button(action: { duplicateNote(note) }) {
+                                    Label("Duplicate Note", systemImage: "doc.on.doc")
+                                }
+                                
+                                Menu("Move to Folder...") {
+                                    ForEach(groupedNotes.keys.sorted(), id: \.self) { targetFolder in
+                                        Button(targetFolder) {
+                                            moveNote(note, to: targetFolder)
+                                        }
+                                    }
+                                }
+                                
+                                Divider()
+                                
+                                Button(role: .destructive, action: { moveToTrash(note) }) {
+                                    Label("Move to Trash", systemImage: "trash")
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Regular Folders Section
                 ForEach(groupedNotes.keys.sorted(), id: \.self) { folder in
                     DisclosureGroup(
                         isExpanded: Binding(
@@ -224,76 +321,82 @@ struct SidebarView: View {
                             set: { expandedFolders[folder] = $0 }
                         ),
                         content: {
-                            ForEach(groupedNotes[folder] ?? []) { note in
-                                NavigationLink(value: note.id) {
-                                    HStack(spacing: 8) {
-                                        if note.pdfPath != nil {
-                                            Image(systemName: "doc.richtext.fill")
-                                                .font(.caption)
-                                                .foregroundColor(primaryAccent)
-                                        } else {
-                                            Image(systemName: note.isStandalone ? "doc.text" : "waveform")
-                                                .font(.caption)
-                                                .foregroundColor(note.isStandalone ? (isDark ? .secondary : Color(red: 71/255, green: 85/255, blue: 105/255)) : primaryAccent)
+                            let folderNotes = groupedNotes[folder] ?? []
+                            if folderNotes.isEmpty {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "tray")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(.secondary)
+                                    Text("No notes in \(folder)")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.secondary)
+                                }
+                                .padding(.vertical, 4)
+                                .padding(.leading, 18)
+                                .listRowInsets(EdgeInsets(top: 1, leading: 6, bottom: 1, trailing: 6))
+                                .listRowBackground(Color.clear)
+                            } else {
+                                ForEach(folderNotes) { note in
+                                    SidebarNoteRowView(
+                                        note: note,
+                                        isSelected: selectedNoteId == note.id,
+                                        isDark: isDark,
+                                        primaryAccent: primaryAccent,
+                                        secondaryAccent: secondaryAccent,
+                                        isPinned: false,
+                                        onSelect: {
+                                            selectedNoteId = note.id
+                                            TabNavigationManager.shared.openNote(note.id)
+                                        }
+                                    )
+                                    .listRowInsets(EdgeInsets(top: 1, leading: 6, bottom: 1, trailing: 6))
+                                    .listRowBackground(Color.clear)
+                                    .onDrag {
+                                        NSItemProvider(object: note.id.uuidString as NSString)
+                                    }
+                                    .contextMenu {
+                                        Button(action: { togglePin(note) }) {
+                                            Label("Pin Note", systemImage: "pin.fill")
+                                        }
+
+                                        Button(action: {
+                                            TabNavigationManager.shared.openNote(note.id, inNewTab: true)
+                                        }) {
+                                            Label("Open in New Tab", systemImage: "plus.rectangle.on.rectangle")
+                                        }
+
+                                        Button(action: { duplicateNote(note) }) {
+                                            Label("Duplicate Note", systemImage: "doc.on.doc")
                                         }
                                         
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(note.title)
-                                                .font(.system(size: 13, weight: .semibold))
-                                                .foregroundColor(isDark ? .white : Color(red: 15/255, green: 23/255, blue: 42/255))
-                                                .lineLimit(1)
-                                            HStack(spacing: 4) {
-                                                if note.pdfPath != nil {
-                                                    Text("PDF")
-                                                        .font(.system(size: 8, weight: .bold))
-                                                        .padding(.horizontal, 4)
-                                                        .padding(.vertical, 1)
-                                                        .background(primaryAccent.opacity(0.18))
-                                                        .foregroundColor(primaryAccent)
-                                                        .cornerRadius(3)
+                                        if note.pdfPath != nil {
+                                            Button(action: {
+                                                if let idx = notes.firstIndex(where: { $0.id == note.id }) {
+                                                    notes[idx].pdfPath = nil
+                                                    NotesDataManager.shared.saveNotes(notes)
                                                 }
-                                                Text(note.timestamp, style: .date)
-                                                    .font(.system(size: 9, weight: .medium))
-                                                    .foregroundColor(isDark ? .secondary : Color(red: 100/255, green: 116/255, blue: 139/255))
+                                            }) {
+                                                Label("Detach PDF Document", systemImage: "doc.badge.ellipsis")
+                                            }
+                                        } else {
+                                            Button(action: { attachPDFToNote(note) }) {
+                                                Label("Attach PDF Document...", systemImage: "paperclip")
                                             }
                                         }
-                                    }
-                                }
-                                .onDrag {
-                                    NSItemProvider(object: note.id.uuidString as NSString)
-                                }
-                                .contextMenu {
-                                    Button(action: { duplicateNote(note) }) {
-                                        Label("Duplicate Note", systemImage: "doc.on.doc")
-                                    }
-                                    
-                                    if note.pdfPath != nil {
-                                        Button(action: {
-                                            if let idx = notes.firstIndex(where: { $0.id == note.id }) {
-                                                notes[idx].pdfPath = nil
-                                                NotesDataManager.shared.saveNotes(notes)
-                                            }
-                                        }) {
-                                            Label("Detach PDF Document", systemImage: "doc.badge.ellipsis")
-                                        }
-                                    } else {
-                                        Button(action: { attachPDFToNote(note) }) {
-                                            Label("Attach PDF Document...", systemImage: "paperclip")
-                                        }
-                                    }
-                                    
-                                    Menu("Move to Folder...") {
-                                        ForEach(groupedNotes.keys.sorted(), id: \.self) { targetFolder in
-                                            Button(targetFolder) {
-                                                moveNote(note, to: targetFolder)
+                                        
+                                        Menu("Move to Folder...") {
+                                            ForEach(groupedNotes.keys.sorted(), id: \.self) { targetFolder in
+                                                Button(targetFolder) {
+                                                    moveNote(note, to: targetFolder)
+                                                }
                                             }
                                         }
-                                    }
-                                    
-                                    Divider()
-                                    
-                                    Button(role: .destructive, action: { moveToTrash(note) }) {
-                                        Label("Move to Trash", systemImage: "trash")
+                                        
+                                        Divider()
+                                        
+                                        Button(role: .destructive, action: { moveToTrash(note) }) {
+                                            Label("Move to Trash", systemImage: "trash")
+                                        }
                                     }
                                 }
                             }
@@ -301,25 +404,34 @@ struct SidebarView: View {
                         label: {
                             HStack(spacing: 6) {
                                 Image(systemName: "folder")
-                                    .font(.system(size: 12, weight: .semibold))
+                                    .font(.system(size: 11, weight: .medium))
                                     .foregroundColor(secondaryAccent)
                                 Text(folder)
-                                    .font(.system(size: 12, weight: .bold))
-                                    .foregroundColor(isDark ? .secondary : Color(red: 51/255, green: 65/255, blue: 85/255))
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(isDark ? .white : Color(red: 30/255, green: 41/255, blue: 59/255))
                                 
                                 Spacer()
                                 
                                 let noteCount = (groupedNotes[folder] ?? []).count
                                 Text("\(noteCount)")
-                                    .font(.system(size: 10, weight: .bold))
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 1)
-                                    .background(secondaryAccent.opacity(0.15))
-                                    .foregroundColor(secondaryAccent)
-                                    .clipShape(Capsule())
+                                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                    .foregroundColor(.secondary)
                             }
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(
+                                RoundedRectangle(cornerRadius: AppRadius.sm)
+                                    .fill(targetedFolder == folder ? secondaryAccent.opacity(0.15) : Color.clear)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: AppRadius.sm)
+                                    .stroke(targetedFolder == folder ? secondaryAccent.opacity(0.6) : Color.clear, lineWidth: 1)
+                            )
                             .contentShape(Rectangle())
-                            .onDrop(of: [.text], isTargeted: nil) { providers in
+                            .onDrop(of: [.text], isTargeted: Binding(
+                                get: { targetedFolder == folder },
+                                set: { if $0 { targetedFolder = folder } else if targetedFolder == folder { targetedFolder = nil } }
+                            )) { providers in
                                 handleDrop(providers: providers, targetFolder: folder)
                             }
                             .contextMenu {
@@ -345,28 +457,24 @@ struct SidebarView: View {
                     DisclosureGroup(
                         content: {
                             ForEach(trashNotes) { note in
-                                NavigationLink(value: note.id) {
-                                    HStack(spacing: 8) {
-                                        Image(systemName: "trash")
-                                            .font(.caption)
-                                            .foregroundColor(primaryAccent)
-                                        
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(note.title)
-                                                .font(.system(size: 13, weight: .medium))
-                                                .foregroundColor(isDark ? .secondary : Color(red: 71/255, green: 85/255, blue: 105/255))
-                                            Text("In Trash")
-                                                .font(.system(size: 9, weight: .bold))
-                                                .foregroundColor(primaryAccent)
-                                        }
+                                SidebarTrashNoteRowView(
+                                    note: note,
+                                    isSelected: selectedNoteId == note.id,
+                                    isDark: isDark,
+                                    primaryAccent: primaryAccent,
+                                    onSelect: {
+                                        selectedNoteId = note.id
+                                        TabNavigationManager.shared.openNote(note.id)
                                     }
-                                }
+                                )
+                                .listRowInsets(EdgeInsets(top: 1, leading: 6, bottom: 1, trailing: 6))
+                                .listRowBackground(Color.clear)
                                 .onDrag {
                                     NSItemProvider(object: note.id.uuidString as NSString)
                                 }
                                 .contextMenu {
                                     Button(action: { restoreFromTrash(note) }) {
-                                        Label("Restore Note", systemImage: "arrow.uturn.backward")
+                                        Label("Restore Note (to \(note.originalFolder ?? "General"))", systemImage: "arrow.uturn.backward")
                                     }
                                     
                                     Divider()
@@ -378,19 +486,39 @@ struct SidebarView: View {
                             }
                         },
                         label: {
-                            HStack {
-                                Image(systemName: "trash.fill")
-                                    .foregroundColor(primaryAccent)
-                                Text("Trash Bin (\(trashNotes.count))")
-                                    .font(.system(size: 12, weight: .bold))
-                                    .foregroundColor(primaryAccent)
+                            HStack(spacing: 6) {
+                                Image(systemName: "trash")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundColor(.secondary)
+                                Text("Trash")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(.secondary)
+                                Text("(\(trashNotes.count))")
+                                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                    .foregroundColor(.secondary)
                                 Spacer()
                                 Button("Empty") {
                                     showEmptyTrashAlert = true
                                 }
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundColor(.red)
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(.red.opacity(0.85))
                                 .buttonStyle(.plain)
+                                .accessibilityLabel("Empty Trash Bin")
+                            }
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(
+                                RoundedRectangle(cornerRadius: AppRadius.sm)
+                                    .fill(isTrashTargeted ? primaryAccent.opacity(0.15) : Color.clear)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: AppRadius.sm)
+                                    .stroke(isTrashTargeted ? primaryAccent.opacity(0.6) : Color.clear, lineWidth: 1)
+                            )
+                            .contentShape(Rectangle())
+                            .onDrop(of: [.text], isTargeted: $isTrashTargeted) { providers in
+                                handleDrop(providers: providers, targetFolder: "Trash")
+                            }
                                 .alert("Empty Trash Permanently?", isPresented: $showEmptyTrashAlert) {
                                     Button("Empty Trash", role: .destructive) {
                                         emptyTrashPermanently()
@@ -399,11 +527,6 @@ struct SidebarView: View {
                                 } message: {
                                     Text("This will permanently delete all \(trashNotes.count) items in the trash. This action cannot be undone.")
                                 }
-                            }
-                            .contentShape(Rectangle())
-                            .onDrop(of: [.text], isTargeted: nil) { providers in
-                                handleDrop(providers: providers, targetFolder: "Trash")
-                            }
                         }
                     )
                 }
@@ -412,12 +535,6 @@ struct SidebarView: View {
             .scrollContentBackground(.hidden)
         }
         .background(Color.sidebarBackground(isDark))
-        .onAppear {
-            refreshTagsAsync()
-        }
-        .onChange(of: notes.count) { _, _ in
-            refreshTagsAsync()
-        }
         .popover(isPresented: Binding(
             get: { renamingFolder != nil },
             set: { if !$0 { renamingFolder = nil } }
@@ -446,6 +563,20 @@ struct SidebarView: View {
             }
             .padding()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .filterNotesByTag)) { notif in
+            if let tag = notif.object as? String {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    selectedTag = tag
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .notesRestoredFromUndo)) { notif in
+            if let restored = notif.object as? [NoteItem] {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    notes = restored
+                }
+            }
+        }
     }
 
     private func handleDrop(providers: [NSItemProvider], targetFolder: String) -> Bool {
@@ -462,9 +593,15 @@ struct SidebarView: View {
             
             if let idStr = targetIdStr, let noteId = UUID(uuidString: idStr) {
                 DispatchQueue.main.async {
+                    let previous = self.notes
                     if let idx = self.notes.firstIndex(where: { $0.id == noteId }) {
+                        if targetFolder == "Trash" {
+                            self.notes[idx].originalFolder = self.notes[idx].folder
+                            self.notes[idx].isPinned = false
+                        }
                         self.notes[idx].folder = targetFolder
                         NotesDataManager.shared.saveNotes(self.notes)
+                        NotesDataManager.shared.registerStructuralUndo(actionName: "Move Note", previousState: previous)
                     }
                 }
             }
@@ -495,24 +632,38 @@ struct SidebarView: View {
     private func renameFolder(_ oldName: String, to newName: String) {
         let clean = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !clean.isEmpty && clean != oldName else { return }
+        let previous = notes
         for i in 0..<notes.count {
             if notes[i].folder == oldName {
                 notes[i].folder = clean
             }
         }
         NotesDataManager.shared.saveNotes(notes)
+        NotesDataManager.shared.registerStructuralUndo(actionName: "Rename Folder", previousState: previous)
     }
 
     private func deleteFolder(_ folder: String) {
+        let previous = notes
         for i in 0..<notes.count {
             if notes[i].folder == folder {
                 notes[i].folder = "General"
             }
         }
         NotesDataManager.shared.saveNotes(notes)
+        NotesDataManager.shared.registerStructuralUndo(actionName: "Delete Folder", previousState: previous)
+    }
+
+    private func togglePin(_ note: NoteItem) {
+        let previous = notes
+        if let idx = notes.firstIndex(where: { $0.id == note.id }) {
+            notes[idx].isPinned.toggle()
+            NotesDataManager.shared.saveNotes(notes)
+            NotesDataManager.shared.registerStructuralUndo(actionName: "Toggle Pin", previousState: previous)
+        }
     }
 
     private func duplicateNote(_ note: NoteItem) {
+        let previous = notes
         var copy = note
         copy.id = UUID()
         copy.title = "\(note.title) (Copy)"
@@ -520,43 +671,57 @@ struct SidebarView: View {
         notes.insert(copy, at: 0)
         selectedNoteId = copy.id
         NotesDataManager.shared.saveNotes(notes)
+        NotesDataManager.shared.registerStructuralUndo(actionName: "Duplicate Note", previousState: previous)
     }
 
     private func emptyTrashPermanently() {
+        let previous = notes
         notes.removeAll(where: { $0.folder == "Trash" })
         if let id = selectedNoteId, !notes.contains(where: { $0.id == id }) {
             selectedNoteId = notes.first?.id
         }
         NotesDataManager.shared.saveNotesImmediately(notes)
+        NotesDataManager.shared.registerStructuralUndo(actionName: "Empty Trash", previousState: previous)
     }
 
     private func moveNote(_ note: NoteItem, to folder: String) {
+        let previous = notes
         if let idx = notes.firstIndex(where: { $0.id == note.id }) {
             notes[idx].folder = folder
             NotesDataManager.shared.saveNotes(notes)
+            NotesDataManager.shared.registerStructuralUndo(actionName: "Move to \(folder)", previousState: previous)
         }
     }
 
     private func moveToTrash(_ note: NoteItem) {
+        let previous = notes
         if let idx = notes.firstIndex(where: { $0.id == note.id }) {
+            notes[idx].originalFolder = note.folder
+            notes[idx].isPinned = false
             notes[idx].folder = "Trash"
             NotesDataManager.shared.saveNotes(notes)
+            NotesDataManager.shared.registerStructuralUndo(actionName: "Move to Trash", previousState: previous)
         }
     }
 
     private func restoreFromTrash(_ note: NoteItem) {
+        let previous = notes
         if let idx = notes.firstIndex(where: { $0.id == note.id }) {
-            notes[idx].folder = "General"
+            let targetFolder = note.originalFolder ?? "General"
+            notes[idx].folder = targetFolder == "Trash" ? "General" : targetFolder
             NotesDataManager.shared.saveNotes(notes)
+            NotesDataManager.shared.registerStructuralUndo(actionName: "Restore Note", previousState: previous)
         }
     }
 
     private func deletePermanently(_ note: NoteItem) {
+        let previous = notes
         notes.removeAll(where: { $0.id == note.id })
         if selectedNoteId == note.id {
             selectedNoteId = activeNotes.first?.id
         }
         NotesDataManager.shared.saveNotes(notes)
+        NotesDataManager.shared.registerStructuralUndo(actionName: "Delete Note", previousState: previous)
     }
 
     private func importNewPDFNote() {
@@ -605,28 +770,137 @@ struct SidebarView: View {
             }
         }
     }
+}
 
-    private func refreshTagsAsync() {
-        DispatchQueue.global(qos: .userInitiated).async {
-            var tagSet: Set<String> = []
-            let pattern = "#([a-zA-Z0-9_]+)"
-            guard let regex = try? NSRegularExpression(pattern: pattern) else { return }
-            
-            let active = self.notes.filter { $0.folder != "Trash" }
-            for note in active {
-                let text = note.content
-                let nsRange = NSRange(text.startIndex..<text.endIndex, in: text)
-                let matches = regex.matches(in: text, range: nsRange)
-                for match in matches {
-                    if let range = Range(match.range(at: 1), in: text) {
-                        tagSet.insert(String(text[range]).lowercased())
+// MARK: - Dedicated Theme-Adaptive Sidebar Note Row Component
+struct SidebarNoteRowView: View {
+    let note: NoteItem
+    let isSelected: Bool
+    let isDark: Bool
+    let primaryAccent: Color
+    let secondaryAccent: Color
+    var isPinned: Bool = false
+    let onSelect: () -> Void
+    
+    @State private var isHovered: Bool = false
+    
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(spacing: 8) {
+                // Leading Icon
+                if isPinned {
+                    Image(systemName: "pin.fill")
+                        .font(.system(size: 10))
+                        .foregroundColor(isSelected ? .white : primaryAccent)
+                } else if note.pdfPath != nil {
+                    Image(systemName: "doc.richtext.fill")
+                        .font(.system(size: 11))
+                        .foregroundColor(isSelected ? .white : primaryAccent)
+                } else if note.audioPath != nil {
+                    Image(systemName: "waveform")
+                        .font(.system(size: 11))
+                        .foregroundColor(isSelected ? .white : primaryAccent)
+                } else {
+                    Image(systemName: "doc.text")
+                        .font(.system(size: 11))
+                        .foregroundColor(isSelected ? .white.opacity(0.9) : (isDark ? .secondary : Color(red: 100/255, green: 116/255, blue: 139/255)))
+                }
+                
+                // Note Metadata
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(note.title.isEmpty ? "Untitled Note" : note.title)
+                        .font(.system(size: 12.5, weight: isSelected ? .bold : .medium))
+                        .foregroundColor(isSelected ? .white : (isDark ? .white : Color(red: 15/255, green: 23/255, blue: 42/255)))
+                        .lineLimit(1)
+                    
+                    HStack(spacing: 4) {
+                        if note.pdfPath != nil {
+                            Text("PDF")
+                                .font(.system(size: 8, weight: .bold))
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(isSelected ? Color.white.opacity(0.25) : primaryAccent.opacity(0.18))
+                                .foregroundColor(isSelected ? .white : primaryAccent)
+                                .cornerRadius(3)
+                        }
+                        
+                        if isPinned {
+                            Text(note.folder)
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundColor(isSelected ? Color.white.opacity(0.85) : secondaryAccent)
+                            Text("•")
+                                .font(.system(size: 8))
+                                .foregroundColor(isSelected ? Color.white.opacity(0.7) : .secondary)
+                        }
+                        
+                        Text(note.timestamp, style: .date)
+                            .font(.system(size: 9.5, weight: .regular))
+                            .foregroundColor(isSelected ? Color.white.opacity(0.85) : (isDark ? .secondary : Color(red: 100/255, green: 116/255, blue: 139/255)))
                     }
                 }
+                
+                Spacer()
             }
-            let sorted = Array(tagSet).sorted()
-            DispatchQueue.main.async {
-                self.cachedTags = sorted
-            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: AppRadius.sm)
+                    .fill(
+                        isSelected
+                            ? primaryAccent
+                            : (isHovered ? (isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.05)) : Color.clear)
+                    )
+            )
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+    }
+}
+
+// MARK: - Sidebar Trash Note Row Component
+struct SidebarTrashNoteRowView: View {
+    let note: NoteItem
+    let isSelected: Bool
+    let isDark: Bool
+    let primaryAccent: Color
+    let onSelect: () -> Void
+    
+    @State private var isHovered: Bool = false
+    
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(spacing: 8) {
+                Image(systemName: "trash")
+                    .font(.caption)
+                    .foregroundColor(isSelected ? .white : .secondary)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(note.title.isEmpty ? "Untitled Note" : note.title)
+                        .font(.system(size: 12.5, weight: isSelected ? .bold : .medium))
+                        .foregroundColor(isSelected ? .white : (isDark ? .secondary : Color(red: 71/255, green: 85/255, blue: 105/255)))
+                        .lineLimit(1)
+                    
+                    Text("From: \(note.originalFolder ?? "General")")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(isSelected ? Color.white.opacity(0.85) : .secondary)
+                }
+                
+                Spacer()
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: AppRadius.sm)
+                    .fill(
+                        isSelected
+                            ? primaryAccent
+                            : (isHovered ? (isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.05)) : Color.clear)
+                    )
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
     }
 }

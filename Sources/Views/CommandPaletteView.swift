@@ -58,10 +58,12 @@ struct CommandPaletteView: View {
             ScrollViewReader { scrollProxy in
                 List {
                     if filteredResults.isEmpty {
-                        Text("No matching notes found.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .padding()
+                        WhispEmptyStateView(
+                            icon: "magnifyingglass",
+                            title: "No Matching Notes",
+                            description: query.isEmpty ? "Start typing to search notes..." : "No notes matched \"\(query)\"."
+                        )
+                        .frame(height: 180)
                     } else {
                         ForEach(Array(filteredResults.enumerated()), id: \.element.id) { idx, note in
                             HStack {
@@ -156,15 +158,22 @@ struct CommandPaletteView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
-            .background(Color.sidebarBackground(isDark))
         }
-        .frame(width: 520)
-        .background(Color.panelBackground(isDark))
-        .cornerRadius(12)
+        .frame(width: 540)
+        .background(
+            RoundedRectangle(cornerRadius: AppRadius.lg)
+                .fill(.regularMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppRadius.lg)
+                        .fill(Color.panelBackground(isDark).opacity(0.85))
+                )
+        )
+        .cornerRadius(AppRadius.lg)
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: AppRadius.lg)
                 .stroke(Color.subtleBorder(isDark), lineWidth: 1)
         )
+        .shadow(color: Color.black.opacity(0.4), radius: 24, x: 0, y: 12)
         .onKeyPress(.downArrow) {
             if !filteredResults.isEmpty {
                 selectionIndex = min(selectionIndex + 1, filteredResults.count - 1)

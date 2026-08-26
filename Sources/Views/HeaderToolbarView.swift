@@ -14,14 +14,15 @@ struct ToolbarIconButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 13, weight: .medium))
+                .font(.system(size: 12, weight: .medium))
                 .foregroundColor(isActive ? activeColor : (isHovered ? .primary : .secondary))
                 .frame(width: 28, height: 28)
-                .background(isHovered ? Color.primary.opacity(0.08) : (isActive ? activeColor.opacity(0.12) : Color.clear))
-                .cornerRadius(6)
+                .background(isActive ? activeColor.opacity(0.12) : (isHovered ? Color.primary.opacity(0.06) : Color.clear))
+                .cornerRadius(AppRadius.sm)
         }
         .buttonStyle(.plain)
         .help(helpText)
+        .accessibilityLabel(helpText)
         .onHover { isHovered = $0 }
     }
 }
@@ -44,6 +45,7 @@ struct HeaderToolbarView: View {
     @ObservedObject var recorderVM: AudioRecorderViewModel
     @ObservedObject var playerVM: AudioPlayerViewModel
     @ObservedObject private var dataManager = NotesDataManager.shared
+    @ObservedObject private var tabManager = TabNavigationManager.shared
     
     var onAudioTranscribed: ([TranscriptSegment], String) -> Void
     @State private var showFolderPopover = false
@@ -52,189 +54,309 @@ struct HeaderToolbarView: View {
     @State private var showDeleteAlert = false
 
     var body: some View {
-        HStack(spacing: 10) {
-            // Left Section: Navigation & Document Controls
-            HStack(spacing: 8) {
-                ToolbarIconButton(icon: "sidebar.left", helpText: "Toggle Sidebar", isActive: isSidebarOpen, activeColor: primaryAccent) {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        isSidebarOpen.toggle()
-                    }
-                }
-
-                if let noteBinding = selectedNote {
-                    // Title Editor
-                    TextField("Untitled Note", text: noteBinding.title)
-                        .font(.system(size: 14, weight: .bold))
-                        .textFieldStyle(.plain)
-                        .frame(minWidth: 120, maxWidth: 240)
+        VStack(spacing: 0) {
+            // Trash Safety & Recovery Banner
+            if let noteBinding = selectedNote, noteBinding.wrappedValue.folder == "Trash" {
+                HStack(spacing: 12) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.amber)
                     
-                    // Save Status Indicator Pill
-                    HStack(spacing: 3) {
-                        if dataManager.isSaving {
-                            ProgressView()
-                                .controlSize(.small)
-                                .scaleEffect(0.6)
-                            Text("Saving...")
-                                .font(.system(size: 9, weight: .semibold))
-                                .foregroundColor(.secondary)
-                        } else {
-                            Text("Saved ✓")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundColor(.emerald.opacity(0.85))
+                    Text("This note is currently in the Trash.")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(isDark ? .white : .black)
+                    
+                    Spacer()
+                    
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            let target = noteBinding.wrappedValue.originalFolder ?? "General"
+                            noteBinding.wrappedValue.folder = target == "Trash" ? "General" : target
+                            dataManager.saveNotes(notes)
                         }
-                    }
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 3)
-                    .background(Color.cardBackground(isDark))
-                    .cornerRadius(4)
-                    .help("Vault automatic save state")
-                    
-                    // Folder Selector Pill
-                    Button(action: { showFolderPopover.toggle() }) {
+                    }) {
                         HStack(spacing: 4) {
-                            Text(noteBinding.wrappedValue.folder)
-                               .font(.system(size: 11, weight: .semibold))
-                               .foregroundColor(.primary)
-                            Image(systemName: "chevron.down")
-                               .font(.system(size: 8, weight: .bold))
-                               .foregroundColor(.secondary)
+                            Image(systemName: "arrow.uturn.backward")
+                                .font(.system(size: 10, weight: .bold))
+                            Text("Restore Note")
+                                .font(.system(size: 11, weight: .bold))
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(Color.cardBackground(isDark))
-                        .cornerRadius(6)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6)
-                                .stroke(Color.subtleBorder(isDark), lineWidth: 1)
-                        )
+                        .background(Color.emerald.opacity(0.2))
+                        .foregroundColor(.emerald)
+                        .cornerRadius(5)
                     }
                     .buttonStyle(.plain)
-                    .popover(isPresented: $showFolderPopover) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Move Note to Folder")
-                                .font(.caption)
-                                .fontWeight(.bold)
-                            TextField("New Folder name...", text: $newFolderName, onCommit: {
-                                if !newFolderName.isEmpty {
-                                    noteBinding.wrappedValue.folder = newFolderName
-                                    showFolderPopover = false
-                                    newFolderName = ""
-                                }
-                            })
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 180)
-                        }
-                        .padding()
-                    }
-                }
-            }
-            
-            Spacer()
-
-            // Center Section: Mode Picker Segmented Control
-            if let noteBinding = selectedNote {
-                let availableModes: [EditModeType] = noteBinding.wrappedValue.pdfPath != nil ? EditModeType.allCases : [.edit, .split, .preview]
-                HStack(spacing: 2) {
-                    ForEach(availableModes, id: \.self) { mode in
-                        Button(action: { editMode = mode }) {
-                            Text(mode.rawValue)
-                                .font(.system(size: 11, weight: editMode == mode ? .bold : .medium))
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 4)
-                                .background(editMode == mode ? primaryAccent.opacity(0.18) : Color.clear)
-                                .foregroundColor(editMode == mode ? primaryAccent : .secondary)
-                                .cornerRadius(5)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(2)
-                .background(Color.cardBackground(isDark))
-                .cornerRadius(7)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 7)
-                        .stroke(Color.subtleBorder(isDark), lineWidth: 1)
-                )
-            }
-
-            Spacer()
-            
-            // Right Section: Tools & Action Buttons
-            HStack(spacing: 6) {
-                if let noteBinding = selectedNote {
-                    // Live Waveform Visualizer
-                    if recorderVM.isRecording {
-                        WaveformVisualizerView(level: recorderVM.audioLevel, primaryColor: primaryAccent)
-                    }
-
-                    // Attach PDF / Document Action Button
-                    ToolbarIconButton(
-                        icon: noteBinding.wrappedValue.pdfPath != nil ? "doc.richtext.fill" : "paperclip",
-                        helpText: noteBinding.wrappedValue.pdfPath != nil ? "View Attached PDF Document" : "Attach PDF Document...",
-                        isActive: noteBinding.wrappedValue.pdfPath != nil,
-                        activeColor: primaryAccent
-                    ) {
-                        if noteBinding.wrappedValue.pdfPath != nil {
-                            editMode = (editMode == .pdf ? .split : .pdf)
-                        } else {
-                            attachPDFDocument()
-                        }
-                    }
-
-                    // Audio Record Pill Button
-                    if noteBinding.wrappedValue.isStandalone {
-                        Button(action: toggleRecording) {
-                            HStack(spacing: 5) {
-                                Image(systemName: recorderVM.isRecording ? "stop.circle.fill" : "mic.fill")
-                                    .font(.system(size: 11))
-                                    .foregroundColor(.white)
-                                Text(recorderVM.isRecording ? "Stop" : "Record")
-                                    .font(.system(size: 11, weight: .bold))
-                                    .foregroundColor(.white)
-                            }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(recorderVM.isRecording ? Color.red : primaryAccent)
-                            .cornerRadius(14)
-                        }
-                        .buttonStyle(.plain)
-                        .help(recorderVM.isRecording ? "Stop Recording" : "Record Audio Note")
-                    }
-
-                    // AI Assistant Popover Button
-                    Button(action: { showAIAssistantPopover.toggle() }) {
+                    
+                    Button(action: {
+                        showDeleteAlert = true
+                    }) {
                         HStack(spacing: 4) {
-                            Image(systemName: "sparkles")
+                            Image(systemName: "trash.slash.fill")
+                                .font(.system(size: 10, weight: .bold))
+                            Text("Delete Permanently")
                                 .font(.system(size: 11, weight: .bold))
-                                .foregroundColor(primaryAccent)
-                            Text("AI Assistant")
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundColor(primaryAccent)
                         }
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 5)
-                        .background(primaryAccent.opacity(0.12))
-                        .cornerRadius(7)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 7)
-                                .stroke(primaryAccent.opacity(0.3), lineWidth: 1)
-                        )
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.red.opacity(0.18))
+                        .foregroundColor(.red)
+                        .cornerRadius(5)
                     }
                     .buttonStyle(.plain)
-                    .help("Open Gemma Local AI Assistant")
-                    .popover(isPresented: $showAIAssistantPopover) {
-                        AIStudyAssistantView(
-                            note: noteBinding.wrappedValue,
-                            isDark: isDark,
-                            primaryAccent: primaryAccent,
-                            secondaryAccent: secondaryAccent,
-                            onInsertSummary: { summaryBlock in
-                                noteBinding.wrappedValue.content += summaryBlock
-                                NotesDataManager.shared.saveNotes(notes)
-                                showAIAssistantPopover = false
+                    .alert("Permanently Delete Note?", isPresented: $showDeleteAlert) {
+                        Button("Delete Permanently", role: .destructive) {
+                            if let id = selectedNoteId {
+                                notes.removeAll(where: { $0.id == id })
+                                tabManager.closeTab(id)
+                                selectedNoteId = notes.first?.id
+                                dataManager.saveNotes(notes)
                             }
-                        )
+                        }
+                        Button("Cancel", role: .cancel) {}
+                    } message: {
+                        Text("This note \"\(noteBinding.wrappedValue.title)\" will be removed permanently. This action cannot be undone.")
                     }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
+                .background(Color.red.opacity(0.12))
+                
+                Divider()
+                    .background(Color.red.opacity(0.25))
+            }
+
+            HStack(spacing: 10) {
+                // Left Section: Navigation & Document Controls
+                HStack(spacing: 6) {
+                    ToolbarIconButton(icon: "sidebar.left", helpText: "Toggle Sidebar", isActive: isSidebarOpen, activeColor: primaryAccent) {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            isSidebarOpen.toggle()
+                        }
+                    }
+
+                    // Back & Forward History Navigation
+                    HStack(spacing: 2) {
+                        Button(action: {
+                            withAnimation(.easeInOut(duration: 0.15)) {
+                                tabManager.goBack()
+                            }
+                        }) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(tabManager.canGoBack ? (isDark ? .white : .black) : .secondary.opacity(0.35))
+                                .frame(width: 22, height: 22)
+                                .background(Color.clear)
+                                .cornerRadius(4)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!tabManager.canGoBack)
+                        .help("Navigate Back (⌘[)")
+
+                        Button(action: {
+                            withAnimation(.easeInOut(duration: 0.15)) {
+                                tabManager.goForward()
+                            }
+                        }) {
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(tabManager.canGoForward ? (isDark ? .white : .black) : .secondary.opacity(0.35))
+                                .frame(width: 22, height: 22)
+                                .background(Color.clear)
+                                .cornerRadius(4)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!tabManager.canGoForward)
+                        .help("Navigate Forward (⌘])")
+                    }
+                    .padding(2)
+                    .background(Color.primary.opacity(0.04))
+                    .cornerRadius(6)
+
+                    if let noteBinding = selectedNote {
+                        // Title Editor
+                        TextField("Untitled Note", text: noteBinding.title)
+                            .font(.system(size: 13, weight: .semibold))
+                            .textFieldStyle(.plain)
+                            .frame(minWidth: 120, maxWidth: 220)
+                        
+                        // Pin / Unpin Note Button
+                        Button(action: {
+                            withAnimation(.easeInOut(duration: 0.15)) {
+                                noteBinding.wrappedValue.isPinned.toggle()
+                                dataManager.saveNotes(notes)
+                            }
+                        }) {
+                            Image(systemName: noteBinding.wrappedValue.isPinned ? "pin.fill" : "pin")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(noteBinding.wrappedValue.isPinned ? primaryAccent : .secondary)
+                                .frame(width: 22, height: 22)
+                                .background(noteBinding.wrappedValue.isPinned ? primaryAccent.opacity(0.12) : Color.clear)
+                                .cornerRadius(4)
+                        }
+                        .buttonStyle(.plain)
+                        .help(noteBinding.wrappedValue.isPinned ? "Unpin Note (⌘⇧P)" : "Pin Note (⌘⇧P)")
+
+                        // Save Status Indicator
+                        HStack(spacing: 4) {
+                            if dataManager.isSaving {
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .scaleEffect(0.55)
+                                Text("Saving")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(.secondary)
+                            } else {
+                                Circle()
+                                    .fill(Color.emerald.opacity(0.8))
+                                    .frame(width: 5, height: 5)
+                                Text("Saved")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .help("Vault automatic save state")
+                        
+                        // Folder Selector Pill
+                        Button(action: { showFolderPopover.toggle() }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "folder")
+                                    .font(.system(size: 9, weight: .medium))
+                                    .foregroundColor(.secondary)
+                                Text(noteBinding.wrappedValue.folder)
+                                   .font(.system(size: 11, weight: .medium))
+                                   .foregroundColor(.primary)
+                                Image(systemName: "chevron.down")
+                                   .font(.system(size: 7, weight: .semibold))
+                                   .foregroundColor(.secondary)
+                            }
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(Color.primary.opacity(0.04))
+                            .cornerRadius(6)
+                        }
+                        .buttonStyle(.plain)
+                        .popover(isPresented: $showFolderPopover) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Move Note to Folder")
+                                    .font(.caption)
+                                    .fontWeight(.bold)
+                                TextField("New Folder name...", text: $newFolderName, onCommit: {
+                                    if !newFolderName.isEmpty {
+                                        noteBinding.wrappedValue.folder = newFolderName
+                                        showFolderPopover = false
+                                        newFolderName = ""
+                                    }
+                                })
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 180)
+                            }
+                            .padding()
+                        }
+                    }
+                }
+                
+                Spacer()
+
+                // Center Section: Mode Picker Segmented Control
+                if let noteBinding = selectedNote {
+                    let availableModes: [EditModeType] = noteBinding.wrappedValue.pdfPath != nil ? EditModeType.allCases : [.edit, .split, .preview]
+                    HStack(spacing: 1) {
+                        ForEach(availableModes, id: \.self) { mode in
+                            Button(action: { editMode = mode }) {
+                                Text(mode.rawValue)
+                                    .font(.system(size: 11, weight: editMode == mode ? .semibold : .regular))
+                                    .padding(.horizontal, 9)
+                                    .padding(.vertical, 3)
+                                    .background(editMode == mode ? (isDark ? Color.white.opacity(0.12) : Color.black.opacity(0.08)) : Color.clear)
+                                    .foregroundColor(editMode == mode ? .primary : .secondary)
+                                    .cornerRadius(5)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(2)
+                    .background(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.04))
+                    .cornerRadius(AppRadius.sm)
+                }
+
+                Spacer()
+                
+                // Right Section: Tools & Action Buttons
+                HStack(spacing: 5) {
+                    if let noteBinding = selectedNote {
+                        // Live Waveform Visualizer
+                        if recorderVM.isRecording {
+                            WaveformVisualizerView(level: recorderVM.audioLevel, primaryColor: primaryAccent)
+                        }
+
+                        // Attach PDF / Document Action Button
+                        ToolbarIconButton(
+                            icon: noteBinding.wrappedValue.pdfPath != nil ? "doc.richtext.fill" : "paperclip",
+                            helpText: noteBinding.wrappedValue.pdfPath != nil ? "View Attached PDF Document" : "Attach PDF Document...",
+                            isActive: noteBinding.wrappedValue.pdfPath != nil,
+                            activeColor: primaryAccent
+                        ) {
+                            if noteBinding.wrappedValue.pdfPath != nil {
+                                editMode = (editMode == .pdf ? .split : .pdf)
+                            } else {
+                                attachPDFDocument()
+                            }
+                        }
+
+                        // Audio Record Pill Button
+                        if noteBinding.wrappedValue.isStandalone {
+                            Button(action: toggleRecording) {
+                                HStack(spacing: 5) {
+                                    Circle()
+                                        .fill(recorderVM.isRecording ? Color.red : primaryAccent)
+                                        .frame(width: 6, height: 6)
+                                    Text(recorderVM.isRecording ? "Stop" : "Record")
+                                        .font(.system(size: 11, weight: .semibold))
+                                        .foregroundColor(recorderVM.isRecording ? .red : .primary)
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(recorderVM.isRecording ? Color.red.opacity(0.15) : Color.primary.opacity(0.05))
+                                .cornerRadius(AppRadius.sm)
+                            }
+                            .buttonStyle(.plain)
+                            .help(recorderVM.isRecording ? "Stop Recording" : "Record Audio Note")
+                        }
+
+                        // AI Assistant Popover Button
+                        Button(action: { showAIAssistantPopover.toggle() }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "sparkles")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(primaryAccent)
+                                Text("AI Assistant")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(primaryAccent)
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(primaryAccent.opacity(0.1))
+                            .cornerRadius(AppRadius.sm)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Open Gemma Local AI Assistant")
+                        .popover(isPresented: $showAIAssistantPopover) {
+                            AIStudyAssistantView(
+                                note: noteBinding.wrappedValue,
+                                isDark: isDark,
+                                primaryAccent: primaryAccent,
+                                secondaryAccent: secondaryAccent,
+                                onInsertSummary: { summaryBlock in
+                                    noteBinding.wrappedValue.content += summaryBlock
+                                    NotesDataManager.shared.saveNotes(notes)
+                                    showAIAssistantPopover = false
+                                }
+                            )
+                        }
 
                     // Knowledge Graph Canvas Toggle
                     ToolbarIconButton(icon: "circle.hexagonpath", helpText: "Knowledge Graph Canvas (⌘G)", isActive: isGraphViewOpen, activeColor: secondaryAccent) {
@@ -277,15 +399,16 @@ struct HeaderToolbarView: View {
                 }
             }
         }
-        .padding(.horizontal, 14)
-        .frame(height: 48)
-        .background(Color.panelBackground(isDark))
-        .overlay(
-            Rectangle()
-                .frame(height: 1)
-                .foregroundColor(Color.subtleBorder(isDark)),
-            alignment: .bottom
-        )
+            .padding(.horizontal, 14)
+            .frame(height: 48)
+            .background(Color.panelBackground(isDark))
+            .overlay(
+                Rectangle()
+                    .frame(height: 1)
+                    .foregroundColor(Color.subtleBorder(isDark)),
+                alignment: .bottom
+            )
+        }
     }
     
     private func toggleRecording() {
