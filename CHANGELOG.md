@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semanticsver.org/spec/
 - **Slide Outline & Speaker Notes Drawer**:
   - Collapsible drawer showing slide titles, bullet summaries, tables, and speaker/presenter notes.
 - **One-Click Markdown Citations & Outline Export**:
-  - "Quote Slide" button to paste formatted slide quotes with presenter notes (`> 📊 **Slide 3: ...**`) directly into your active note.
+  - "Quote Slide" button to paste formatted slide quotes with presenter notes (`> Slide 3: ...`) directly into your active note.
   - "Insert Outline" button to generate a structured markdown outline for the entire presentation.
 - **AI Study Assistant Presentation Awareness**:
   - Gemma 3 AI automatically analyzes slide text and speaker notes to generate study summaries, interactive flashcards, and Q&A citations.
@@ -103,8 +103,8 @@ and this project adheres to [Semantic Versioning](https://semanticsver.org/spec/
 ### Added
 - **Native PDF Document Support & Split-Screen Reading**:
   - Full-screen & side-by-side split reading with draggable divider ratio (`⌘\` / `⌘Option+P`).
-  - Seamless PDF document attachment, vault sandboxing, and Apple Preview.app integration (`↗`).
-  - Interactive **"Cite"** action (`💬`) to instantly insert selected text as a quoted blockquote with document & page citation.
+  - Seamless PDF document attachment, vault sandboxing, and Apple Preview.app integration.
+  - Interactive **"Cite"** action to instantly insert selected text as a quoted blockquote with document & page citation.
 - **Deep PDF AI Assistant Integration**:
   - Active PDF Document Context badge identifying attached slides/papers.
   - **1-Click Executive PDF Summarizer**: Background document analysis with 1-click note insertion.
@@ -132,7 +132,7 @@ and this project adheres to [Semantic Versioning](https://semanticsver.org/spec/
 ### Added
 - **Data Safety & Rolling Snapshots**: Automatic versioned backup engine saving up to 10 rolling JSON snapshots (`Backups/notes_backup_YYYYMMDD_HHmmss.json`) on every save.
 - **Crash & Corruption Recovery**: Automatic recovery logic that restores notes from the latest valid backup snapshot if `notes.json` fails to decode.
-- **Real-Time Save State Indicator**: Status indicator pill (`Saved ✓` / `Saving...`) in top bar displaying live vault persistence status.
+- **Real-Time Save State Indicator**: Status indicator pill (`Saved` / `Saving...`) in top bar displaying live vault persistence status.
 - **Full Vault Exporter**: Export entire vault to a folder of structured `.md` files organized by directory (`File -> Export Full Vault to Folder...`).
 - **Unlinked Mentions & 1-Click Linking**: Obsidian-style unlinked mentions panel with a single-click `+ Link` button to convert plain text mentions into `[[Wiki Links]]`.
 - **Daily Notes Shortcut (`⌘D`)**: Jump to or create today's daily journal (`Daily Notes/YYYY-MM-DD.md`) pre-populated with morning study intentions and notes header.

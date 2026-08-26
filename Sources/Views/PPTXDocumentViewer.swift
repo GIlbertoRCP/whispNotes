@@ -5,6 +5,16 @@ import QuickLookUI
 // MARK: - Native QuickLook Presentation NSViewRepresentable Wrapper
 struct QLPreviewRepresentable: NSViewRepresentable {
     let url: URL
+    var currentSlideIndex: Int = 1
+    var totalSlides: Int = 1
+    
+    class Coordinator: NSObject {
+        var lastSlideIndex: Int = 1
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
     
     func makeNSView(context: Context) -> QLPreviewView {
         let preview = QLPreviewView(frame: .zero, style: .normal) ?? QLPreviewView()
@@ -19,6 +29,42 @@ struct QLPreviewRepresentable: NSViewRepresentable {
         } else if nsView.previewItem == nil {
             nsView.previewItem = url as NSURL
         }
+        
+        if context.coordinator.lastSlideIndex != currentSlideIndex {
+            context.coordinator.lastSlideIndex = currentSlideIndex
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                self.scrollToSlide(slideIndex: currentSlideIndex, totalSlides: totalSlides, in: nsView)
+            }
+        }
+    }
+    
+    private func scrollToSlide(slideIndex: Int, totalSlides: Int, in view: NSView) {
+        if let scrollView = findScrollView(in: view), let docView = scrollView.documentView {
+            let clipView = scrollView.contentView
+            let totalHeight = docView.bounds.height
+            let visibleHeight = clipView.bounds.height
+            
+            if totalHeight > visibleHeight && totalSlides > 1 {
+                let slideFraction = CGFloat(max(0, slideIndex - 1)) / CGFloat(max(1, totalSlides - 1))
+                let maxScrollY = totalHeight - visibleHeight
+                let targetY = max(0, min(slideFraction * maxScrollY, maxScrollY))
+                
+                NSAnimationContext.runAnimationGroup { ctx in
+                    ctx.duration = 0.22
+                    ctx.allowsImplicitAnimation = true
+                    clipView.animator().scroll(to: NSPoint(x: 0, y: targetY))
+                }
+                scrollView.reflectScrolledClipView(clipView)
+            }
+        }
+    }
+    
+    private func findScrollView(in view: NSView) -> NSScrollView? {
+        if let sv = view as? NSScrollView { return sv }
+        for sub in view.subviews {
+            if let sv = findScrollView(in: sub) { return sv }
+        }
+        return nil
     }
 }
 
@@ -72,9 +118,13 @@ struct PPTXDocumentViewerView: View {
                 HStack(spacing: 0) {
                     // Presentation Visual Rendering Canvas
                     ZStack(alignment: .topTrailing) {
-                        QLPreviewRepresentable(url: pptxURL)
-                            .id(pptxURL)
-                            .background(Color.black.opacity(isDark ? 0.35 : 0.05))
+                        QLPreviewRepresentable(
+                            url: pptxURL,
+                            currentSlideIndex: currentSlideIndex,
+                            totalSlides: totalSlides
+                        )
+                        .id(pptxURL)
+                        .background(Color.black.opacity(isDark ? 0.35 : 0.05))
                         
                         // Floating Citation Toast
                         if showQuoteNotification {

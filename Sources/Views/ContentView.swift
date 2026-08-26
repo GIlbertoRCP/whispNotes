@@ -340,9 +340,7 @@ struct ContentView: View {
         }
         .onChange(of: tabManager.activeTabId) { _, newActiveId in
             guard let id = newActiveId, selectedNoteId != id else { return }
-            DispatchQueue.main.async {
-                self.selectedNoteId = id
-            }
+            self.selectedNoteId = id
         }
         .onChange(of: selectedNoteId) { _, newId in
             guard let id = newId else { return }

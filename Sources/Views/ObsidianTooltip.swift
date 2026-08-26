@@ -78,7 +78,7 @@ struct ObsidianTooltipModifier: ViewModifier {
     let text: String
     var shortcut: String? = nil
     var edge: VerticalEdge = .bottom
-    var delay: Double = 0.25 // 250ms snappy delay
+    var delay: Double = 0.2 // 200ms delay
     
     @State private var isHovered = false
     @State private var showTooltip = false
@@ -86,6 +86,7 @@ struct ObsidianTooltipModifier: ViewModifier {
     
     func body(content: Content) -> some View {
         content
+            .contentShape(Rectangle())
             .onHover { hovering in
                 isHovered = hovering
                 hoverWorkItem?.cancel()
@@ -93,14 +94,14 @@ struct ObsidianTooltipModifier: ViewModifier {
                 if hovering {
                     let workItem = DispatchWorkItem {
                         guard self.isHovered else { return }
-                        withAnimation(.spring(response: 0.22, dampingFraction: 0.78)) {
+                        withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
                             self.showTooltip = true
                         }
                     }
                     hoverWorkItem = workItem
                     DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
                 } else {
-                    withAnimation(.easeOut(duration: 0.12)) {
+                    withAnimation(.easeOut(duration: 0.1)) {
                         self.showTooltip = false
                     }
                 }
@@ -113,9 +114,9 @@ struct ObsidianTooltipModifier: ViewModifier {
                         pointUp: edge == .bottom
                     )
                     .offset(y: edge == .bottom ? 30 : -30)
-                    .zIndex(999)
+                    .zIndex(9999)
                     .allowsHitTesting(false)
-                    .transition(.opacity.combined(with: .scale(scale: 0.94)))
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
                 }
             }
     }
@@ -123,8 +124,16 @@ struct ObsidianTooltipModifier: ViewModifier {
 
 // MARK: - Fluent View Extension
 extension View {
-    /// Attaches an Obsidian-style floating tooltip with dark bubble, arrow pointer, and optional keyboard shortcut badge.
+    /// Attaches an Obsidian-style floating tooltip and native macOS accessibility tooltip with dark bubble, arrow pointer, and optional keyboard shortcut badge.
     func obsidianTooltip(_ text: String, shortcut: String? = nil, edge: VerticalEdge = .bottom) -> some View {
-        self.modifier(ObsidianTooltipModifier(text: text, shortcut: shortcut, edge: edge))
+        let fullHelpText: String
+        if let sc = shortcut, !sc.isEmpty {
+            fullHelpText = "\(text) (\(sc))"
+        } else {
+            fullHelpText = text
+        }
+        return self
+            .help(fullHelpText)
+            .modifier(ObsidianTooltipModifier(text: text, shortcut: shortcut, edge: edge))
     }
 }
