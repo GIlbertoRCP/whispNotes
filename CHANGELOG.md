@@ -5,6 +5,33 @@ All notable changes to **WhispNotes** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semanticsver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-08-25
+
+### Added
+- **Antigravity / Obsidian-Style Vim Mode & `:` Command Bar**:
+  - Full modal state machine: `NORMAL`, `INSERT`, `VISUAL`, `VISUAL LINE`, and `COMMAND` (`:`) modes.
+  - Classic navigation motions (`h`, `j`, `k`, `l`, `w`, `b`, `e`, `0`, `$`, `gg`, `G`), edits (`x`, `dd`, `yy`, `p`, `P`, `u`, `Ctrl+r`, `o`, `O`, `A`, `I`, `a`, `i`), and `:` commands (`:w`, `:q`, `:wq`, `:tabn`, `:tabp`, `:tabnew`, `:graph`, `:toc`, `:ai`, `:%s/find/replace/g`, `:help`).
+  - Interactive bottom status bar with mode chip, live `:` prompt, feedback toast, and real-time cursor line/col coordinate tracker.
+  - Interactive Vim Cheat Sheet modal (`:help` or `?` icon).
+- **Interactive Mermaid.js Diagram Engine**:
+  - Live SVG rendering for flowcharts (`graph TD`, `flowchart LR`), sequence diagrams, class diagrams, state diagrams, ER diagrams, pie charts, and Gantt charts with dark/light mode theme matching.
+  - 1-click **Copy Diagram Code** button and syntax error diagnostics.
+- **LaTeX Math Equation (KaTeX) Rendering**:
+  - Fast, native rendering of block math formulas (`$$ ... $$` and ```` ```math ````) and inline math formulas (`$ ... $`).
+- **Zen Focus Mode Overhaul (`⌘⇧F`)**:
+  - Minimalist `ZenFocusTopBarView` with focus status pill, note title, Edit/Split/Preview mode switcher, and 1-click "Exit Focus" action.
+  - Typewriter-style centered writing canvas (`maxWidth: 750pt`) with optimal typography line length and auto-hidden toolbars.
+- **Overhauled Knowledge Graph Canvas (`⌘G`)**:
+  - Decoupled 1:1 node dragging without gesture conflicts.
+  - 60fps force-directed physics simulation with dynamic spring stretching and auto-sleep optimization.
+  - Direct 1-tap note opening from nodes, 1-click `Arrange` circle layout, and `Reset` zoom controls.
+- **Sidebar Readability & Themed Selection**:
+  - Custom `SidebarNoteRowView` with dynamic theme palette inheritance (`primaryAccent`).
+  - High-contrast white typography in selected states across all themes and dark/light modes.
+  - Zero-dead-zone full-width clickability for instant note switching.
+
+---
+
 ## [1.2.0] - 2026-08-18
 
 ### Added
