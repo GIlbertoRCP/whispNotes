@@ -19,6 +19,16 @@ public struct WhispNotesSwiftApp: App {
     public init() {
         NSApplication.shared.setActivationPolicy(.regular)
         NSApplication.shared.activate(ignoringOtherApps: true)
+        
+        // Auto-migrate to the new default "Classic Minimal" theme if previously on the old default "Midnight Rose" or unmigrated
+        let migrationKey = "hasMigratedToClassicMinimal_v140"
+        if !UserDefaults.standard.bool(forKey: migrationKey) {
+            let current = UserDefaults.standard.string(forKey: "colorTheme")
+            if current == nil || current == "Midnight Rose" || current == "Default" {
+                UserDefaults.standard.set("Classic Minimal", forKey: "colorTheme")
+            }
+            UserDefaults.standard.set(true, forKey: migrationKey)
+        }
     }
 
     public var body: some Scene {
