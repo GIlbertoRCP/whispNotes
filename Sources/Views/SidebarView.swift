@@ -131,6 +131,20 @@ struct SidebarView: View {
                 .buttonStyle(.plain)
                 .help("Import PDF Document Note")
 
+                // + New Note from Template Button
+                Button(action: {
+                    NotificationCenter.default.post(name: .openTemplateModal, object: nil)
+                }) {
+                    Image(systemName: "square.grid.2x2")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.secondary)
+                        .frame(width: 26, height: 26)
+                        .background(Color.primary.opacity(0.05))
+                        .cornerRadius(AppRadius.sm)
+                }
+                .buttonStyle(.plain)
+                .help("New Note from Template (⌘T)")
+
                 // + New Note Button
                 Button(action: createNewNote) {
                     Image(systemName: "square.and.pencil")

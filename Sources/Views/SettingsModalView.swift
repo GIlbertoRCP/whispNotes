@@ -848,8 +848,26 @@ struct SettingsModalView: View {
                     .stroke(Color.subtleBorder(isDarkMode), lineWidth: 1)
             )
 
-            // Links Card
+            // Support & Diagnostics Card
             HStack(spacing: 12) {
+                Button(action: { WhispLogger.exportDiagnosticsBundle(notesCount: notes.count) }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "ladybug.fill")
+                        Text("Export Diagnostics Bundle")
+                    }
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(primaryAccent)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(primaryAccent.opacity(0.12))
+                    .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+                .help("Export local diagnostic logs for bug reports")
+                
+                Spacer()
+                
                 Button(action: { updater.openReleaseInBrowser() }) {
                     HStack(spacing: 6) {
                         Image(systemName: "link")
@@ -860,11 +878,12 @@ struct SettingsModalView: View {
                 }
                 .buttonStyle(.plain)
                 
-                Spacer()
+                Text("•")
+                    .foregroundColor(.secondary)
                 
-                Text("Created with ❤️ for Mac")
-                    .font(.caption2)
-                    .foregroundColor(.secondary.opacity(0.8))
+                Text("Created for Mac")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
             .padding(.horizontal, 4)
         }

@@ -66,6 +66,7 @@ struct ContentView: View {
     @State private var isSidebarOpen = true
     @State private var isFocusMode = false
     @State private var isVaultSearchOpen = false
+    @State private var isTemplateModalOpen = false
     @State private var editMode: EditModeType = .split
 
     var primaryAccent: Color {
@@ -289,25 +290,38 @@ struct ContentView: View {
         .sheet(isPresented: $updater.showUpdateModal) {
             AppUpdateModalView(updater: updater)
         }
+        .sheet(isPresented: $isTemplateModalOpen) {
+            NoteTemplateModalView(
+                isOpen: $isTemplateModalOpen,
+                notes: $notes,
+                selectedNoteId: $selectedNoteId,
+                isDark: isDarkMode,
+                primaryAccent: primaryAccent,
+                secondaryAccent: secondaryAccent
+            )
+        }
         .onReceive(NotificationCenter.default.publisher(for: .openVaultSearch)) { _ in
             isVaultSearchOpen = true
         }
+        .onReceive(NotificationCenter.default.publisher(for: .openTemplateModal)) { _ in
+            isTemplateModalOpen = true
+        }
         .onChange(of: tabManager.activeTabId) { _, newActiveId in
-            if let id = newActiveId, selectedNoteId != id {
-                selectedNoteId = id
+            guard let id = newActiveId, selectedNoteId != id else { return }
+            DispatchQueue.main.async {
+                self.selectedNoteId = id
             }
         }
         .onChange(of: selectedNoteId) { _, newId in
-            if let id = newId {
-                if tabManager.activeTabId != id {
-                    tabManager.openNote(id)
-                }
-                if let note = notes.first(where: { $0.id == id }) {
-                    if note.pdfPath != nil {
-                        editMode = .pdf
-                    } else if editMode == .pdf {
-                        editMode = .edit
-                    }
+            guard let id = newId else { return }
+            if tabManager.activeTabId != id {
+                tabManager.openNote(id)
+            }
+            if let note = notes.first(where: { $0.id == id }) {
+                if note.pdfPath != nil {
+                    if editMode != .pdf { editMode = .pdf }
+                } else if editMode == .pdf {
+                    editMode = .edit
                 }
             }
         }

@@ -442,10 +442,14 @@ struct AIStudyAssistantView: View {
         let q = customPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty else { return }
         isAnswering = true
+        promptResponse = ""
         Task {
-            let res = await gemmaEngine.askGemma(prompt: q, note: note)
+            _ = await gemmaEngine.askGemmaStreaming(prompt: q, note: note) { token in
+                DispatchQueue.main.async {
+                    self.promptResponse += token
+                }
+            }
             await MainActor.run {
-                self.promptResponse = res
                 self.isAnswering = false
             }
         }

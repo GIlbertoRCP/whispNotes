@@ -6,6 +6,7 @@ import AppKit
 extension Notification.Name {
     static let pasteImageAsAttachment = Notification.Name("pasteImageAsAttachment")
     static let notesRestoredFromUndo = Notification.Name("notesRestoredFromUndo")
+    static let openTemplateModal = Notification.Name("openTemplateModal")
 }
 
 // MARK: - Data Manager (JSON Persistence, Rolling Backups & Vault Export)
@@ -496,9 +497,58 @@ class NotesDataManager: ObservableObject {
     private func getSeedNotes() -> [NoteItem] {
         return [
             NoteItem(
-                title: "Welcome to Native WhispNotes",
+                title: "Welcome to WhispNotes",
                 folder: "General",
-                content: "# Pure Native SwiftUI\n\nThis application runs 100% native on macOS with **zero background HTTP servers** or external API ports.\n\n### Markdown Table Example\n| Feature | Status | Quality |\n| --- | --- | --- |\n| Wiki Links | Active | 100% |\n| Diarization | Active | Native |\n\n### Code Block Example\n```swift\nfunc helloWorld() {\n    print(\"Hello WhispNotes!\")\n}\n```\n\n### Key Shortcuts\n- `⌘N` - New Standalone Note\n- `⌘D` - Today's Daily Note\n- `⌘K` or `⌘O` - Spotlight Search Palette\n- `⌘G` - Obsidian Knowledge Graph Canvas\n- `⌘⇧F` - Zen Focus Mode\n- `Space` - Play/Pause Audio (when player active)\n\n### Wiki-Links & Tags\nType `[[Lecture Notes]]` to link notes, or use `#ideas` and `#lecture` to tag notes!",
+                content: """
+                # 🚀 Welcome to WhispNotes
+
+                WhispNotes is a **100% private, on-device intelligence workspace** designed for researchers, engineers, and students. Everything runs natively on Apple Silicon with **zero cloud dependencies** or background web servers.
+
+                ---
+
+                ## 🧠 Interactive Mermaid.js Architecture Diagrams
+                WhispNotes automatically renders live vector diagrams directly from markdown:
+
+                ```mermaid
+                flowchart LR
+                    Audio[🎙️ Lecture Audio] --> Whisper[Local Whisper AI]
+                    PDF[📄 PDF Attachment] --> Reader[Native PDFKit]
+                    Whisper --> Sync[Diarized Sync Engine]
+                    Reader --> Graph[Obsidian Knowledge Graph]
+                    Sync --> Vault[(Encrypted Local Vault)]
+                    Graph --> Vault
+                ```
+
+                ---
+
+                ## 📐 Native KaTeX LaTeX Math Rendering
+                Write inline math like $E = mc^2$ or full display equations with live LaTeX typesetting:
+
+                $$
+                f(x) = \\int_{-\\infty}^{\\infty} \\hat{f}(\\xi) e^{2 \\pi i \\xi x} d\\xi
+                $$
+
+                $$
+                \\nabla \\times \\mathbf{B} = \\mu_0 \\mathbf{J} + \\mu_0 \\epsilon_0 \\frac{\\partial \\mathbf{E}}{\\partial t}
+                $$
+
+                ---
+
+                ## ⚡ Key Shortcuts & Features
+                - **`⌘N`** — Create New Note
+                - **`⌘T`** — New Note from Template (Meeting, Cornell, RFC, Podcast)
+                - **`⌘K` / `⌘O`** — Fuzzy Vault Spotlight Search
+                - **`⌘G`** — Obsidian Knowledge Graph Canvas
+                - **`⌘⇧F`** — Zen Focus Mode
+                - **`⌘[` / `⌘]`** — History Navigation
+                - **`⌘,`** — Preferences & Color Themes
+
+                ---
+
+                ## 🔗 Knowledge Connections & Backlinks
+                Connect ideas effortlessly using wiki-links: check out [[Lecture Notes]] and [[Technical Architecture]].
+                Use hashtags like `#research`, `#ai`, and `#engineering` to organize topics across folders.
+                """,
                 timestamp: Date(),
                 audioPath: nil,
                 transcript: [],
@@ -507,9 +557,53 @@ class NotesDataManager: ObservableObject {
             ),
             NoteItem(
                 title: "Lecture Notes",
-                folder: "General",
-                content: "# Lecture Notes\n\nReferenced from [[Welcome to Native WhispNotes]] #lecture.\n\n- Diarized transcription audio synced automatically\n- High quality audio recording",
+                folder: "Lectures",
+                content: """
+                # 🎓 Advanced Algorithms & Systems
+                
+                Connected to [[Welcome to WhispNotes]] and [[Technical Architecture]].
+                
+                ## 📝 Core Concepts
+                - Dynamic Programming & Memoization
+                - Graph Traversal (BFS / DFS / Dijkstra)
+                - Local Speech Recognition & Diarization
+                
+                ### Complexity Analysis
+                $$
+                T(n) = 2 T\\left(\\frac{n}{2}\\right) + \\mathcal{O}(n) \\implies \\mathcal{O}(n \\log n)
+                $$
+                """,
                 timestamp: Date().addingTimeInterval(-3600),
+                audioPath: nil,
+                transcript: [],
+                isStandalone: true,
+                bookmarks: []
+            ),
+            NoteItem(
+                title: "Technical Architecture",
+                folder: "Engineering",
+                content: """
+                # 🏗️ Technical Architecture
+                
+                Referenced from [[Welcome to WhispNotes]].
+                
+                ```mermaid
+                classDiagram
+                    class NoteItem {
+                        +UUID id
+                        +String title
+                        +String content
+                        +String folder
+                        +Date timestamp
+                    }
+                    class NotesDataManager {
+                        +saveNotes()
+                        +loadNotes()
+                    }
+                    NotesDataManager --> NoteItem
+                ```
+                """,
+                timestamp: Date().addingTimeInterval(-7200),
                 audioPath: nil,
                 transcript: [],
                 isStandalone: true,

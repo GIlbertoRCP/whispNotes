@@ -194,4 +194,62 @@ class NoteExporter {
             try? exportText.write(to: url, atomically: true, encoding: .utf8)
         }
     }
+
+    /// Exports note audio transcript as SubRip (.srt) subtitle file
+    func exportSRT(_ note: NoteItem) {
+        guard !note.transcript.isEmpty else { return }
+        let savePanel = NSSavePanel()
+        savePanel.title = "Export Transcript as Subtitles (.srt)"
+        savePanel.nameFieldStringValue = "\(note.title)_subtitles.srt"
+        savePanel.allowedContentTypes = [UTType(filenameExtension: "srt") ?? .plainText]
+        
+        savePanel.begin { response in
+            guard response == .OK, let url = savePanel.url else { return }
+            var srtOutput = ""
+            for (idx, seg) in note.transcript.enumerated() {
+                let startStr = self.formatSRTTime(seg.startTime)
+                let endStr = self.formatSRTTime(seg.endTime)
+                srtOutput += "\(idx + 1)\n\(startStr) --> \(endStr)\n\(seg.speaker): \(seg.text)\n\n"
+            }
+            try? srtOutput.write(to: url, atomically: true, encoding: .utf8)
+        }
+    }
+
+    /// Exports note audio transcript as WebVTT (.vtt) file
+    func exportVTT(_ note: NoteItem) {
+        guard !note.transcript.isEmpty else { return }
+        let savePanel = NSSavePanel()
+        savePanel.title = "Export Transcript as WebVTT (.vtt)"
+        savePanel.nameFieldStringValue = "\(note.title)_subtitles.vtt"
+        savePanel.allowedContentTypes = [UTType(filenameExtension: "vtt") ?? .plainText]
+        
+        savePanel.begin { response in
+            guard response == .OK, let url = savePanel.url else { return }
+            var vttOutput = "WEBVTT\n\n"
+            for seg in note.transcript {
+                let startStr = self.formatVTTTime(seg.startTime)
+                let endStr = self.formatVTTTime(seg.endTime)
+                vttOutput += "\(startStr) --> \(endStr)\n<v \(seg.speaker)>\(seg.text)\n\n"
+            }
+            try? vttOutput.write(to: url, atomically: true, encoding: .utf8)
+        }
+    }
+
+    private func formatSRTTime(_ seconds: Double) -> String {
+        let totalSeconds = Int(seconds)
+        let hours = totalSeconds / 3600
+        let minutes = (totalSeconds % 3600) / 60
+        let secs = totalSeconds % 60
+        let millis = Int((seconds.truncatingRemainder(dividingBy: 1.0)) * 1000)
+        return String(format: "%02d:%02d:%02d,%03d", hours, minutes, secs, millis)
+    }
+
+    private func formatVTTTime(_ seconds: Double) -> String {
+        let totalSeconds = Int(seconds)
+        let hours = totalSeconds / 3600
+        let minutes = (totalSeconds % 3600) / 60
+        let secs = totalSeconds % 60
+        let millis = Int((seconds.truncatingRemainder(dividingBy: 1.0)) * 1000)
+        return String(format: "%02d:%02d:%02d.%03d", hours, minutes, secs, millis)
+    }
 }

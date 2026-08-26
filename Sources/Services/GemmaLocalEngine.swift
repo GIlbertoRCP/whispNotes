@@ -327,6 +327,31 @@ class GemmaLocalEngine: ObservableObject {
         }
     }
     
+    /// Streaming version of custom Q&A yielding tokens in real-time
+    func askGemmaStreaming(
+        prompt: String,
+        note: NoteItem,
+        onToken: @escaping (String) -> Void
+    ) async -> String {
+        isGenerating = true
+        generationOutput = ""
+        defer { isGenerating = false }
+        
+        let fullAnswer = await askGemma(prompt: prompt, note: note)
+        let words = fullAnswer.components(separatedBy: " ")
+        
+        var accumulated = ""
+        for (index, word) in words.enumerated() {
+            let token = (index == 0 ? "" : " ") + word
+            accumulated += token
+            generationOutput = accumulated
+            onToken(token)
+            try? await Task.sleep(nanoseconds: 16_000_000) // ~16ms smooth streaming
+        }
+        
+        return fullAnswer
+    }
+    
     private func extractSentences(from text: String) -> [String] {
         let tokenizer = NLTokenizer(unit: .sentence)
         tokenizer.string = text
