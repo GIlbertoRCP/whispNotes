@@ -13,7 +13,7 @@ struct EditorPanelView: View {
     let secondaryAccent: Color
     
     @AppStorage("editorFontSize") private var editorFontSize: Double = 14.0
-    @AppStorage("editorFontDesign") private var editorFontDesign: String = "Monospaced"
+    @AppStorage("editorFontDesign") private var editorFontDesign: String = "Sans-Serif"
     @AppStorage("editorSplitRatio") private var splitRatio: Double = 0.5
     @AppStorage("enableVimMode") private var enableVimMode = false
     
@@ -196,7 +196,7 @@ struct EditorPanelView: View {
             } else if editMode == .edit {
                 VStack(spacing: 0) {
                     HStack(spacing: 0) {
-                        Spacer()
+                        Spacer(minLength: 8)
                         MacMarkdownEditorView(
                             text: $localContent,
                             noteId: note.id,
@@ -219,11 +219,11 @@ struct EditorPanelView: View {
                                 handleAutoSave(formatted)
                             }
                         )
-                        .frame(maxWidth: isFocusMode ? 750 : .infinity)
-                        Spacer()
+                        .frame(maxWidth: 760)
+                        Spacer(minLength: 8)
                     }
-                    .padding(.horizontal, isFocusMode ? 20 : 6)
-                    .padding(.top, isFocusMode ? 16 : 6)
+                    .padding(.horizontal, isFocusMode ? 24 : 12)
+                    .padding(.top, isFocusMode ? 16 : 8)
                     .background(Color.panelBackground(isDark))
                     
                     if enableVimMode {
@@ -1054,13 +1054,19 @@ struct MacMarkdownEditorView: NSViewRepresentable {
         let nsFont: NSFont
         switch fontDesign {
         case .serif:
-            nsFont = NSFont(name: "Georgia", size: fontSize) ?? NSFont.systemFont(ofSize: fontSize)
+            nsFont = NSFont(name: "New York", size: fontSize) ?? NSFont(name: "Georgia", size: fontSize) ?? NSFont.systemFont(ofSize: fontSize)
         case .monospaced:
             nsFont = NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
         default:
-            nsFont = NSFont.systemFont(ofSize: fontSize)
+            nsFont = NSFont.systemFont(ofSize: fontSize, weight: .regular)
         }
         textView.font = nsFont
+        
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineSpacing = 5.0
+        paragraphStyle.paragraphSpacing = 8.0
+        textView.defaultParagraphStyle = paragraphStyle
+        
         textView.textColor = isDark ? NSColor(red: 226/255, green: 232/255, blue: 240/255, alpha: 1.0) : NSColor(red: 15/255, green: 23/255, blue: 42/255, alpha: 1.0)
         textView.insertionPointColor = isDark ? NSColor.white : NSColor.black
     }

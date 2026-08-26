@@ -496,12 +496,24 @@ struct SidebarView: View {
                                 Text("(\(trashNotes.count))")
                                     .font(.system(size: 10, weight: .medium, design: .monospaced))
                                     .foregroundColor(.secondary)
+                                
                                 Spacer()
-                                Button("Empty") {
+                                
+                                Button(action: {
                                     showEmptyTrashAlert = true
+                                }) {
+                                    HStack(spacing: 3) {
+                                        Image(systemName: "trash.slash")
+                                            .font(.system(size: 9))
+                                        Text("Empty Trash")
+                                            .font(.system(size: 9.5, weight: .semibold))
+                                    }
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.red.opacity(0.12))
+                                    .foregroundColor(SemanticColor.destructive)
+                                    .cornerRadius(4)
                                 }
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(.red.opacity(0.85))
                                 .buttonStyle(.plain)
                                 .accessibilityLabel("Empty Trash Bin")
                             }
@@ -519,14 +531,14 @@ struct SidebarView: View {
                             .onDrop(of: [.text], isTargeted: $isTrashTargeted) { providers in
                                 handleDrop(providers: providers, targetFolder: "Trash")
                             }
-                                .alert("Empty Trash Permanently?", isPresented: $showEmptyTrashAlert) {
-                                    Button("Empty Trash", role: .destructive) {
-                                        emptyTrashPermanently()
-                                    }
-                                    Button("Cancel", role: .cancel) {}
-                                } message: {
-                                    Text("This will permanently delete all \(trashNotes.count) items in the trash. This action cannot be undone.")
+                            .alert("Empty Trash Permanently?", isPresented: $showEmptyTrashAlert) {
+                                Button("Empty Trash", role: .destructive) {
+                                    emptyTrashPermanently()
                                 }
+                                Button("Cancel", role: .cancel) {}
+                            } message: {
+                                Text("This will permanently delete all \(trashNotes.count) items in the trash. This action cannot be undone.")
+                            }
                         }
                     )
                 }
@@ -784,62 +796,88 @@ struct SidebarNoteRowView: View {
     
     @State private var isHovered: Bool = false
     
+    private var excerptText: String {
+        let clean = note.content
+            .replacingOccurrences(of: "#", with: "")
+            .replacingOccurrences(of: "*", with: "")
+            .replacingOccurrences(of: "`", with: "")
+            .replacingOccurrences(of: ">", with: "")
+            .replacingOccurrences(of: "[", with: "")
+            .replacingOccurrences(of: "]", with: "")
+            .replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return clean.isEmpty ? "No additional text" : clean
+    }
+    
     var body: some View {
         Button(action: onSelect) {
-            HStack(spacing: 8) {
+            HStack(alignment: .top, spacing: 8) {
                 // Leading Icon
-                if isPinned {
-                    Image(systemName: "pin.fill")
-                        .font(.system(size: 10))
-                        .foregroundColor(isSelected ? .white : primaryAccent)
-                } else if note.pdfPath != nil {
-                    Image(systemName: "doc.richtext.fill")
-                        .font(.system(size: 11))
-                        .foregroundColor(isSelected ? .white : primaryAccent)
-                } else if note.audioPath != nil {
-                    Image(systemName: "waveform")
-                        .font(.system(size: 11))
-                        .foregroundColor(isSelected ? .white : primaryAccent)
-                } else {
-                    Image(systemName: "doc.text")
-                        .font(.system(size: 11))
-                        .foregroundColor(isSelected ? .white.opacity(0.9) : (isDark ? .secondary : Color(red: 100/255, green: 116/255, blue: 139/255)))
-                }
-                
-                // Note Metadata
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(note.title.isEmpty ? "Untitled Note" : note.title)
-                        .font(.system(size: 12.5, weight: isSelected ? .bold : .medium))
-                        .foregroundColor(isSelected ? .white : (isDark ? .white : Color(red: 15/255, green: 23/255, blue: 42/255)))
-                        .lineLimit(1)
-                    
-                    HStack(spacing: 4) {
-                        if note.pdfPath != nil {
-                            Text("PDF")
-                                .font(.system(size: 8, weight: .bold))
-                                .padding(.horizontal, 4)
-                                .padding(.vertical, 1)
-                                .background(isSelected ? Color.white.opacity(0.25) : primaryAccent.opacity(0.18))
-                                .foregroundColor(isSelected ? .white : primaryAccent)
-                                .cornerRadius(3)
-                        }
-                        
-                        if isPinned {
-                            Text(note.folder)
-                                .font(.system(size: 9, weight: .medium))
-                                .foregroundColor(isSelected ? Color.white.opacity(0.85) : secondaryAccent)
-                            Text("•")
-                                .font(.system(size: 8))
-                                .foregroundColor(isSelected ? Color.white.opacity(0.7) : .secondary)
-                        }
-                        
-                        Text(note.timestamp, style: .date)
-                            .font(.system(size: 9.5, weight: .regular))
-                            .foregroundColor(isSelected ? Color.white.opacity(0.85) : (isDark ? .secondary : Color(red: 100/255, green: 116/255, blue: 139/255)))
+                Group {
+                    if isPinned {
+                        Image(systemName: "pin.fill")
+                            .font(.system(size: 10))
+                            .foregroundColor(isSelected ? .white : primaryAccent)
+                    } else if note.pdfPath != nil {
+                        Image(systemName: "doc.richtext.fill")
+                            .font(.system(size: 11))
+                            .foregroundColor(isSelected ? .white : SemanticColor.pdfBadge)
+                    } else if note.audioPath != nil {
+                        Image(systemName: "waveform")
+                            .font(.system(size: 11))
+                            .foregroundColor(isSelected ? .white : SemanticColor.audioBadge)
+                    } else {
+                        Image(systemName: "doc.text")
+                            .font(.system(size: 11))
+                            .foregroundColor(isSelected ? .white.opacity(0.9) : (isDark ? .secondary : Color(red: 100/255, green: 116/255, blue: 139/255)))
                     }
                 }
+                .frame(width: 14)
+                .padding(.top, 2)
                 
-                Spacer()
+                // Note Metadata & Excerpt
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 4) {
+                        Text(note.title.isEmpty ? "Untitled Note" : note.title)
+                            .font(.system(size: 12.5, weight: isSelected ? .bold : .semibold))
+                            .foregroundColor(isSelected ? .white : (isDark ? .white : Color(red: 15/255, green: 23/255, blue: 42/255)))
+                            .lineLimit(1)
+                        
+                        Spacer()
+                        
+                        Text(note.timestamp, style: .date)
+                            .font(.system(size: 9, weight: .regular))
+                            .foregroundColor(isSelected ? Color.white.opacity(0.8) : .secondary)
+                    }
+                    
+                    // 1-Line Clean Markdown Excerpt
+                    Text(excerptText)
+                        .font(.system(size: 10.5, weight: .regular))
+                        .foregroundColor(isSelected ? Color.white.opacity(0.85) : (isDark ? Color.gray.opacity(0.85) : Color(red: 100/255, green: 116/255, blue: 139/255)))
+                        .lineLimit(1)
+                    
+                    // Badges (PDF, Folder)
+                    if note.pdfPath != nil || isPinned {
+                        HStack(spacing: 4) {
+                            if note.pdfPath != nil {
+                                Text("PDF")
+                                    .font(.system(size: 8, weight: .bold))
+                                    .padding(.horizontal, 4)
+                                    .padding(.vertical, 1)
+                                    .background(isSelected ? Color.white.opacity(0.25) : SemanticColor.pdfSurface)
+                                    .foregroundColor(isSelected ? .white : SemanticColor.pdfBadge)
+                                    .cornerRadius(3)
+                            }
+                            
+                            if isPinned {
+                                Text(note.folder)
+                                    .font(.system(size: 8.5, weight: .medium))
+                                    .foregroundColor(isSelected ? Color.white.opacity(0.85) : secondaryAccent)
+                            }
+                        }
+                        .padding(.top, 1)
+                    }
+                }
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 6)

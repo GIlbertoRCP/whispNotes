@@ -95,22 +95,6 @@ struct SettingsModalView: View {
                 }
                 
                 Spacer()
-                
-                // Bottom Cancel Button
-                Button(action: { isOpen = false }) {
-                    Text("Cancel")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .background(Color.cardBackground(isDarkMode))
-                        .cornerRadius(8)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color.subtleBorder(isDarkMode), lineWidth: 1)
-                        )
-                }
-                .buttonStyle(.plain)
             }
             .padding(20)
             .frame(width: 220)
@@ -165,15 +149,14 @@ struct SettingsModalView: View {
                     .padding(20)
                 }
                 
-                Spacer()
-                
                 Divider()
                     .background(Color.subtleBorder(isDarkMode))
                 
-                // Bottom Action Footer
+                // Bottom Action Row
                 HStack {
                     Spacer()
-                    Button("Cancel") {
+                    
+                    Button("Close") {
                         isOpen = false
                     }
                     .buttonStyle(.plain)
@@ -181,18 +164,18 @@ struct SettingsModalView: View {
                     .padding(.horizontal, 12)
                     
                     Button(action: { isOpen = false }) {
-                        Text("Save Configuration")
+                        Text("Done")
                             .font(.subheadline)
                             .fontWeight(.bold)
                             .foregroundColor(.white)
                             .padding(.horizontal, 18)
-                            .padding(.vertical, 10)
+                            .padding(.vertical, 8)
                             .background(primaryAccent)
-                            .cornerRadius(10)
+                            .cornerRadius(8)
                     }
                     .buttonStyle(.plain)
                 }
-                .padding(16)
+                .padding(14)
             }
             .background(Color.panelBackground(isDarkMode))
         }
@@ -202,6 +185,7 @@ struct SettingsModalView: View {
             RoundedRectangle(cornerRadius: 16)
                 .stroke(Color.subtleBorder(isDarkMode), lineWidth: 1)
         )
+        .preferredColorScheme(isDarkMode ? .dark : .light)
         .sheet(isPresented: $showVimHelpSheet) {
             VimHelpModalView(
                 isPresented: $showVimHelpSheet,
@@ -960,19 +944,24 @@ struct ThemeSwatchButton: View {
                     )
                     .padding(5)
                     
-                    // Checkmark badge if selected
+                    // High-contrast checkmark badge if selected
                     if isSelected {
                         VStack {
                             HStack {
                                 Spacer()
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 13, weight: .bold))
-                                    .foregroundColor(definition.primary)
-                                    .background(Circle().fill(Color.black.opacity(0.65)))
+                                ZStack {
+                                    Circle()
+                                        .fill(SemanticColor.success)
+                                        .frame(width: 16, height: 16)
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 9, weight: .black))
+                                        .foregroundColor(.white)
+                                }
+                                .shadow(color: Color.black.opacity(0.4), radius: 3, x: 0, y: 1)
                             }
                             Spacer()
                         }
-                        .padding(3)
+                        .padding(2)
                     }
                 }
                 .frame(height: 48)

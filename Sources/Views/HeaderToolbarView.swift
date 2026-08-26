@@ -127,9 +127,9 @@ struct HeaderToolbarView: View {
                     .background(Color.red.opacity(0.25))
             }
 
-            HStack(spacing: 10) {
-                // Left Section: Navigation & Document Controls
-                HStack(spacing: 6) {
+            HStack(spacing: 8) {
+                // Group 1: Navigation Controls
+                HStack(spacing: 4) {
                     ToolbarIconButton(icon: "sidebar.left", helpText: "Toggle Sidebar", isActive: isSidebarOpen, activeColor: primaryAccent) {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             isSidebarOpen.toggle()
@@ -173,13 +173,22 @@ struct HeaderToolbarView: View {
                     .padding(2)
                     .background(Color.primary.opacity(0.04))
                     .cornerRadius(6)
+                }
 
-                    if let noteBinding = selectedNote {
+                // Vertical Cluster Divider
+                Rectangle()
+                    .fill(Color.subtleBorder(isDark))
+                    .frame(width: 1, height: 16)
+                    .padding(.horizontal, 2)
+
+                // Group 2: Document Identity & Metadata
+                if let noteBinding = selectedNote {
+                    HStack(spacing: 6) {
                         // Title Editor
                         TextField("Untitled Note", text: noteBinding.title)
                             .font(.system(size: 13, weight: .semibold))
                             .textFieldStyle(.plain)
-                            .frame(minWidth: 120, maxWidth: 220)
+                            .frame(minWidth: 120, maxWidth: 200)
                         
                         // Pin / Unpin Note Button
                         Button(action: {
@@ -209,7 +218,7 @@ struct HeaderToolbarView: View {
                                     .foregroundColor(.secondary)
                             } else {
                                 Circle()
-                                    .fill(Color.emerald.opacity(0.8))
+                                    .fill(SemanticColor.success.opacity(0.9))
                                     .frame(width: 5, height: 5)
                                 Text("Saved")
                                     .font(.system(size: 10, weight: .medium))
@@ -261,7 +270,7 @@ struct HeaderToolbarView: View {
                 
                 Spacer()
 
-                // Center Section: Mode Picker Segmented Control
+                // Group 3: View Mode Picker Segmented Control
                 if let noteBinding = selectedNote {
                     let availableModes: [EditModeType] = noteBinding.wrappedValue.pdfPath != nil ? EditModeType.allCases : [.edit, .split, .preview]
                     HStack(spacing: 1) {
@@ -285,12 +294,12 @@ struct HeaderToolbarView: View {
 
                 Spacer()
                 
-                // Right Section: Tools & Action Buttons
-                HStack(spacing: 5) {
-                    if let noteBinding = selectedNote {
+                // Group 4: Document Primary Actions
+                if let noteBinding = selectedNote {
+                    HStack(spacing: 6) {
                         // Live Waveform Visualizer
                         if recorderVM.isRecording {
-                            WaveformVisualizerView(level: recorderVM.audioLevel, primaryColor: primaryAccent)
+                            WaveformVisualizerView(level: recorderVM.audioLevel, primaryColor: SemanticColor.record)
                         }
 
                         // Attach PDF / Document Action Button
@@ -298,7 +307,7 @@ struct HeaderToolbarView: View {
                             icon: noteBinding.wrappedValue.pdfPath != nil ? "doc.richtext.fill" : "paperclip",
                             helpText: noteBinding.wrappedValue.pdfPath != nil ? "View Attached PDF Document" : "Attach PDF Document...",
                             isActive: noteBinding.wrappedValue.pdfPath != nil,
-                            activeColor: primaryAccent
+                            activeColor: SemanticColor.pdfBadge
                         ) {
                             if noteBinding.wrappedValue.pdfPath != nil {
                                 editMode = (editMode == .pdf ? .split : .pdf)
@@ -307,48 +316,56 @@ struct HeaderToolbarView: View {
                             }
                         }
 
-                        // Audio Record Pill Button
+                        // Audio Record Button (Destructive / Dedicated Recording Red)
                         if noteBinding.wrappedValue.isStandalone {
                             Button(action: toggleRecording) {
                                 HStack(spacing: 5) {
                                     Circle()
-                                        .fill(recorderVM.isRecording ? Color.red : primaryAccent)
+                                        .fill(SemanticColor.record)
                                         .frame(width: 6, height: 6)
                                     Text(recorderVM.isRecording ? "Stop" : "Record")
                                         .font(.system(size: 11, weight: .semibold))
-                                        .foregroundColor(recorderVM.isRecording ? .red : .primary)
+                                        .foregroundColor(recorderVM.isRecording ? SemanticColor.record : .primary)
                                 }
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
-                                .background(recorderVM.isRecording ? Color.red.opacity(0.15) : Color.primary.opacity(0.05))
+                                .background(recorderVM.isRecording ? SemanticColor.record.opacity(0.15) : Color.primary.opacity(0.05))
                                 .cornerRadius(AppRadius.sm)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: AppRadius.sm)
+                                        .stroke(recorderVM.isRecording ? SemanticColor.record.opacity(0.5) : Color.clear, lineWidth: 1)
+                                )
                             }
                             .buttonStyle(.plain)
-                            .help(recorderVM.isRecording ? "Stop Recording" : "Record Audio Note")
+                            .help(recorderVM.isRecording ? "Stop Recording Lecture Audio" : "Record Audio Note (⌘R)")
                         }
 
-                        // AI Assistant Popover Button
+                        // AI Assistant Popover Button (Dedicated Purple/Violet)
                         Button(action: { showAIAssistantPopover.toggle() }) {
                             HStack(spacing: 4) {
                                 Image(systemName: "sparkles")
-                                    .font(.system(size: 10, weight: .medium))
-                                    .foregroundColor(primaryAccent)
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundColor(SemanticColor.aiAccent)
                                 Text("AI Assistant")
                                     .font(.system(size: 11, weight: .semibold))
-                                    .foregroundColor(primaryAccent)
+                                    .foregroundColor(SemanticColor.aiAccent)
                             }
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
-                            .background(primaryAccent.opacity(0.1))
+                            .background(SemanticColor.aiAccentSurface)
                             .cornerRadius(AppRadius.sm)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: AppRadius.sm)
+                                    .stroke(SemanticColor.aiAccent.opacity(0.25), lineWidth: 1)
+                            )
                         }
                         .buttonStyle(.plain)
-                        .help("Open Gemma Local AI Assistant")
+                        .help("Open Gemma Local AI Assistant (Summarize, Q&A, Flashcards)")
                         .popover(isPresented: $showAIAssistantPopover) {
                             AIStudyAssistantView(
                                 note: noteBinding.wrappedValue,
                                 isDark: isDark,
-                                primaryAccent: primaryAccent,
+                                primaryAccent: SemanticColor.aiAccent,
                                 secondaryAccent: secondaryAccent,
                                 onInsertSummary: { summaryBlock in
                                     noteBinding.wrappedValue.content += summaryBlock
@@ -357,48 +374,62 @@ struct HeaderToolbarView: View {
                                 }
                             )
                         }
-
-                    // Knowledge Graph Canvas Toggle
-                    ToolbarIconButton(icon: "circle.hexagonpath", helpText: "Knowledge Graph Canvas (⌘G)", isActive: isGraphViewOpen, activeColor: secondaryAccent) {
-                        isGraphViewOpen = true
                     }
 
-                    // Zen Focus Mode Toggle
-                    ToolbarIconButton(icon: isFocusMode ? "viewfinder.circle.fill" : "viewfinder", helpText: "Zen Focus Mode (⌘Shift+F)", isActive: isFocusMode, activeColor: primaryAccent) {
-                        isFocusMode.toggle()
-                    }
+                    // Vertical Cluster Divider
+                    Rectangle()
+                        .fill(Color.subtleBorder(isDark))
+                        .frame(width: 1, height: 16)
+                        .padding(.horizontal, 2)
 
-                    // Move to Trash Button
-                    ToolbarIconButton(icon: "trash", helpText: "Move Note to Trash", isActive: false) {
-                        showDeleteAlert = true
-                    }
-                    .alert("Move Note to Trash?", isPresented: $showDeleteAlert) {
-                        Button("Move to Trash", role: .destructive) {
-                            noteBinding.wrappedValue.folder = "Trash"
-                            selectedNoteId = notes.first(where: { $0.folder != "Trash" })?.id
-                            NotesDataManager.shared.saveNotes(notes)
+                    // Group 5: Tools & Window Utilities
+                    HStack(spacing: 4) {
+                        // Knowledge Graph Canvas Toggle
+                        ToolbarIconButton(icon: "circle.hexagonpath", helpText: "Knowledge Graph Canvas (⌘G)", isActive: isGraphViewOpen, activeColor: secondaryAccent) {
+                            isGraphViewOpen = true
                         }
-                        Button("Cancel", role: .cancel) {}
-                    } message: {
-                        Text("Are you sure you want to move '\(noteBinding.wrappedValue.title)' to Trash?")
-                    }
 
-                    // Toggle Transcript Right Panel Button
-                    if !noteBinding.wrappedValue.isStandalone {
-                        ToolbarIconButton(icon: "sidebar.right", helpText: "Toggle Transcript View", isActive: isRightPanelOpen, activeColor: primaryAccent) {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                isRightPanelOpen.toggle()
+                        // Zen Focus Mode Toggle
+                        ToolbarIconButton(icon: isFocusMode ? "viewfinder.circle.fill" : "viewfinder", helpText: "Zen Focus Mode (⌘Shift+F)", isActive: isFocusMode, activeColor: primaryAccent) {
+                            isFocusMode.toggle()
+                        }
+
+                        // Move to Trash Button
+                        ToolbarIconButton(icon: "trash", helpText: "Move Note to Trash", isActive: false) {
+                            showDeleteAlert = true
+                        }
+                        .alert("Move Note to Trash?", isPresented: $showDeleteAlert) {
+                            Button("Move to Trash", role: .destructive) {
+                                noteBinding.wrappedValue.folder = "Trash"
+                                selectedNoteId = notes.first(where: { $0.folder != "Trash" })?.id
+                                NotesDataManager.shared.saveNotes(notes)
+                            }
+                            Button("Cancel", role: .cancel) {}
+                        } message: {
+                            Text("Are you sure you want to move '\(noteBinding.wrappedValue.title)' to Trash?")
+                        }
+
+                        // Toggle Transcript Right Panel Button
+                        if !noteBinding.wrappedValue.isStandalone {
+                            ToolbarIconButton(icon: "sidebar.right", helpText: "Toggle Transcript View", isActive: isRightPanelOpen, activeColor: primaryAccent) {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    isRightPanelOpen.toggle()
+                                }
                             }
                         }
+
+                        // Settings Toggle Button
+                        ToolbarIconButton(icon: "gearshape", helpText: "Preferences & Settings (⌘,)", isActive: isSettingsOpen, activeColor: primaryAccent) {
+                            isSettingsOpen = true
+                        }
+                    }
+                } else {
+                    // When no note is selected, still provide settings button
+                    ToolbarIconButton(icon: "gearshape", helpText: "Preferences & Settings (⌘,)", isActive: isSettingsOpen, activeColor: primaryAccent) {
+                        isSettingsOpen = true
                     }
                 }
-
-                // Settings Toggle Button
-                ToolbarIconButton(icon: "gearshape", helpText: "Preferences & Settings (⌘,)", isActive: isSettingsOpen, activeColor: primaryAccent) {
-                    isSettingsOpen = true
-                }
             }
-        }
             .padding(.horizontal, 14)
             .frame(height: 48)
             .background(Color.panelBackground(isDark))

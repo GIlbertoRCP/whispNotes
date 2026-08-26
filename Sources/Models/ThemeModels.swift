@@ -320,3 +320,29 @@ extension Color {
         isDark ? Color.white : Color(red: 15/255, green: 23/255, blue: 42/255)
     }
 }
+
+// MARK: - Semantic Purpose Colors
+public struct SemanticColor {
+    // 1. Destructive & Recording (strictly red/crimson)
+    public static let record = Color(red: 239/255, green: 68/255, blue: 68/255) // Red 500 (#EF4444)
+    public static let recordPulse = Color(red: 248/255, green: 113/255, blue: 113/255) // Red 400
+    public static let destructive = Color(red: 220/255, green: 38/255, blue: 38/255) // Red 600 (#DC2626)
+    
+    // 2. AI Intelligence (distinct Violet/Purple)
+    public static let aiAccent = Color(red: 139/255, green: 92/255, blue: 246/255) // Purple 500 (#8B5CF6)
+    public static let aiAccentGlow = Color(red: 168/255, green: 85/255, blue: 247/255) // Purple 400 (#A855F7)
+    public static let aiAccentSurface = Color(red: 139/255, green: 92/255, blue: 246/255).opacity(0.12)
+    
+    // 3. File-Type Badges & Content Categorization
+    public static let pdfBadge = Color(red: 245/255, green: 158/255, blue: 11/255) // Amber 500
+    public static let pdfSurface = Color(red: 245/255, green: 158/255, blue: 11/255).opacity(0.15)
+    public static let audioBadge = Color(red: 59/255, green: 130/255, blue: 246/255) // Blue 500
+    public static let audioSurface = Color(red: 59/255, green: 130/255, blue: 246/255).opacity(0.15)
+    public static let markdownBadge = Color(red: 100/255, green: 116/255, blue: 139/255) // Slate 500
+    public static let markdownSurface = Color(red: 100/255, green: 116/255, blue: 139/255).opacity(0.12)
+    
+    // 4. Statuses
+    public static let success = Color(red: 16/255, green: 185/255, blue: 129/255) // Emerald 500
+    public static let warning = Color(red: 245/255, green: 158/255, blue: 11/255) // Amber 500
+    public static let info = Color(red: 56/255, green: 189/255, blue: 248/255) // Sky 400
+}
