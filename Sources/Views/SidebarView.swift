@@ -422,14 +422,14 @@ struct SidebarView: View {
                                     .foregroundColor(secondaryAccent)
                                 Text(folder)
                                     .font(.system(size: 12, weight: .semibold))
-                                    .foregroundColor(isDark ? .white : Color(red: 30/255, green: 41/255, blue: 59/255))
+                                    .foregroundColor(isDark ? .white : Color(red: 15/255, green: 23/255, blue: 42/255))
                                 
                                 Spacer()
                                 
                                 let noteCount = (groupedNotes[folder] ?? []).count
                                 Text("\(noteCount)")
-                                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                                    .foregroundColor(.secondary)
+                                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                    .foregroundColor(isDark ? Color(red: 148/255, green: 163/255, blue: 184/255) : Color(red: 100/255, green: 116/255, blue: 139/255))
                             }
                             .padding(.horizontal, 6)
                             .padding(.vertical, 3)
@@ -503,13 +503,13 @@ struct SidebarView: View {
                             HStack(spacing: 6) {
                                 Image(systemName: "trash")
                                     .font(.system(size: 11, weight: .medium))
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(isDark ? Color(red: 148/255, green: 163/255, blue: 184/255) : .secondary)
                                 Text("Trash")
                                     .font(.system(size: 12, weight: .semibold))
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(isDark ? Color(red: 226/255, green: 232/255, blue: 240/255) : Color(red: 30/255, green: 41/255, blue: 59/255))
                                 Text("(\(trashNotes.count))")
-                                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                                    .foregroundColor(.secondary)
+                                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                    .foregroundColor(isDark ? Color(red: 148/255, green: 163/255, blue: 184/255) : Color(red: 100/255, green: 116/255, blue: 139/255))
                                 
                                 Spacer()
                                 
@@ -808,7 +808,28 @@ struct SidebarNoteRowView: View {
     var isPinned: Bool = false
     let onSelect: () -> Void
     
+    @AppStorage("colorTheme") private var colorTheme = "Classic Minimal"
     @State private var isHovered: Bool = false
+    
+    private var isLightAccent: Bool {
+        isDark && (colorTheme == "Classic Minimal" || colorTheme == "Nord Arctic" || colorTheme == "Rose Pine")
+    }
+    
+    private var selectedTitleColor: Color {
+        isLightAccent ? Color(red: 15/255, green: 23/255, blue: 42/255) : .white
+    }
+    
+    private var selectedSecondaryColor: Color {
+        isLightAccent ? Color(red: 71/255, green: 85/255, blue: 105/255) : Color.white.opacity(0.85)
+    }
+    
+    private var selectedExcerptColor: Color {
+        isLightAccent ? Color(red: 51/255, green: 65/255, blue: 85/255) : Color.white.opacity(0.9)
+    }
+    
+    private var selectedIconColor: Color {
+        isLightAccent ? Color(red: 15/255, green: 23/255, blue: 42/255) : .white
+    }
     
     private var excerptText: String {
         let clean = note.content
@@ -831,19 +852,19 @@ struct SidebarNoteRowView: View {
                     if isPinned {
                         Image(systemName: "pin.fill")
                             .font(.system(size: 10))
-                            .foregroundColor(isSelected ? .white : primaryAccent)
+                            .foregroundColor(isSelected ? selectedIconColor : primaryAccent)
                     } else if note.pdfPath != nil {
                         Image(systemName: "doc.richtext.fill")
                             .font(.system(size: 11))
-                            .foregroundColor(isSelected ? .white : SemanticColor.pdfBadge)
+                            .foregroundColor(isSelected ? selectedIconColor : SemanticColor.pdfBadge)
                     } else if note.audioPath != nil {
                         Image(systemName: "waveform")
                             .font(.system(size: 11))
-                            .foregroundColor(isSelected ? .white : SemanticColor.audioBadge)
+                            .foregroundColor(isSelected ? selectedIconColor : SemanticColor.audioBadge)
                     } else {
                         Image(systemName: "doc.text")
                             .font(.system(size: 11))
-                            .foregroundColor(isSelected ? .white.opacity(0.9) : (isDark ? .secondary : Color(red: 100/255, green: 116/255, blue: 139/255)))
+                            .foregroundColor(isSelected ? selectedIconColor : (isDark ? Color(red: 148/255, green: 163/255, blue: 184/255) : Color(red: 100/255, green: 116/255, blue: 139/255)))
                     }
                 }
                 .frame(width: 14)
@@ -854,20 +875,20 @@ struct SidebarNoteRowView: View {
                     HStack(spacing: 4) {
                         Text(note.title.isEmpty ? "Untitled Note" : note.title)
                             .font(.system(size: 12.5, weight: isSelected ? .bold : .semibold))
-                            .foregroundColor(isSelected ? .white : (isDark ? .white : Color(red: 15/255, green: 23/255, blue: 42/255)))
+                            .foregroundColor(isSelected ? selectedTitleColor : (isDark ? .white : Color(red: 15/255, green: 23/255, blue: 42/255)))
                             .lineLimit(1)
                         
                         Spacer()
                         
                         Text(note.timestamp, style: .date)
                             .font(.system(size: 9, weight: .regular))
-                            .foregroundColor(isSelected ? Color.white.opacity(0.8) : .secondary)
+                            .foregroundColor(isSelected ? selectedSecondaryColor : (isDark ? Color(red: 148/255, green: 163/255, blue: 184/255) : Color(red: 100/255, green: 116/255, blue: 139/255)))
                     }
                     
                     // 1-Line Clean Markdown Excerpt
                     Text(excerptText)
                         .font(.system(size: 10.5, weight: .regular))
-                        .foregroundColor(isSelected ? Color.white.opacity(0.85) : (isDark ? Color.gray.opacity(0.85) : Color(red: 100/255, green: 116/255, blue: 139/255)))
+                        .foregroundColor(isSelected ? selectedExcerptColor : (isDark ? Color(red: 203/255, green: 213/255, blue: 225/255) : Color(red: 71/255, green: 85/255, blue: 105/255)))
                         .lineLimit(1)
                     
                     // Badges (PDF, Folder)
@@ -878,15 +899,15 @@ struct SidebarNoteRowView: View {
                                     .font(.system(size: 8, weight: .bold))
                                     .padding(.horizontal, 4)
                                     .padding(.vertical, 1)
-                                    .background(isSelected ? Color.white.opacity(0.25) : SemanticColor.pdfSurface)
-                                    .foregroundColor(isSelected ? .white : SemanticColor.pdfBadge)
+                                    .background(isSelected ? (isLightAccent ? Color.black.opacity(0.12) : Color.white.opacity(0.25)) : SemanticColor.pdfSurface)
+                                    .foregroundColor(isSelected ? (isLightAccent ? Color(red: 15/255, green: 23/255, blue: 42/255) : .white) : SemanticColor.pdfBadge)
                                     .cornerRadius(3)
                             }
                             
                             if isPinned {
                                 Text(note.folder)
                                     .font(.system(size: 8.5, weight: .medium))
-                                    .foregroundColor(isSelected ? Color.white.opacity(0.85) : secondaryAccent)
+                                    .foregroundColor(isSelected ? selectedSecondaryColor : secondaryAccent)
                             }
                         }
                         .padding(.top, 1)
@@ -918,24 +939,41 @@ struct SidebarTrashNoteRowView: View {
     let primaryAccent: Color
     let onSelect: () -> Void
     
+    @AppStorage("colorTheme") private var colorTheme = "Classic Minimal"
     @State private var isHovered: Bool = false
+    
+    private var isLightAccent: Bool {
+        isDark && (colorTheme == "Classic Minimal" || colorTheme == "Nord Arctic" || colorTheme == "Rose Pine")
+    }
+    
+    private var selectedTitleColor: Color {
+        isLightAccent ? Color(red: 15/255, green: 23/255, blue: 42/255) : .white
+    }
+    
+    private var selectedSecondaryColor: Color {
+        isLightAccent ? Color(red: 71/255, green: 85/255, blue: 105/255) : Color.white.opacity(0.85)
+    }
+    
+    private var selectedIconColor: Color {
+        isLightAccent ? Color(red: 15/255, green: 23/255, blue: 42/255) : .white
+    }
     
     var body: some View {
         Button(action: onSelect) {
             HStack(spacing: 8) {
                 Image(systemName: "trash")
                     .font(.caption)
-                    .foregroundColor(isSelected ? .white : .secondary)
+                    .foregroundColor(isSelected ? selectedIconColor : (isDark ? Color(red: 148/255, green: 163/255, blue: 184/255) : .secondary))
                 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(note.title.isEmpty ? "Untitled Note" : note.title)
                         .font(.system(size: 12.5, weight: isSelected ? .bold : .medium))
-                        .foregroundColor(isSelected ? .white : (isDark ? .secondary : Color(red: 71/255, green: 85/255, blue: 105/255)))
+                        .foregroundColor(isSelected ? selectedTitleColor : (isDark ? Color(red: 226/255, green: 232/255, blue: 240/255) : Color(red: 71/255, green: 85/255, blue: 105/255)))
                         .lineLimit(1)
                     
                     Text("From: \(note.originalFolder ?? "General")")
                         .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(isSelected ? Color.white.opacity(0.85) : .secondary)
+                        .foregroundColor(isSelected ? selectedSecondaryColor : (isDark ? Color(red: 148/255, green: 163/255, blue: 184/255) : .secondary))
                 }
                 
                 Spacer()
