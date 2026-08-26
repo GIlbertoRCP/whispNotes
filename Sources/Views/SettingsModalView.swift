@@ -51,6 +51,22 @@ struct SettingsModalView: View {
         ThemeColors.primary(colorTheme)
     }
     
+    private var onPrimaryAccentTextColor: Color {
+        if isDarkMode && (colorTheme == "Classic Minimal" || colorTheme == "Nord Arctic" || colorTheme == "Rose Pine") {
+            return Color(red: 15/255, green: 23/255, blue: 42/255) // Deep Slate / Black for high contrast on light buttons
+        } else {
+            return Color.white
+        }
+    }
+    
+    private var subtitleTextColor: Color {
+        isDarkMode ? Color(red: 203/255, green: 213/255, blue: 225/255) : Color(red: 71/255, green: 85/255, blue: 105/255)
+    }
+    
+    private var sectionHeaderTextColor: Color {
+        isDarkMode ? Color(red: 148/255, green: 163/255, blue: 184/255) : Color(red: 100/255, green: 116/255, blue: 139/255)
+    }
+    
     let fontDesigns = ["Monospaced", "Sans-Serif", "Serif"]
     let speakerTemplates = ["Speaker 1 / Speaker 2", "Professor / Student", "Interviewer / Candidate", "Presenter / Audience"]
     let languages = ["Auto-Detect Language", "English", "Spanish", "French", "German", "Italian", "Portuguese", "Japanese", "Chinese", "Korean"]
@@ -86,8 +102,8 @@ struct SettingsModalView: View {
                             }
                             .padding(.horizontal, 12)
                             .padding(.vertical, 10)
-                            .background(selectedTab == tab ? primaryAccent.opacity(0.15) : Color.clear)
-                            .foregroundColor(selectedTab == tab ? primaryAccent : .secondary)
+                            .background(selectedTab == tab ? (isDarkMode ? Color.white.opacity(0.14) : primaryAccent.opacity(0.12)) : Color.clear)
+                            .foregroundColor(selectedTab == tab ? (isDarkMode ? .white : primaryAccent) : (isDarkMode ? Color(red: 160/255, green: 174/255, blue: 192/255) : Color(red: 100/255, green: 116/255, blue: 139/255)))
                             .cornerRadius(8)
                         }
                         .buttonStyle(.plain)
@@ -113,7 +129,7 @@ struct SettingsModalView: View {
                             .fontWeight(.bold)
                         Text(headerSubtitle)
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(subtitleTextColor)
                     }
                     Spacer()
                     Button(action: { isOpen = false }) {
@@ -160,14 +176,14 @@ struct SettingsModalView: View {
                         isOpen = false
                     }
                     .buttonStyle(.plain)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(subtitleTextColor)
                     .padding(.horizontal, 12)
                     
                     Button(action: { isOpen = false }) {
                         Text("Done")
                             .font(.subheadline)
                             .fontWeight(.bold)
-                            .foregroundColor(.white)
+                            .foregroundColor(onPrimaryAccentTextColor)
                             .padding(.horizontal, 18)
                             .padding(.vertical, 8)
                             .background(primaryAccent)
@@ -236,7 +252,7 @@ struct SettingsModalView: View {
                         .fontWeight(.semibold)
                     Text("Toggle between Light theme and high-contrast Dark theme.")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(subtitleTextColor)
                 }
                 
                 Spacer()
@@ -252,15 +268,13 @@ struct SettingsModalView: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Text("COLOR THEME PALETTE")
-                        .font(.caption2)
-                        .fontWeight(.bold)
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundColor(sectionHeaderTextColor)
                     
                     Spacer()
                     
                     Text(colorTheme)
-                        .font(.caption2)
-                        .fontWeight(.bold)
+                        .font(.system(size: 11, weight: .bold))
                         .foregroundColor(primaryAccent)
                 }
                 
@@ -286,9 +300,8 @@ struct SettingsModalView: View {
             // Card 3: Speaker Naming Template
             VStack(alignment: .leading, spacing: 10) {
                 Text("DEFAULT SPEAKER NAMING TEMPLATE")
-                    .font(.caption2)
-                    .fontWeight(.bold)
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundColor(sectionHeaderTextColor)
                 
                 Picker("", selection: $defaultSpeakerTemplate) {
                     ForEach(speakerTemplates, id: \.self) { tpl in
@@ -315,7 +328,7 @@ struct SettingsModalView: View {
                             .fontWeight(.semibold)
                         Text("Navigate and edit notes using Vim Normal, Insert, Visual modes, and : command-line shortcuts.")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(subtitleTextColor)
                     }
                     
                     Spacer()
@@ -331,7 +344,7 @@ struct SettingsModalView: View {
                     HStack {
                         Text("Includes :w (save), :q (close tab), :wq (save & close), :tabn, :set nu, and modal motions (h/j/k/l, w, b, dd, yy, p).")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(subtitleTextColor)
                         
                         Spacer()
                         
@@ -345,8 +358,8 @@ struct SettingsModalView: View {
                             }
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
-                            .background(primaryAccent.opacity(0.15))
-                            .foregroundColor(primaryAccent)
+                            .background(isDarkMode ? Color.white.opacity(0.14) : primaryAccent.opacity(0.12))
+                            .foregroundColor(isDarkMode ? .white : primaryAccent)
                             .cornerRadius(6)
                         }
                         .buttonStyle(.plain)
@@ -363,9 +376,8 @@ struct SettingsModalView: View {
         VStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 12) {
                 Text("FONT SIZE (\(Int(editorFontSize)) pt)")
-                    .font(.caption2)
-                    .fontWeight(.bold)
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundColor(sectionHeaderTextColor)
                 
                 Slider(value: $editorFontSize, in: 12...24, step: 1.0)
                     .accentColor(primaryAccent)
@@ -376,9 +388,8 @@ struct SettingsModalView: View {
             
             VStack(alignment: .leading, spacing: 12) {
                 Text("FONT FAMILY DESIGN")
-                    .font(.caption2)
-                    .fontWeight(.bold)
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundColor(sectionHeaderTextColor)
                 
                 Picker("", selection: $editorFontDesign) {
                     ForEach(fontDesigns, id: \.self) { design in
@@ -397,12 +408,11 @@ struct SettingsModalView: View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("OFFLINE WHISPER GGUF MODELS")
-                    .font(.caption2)
-                    .fontWeight(.bold)
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundColor(sectionHeaderTextColor)
                 Text("Download Whisper models from HuggingFace to run 100% offline local transcription.")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(subtitleTextColor)
             }
             
             ForEach(downloader.availableModels) { model in
@@ -438,8 +448,8 @@ struct SettingsModalView: View {
                             }
                             
                             Text("\(model.sizeMB) MB • \(model.description)")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
+                                .font(.caption)
+                                .foregroundColor(subtitleTextColor)
                         }
                         
                         Spacer()
@@ -461,8 +471,8 @@ struct SettingsModalView: View {
                                 .fontWeight(.bold)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 5)
-                                .background(ThemeColors.secondary(colorTheme))
-                                .foregroundColor(.white)
+                                .background(isDarkMode ? Color.white.opacity(0.16) : Color.black.opacity(0.08))
+                                .foregroundColor(isDarkMode ? .white : Color(red: 15/255, green: 23/255, blue: 42/255))
                                 .cornerRadius(6)
                             }
                         } else {
@@ -476,7 +486,7 @@ struct SettingsModalView: View {
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 5)
                                 .background(primaryAccent)
-                                .foregroundColor(.white)
+                                .foregroundColor(onPrimaryAccentTextColor)
                                 .cornerRadius(6)
                             }
                             .buttonStyle(.plain)
@@ -489,7 +499,7 @@ struct SettingsModalView: View {
                                 .accentColor(primaryAccent)
                             Text("Downloading from HuggingFace... \(Int(downloader.downloadProgress * 100))%")
                                 .font(.system(size: 9, design: .monospaced))
-                                .foregroundColor(.secondary)
+                                .foregroundColor(subtitleTextColor)
                         }
                     }
                 }
@@ -528,8 +538,8 @@ struct SettingsModalView: View {
                         }
                         
                         Text("\(gemmaDownloader.defaultModel.sizeMB) MB • \(gemmaDownloader.defaultModel.description)")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
+                            .font(.caption)
+                            .foregroundColor(subtitleTextColor)
                     }
                     
                     Spacer()
@@ -559,7 +569,7 @@ struct SettingsModalView: View {
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
                             .background(primaryAccent)
-                            .foregroundColor(.white)
+                            .foregroundColor(onPrimaryAccentTextColor)
                             .cornerRadius(6)
                         }
                         .buttonStyle(.plain)
@@ -572,7 +582,7 @@ struct SettingsModalView: View {
                             .accentColor(primaryAccent)
                         Text(gemmaDownloader.statusMessage)
                             .font(.system(size: 9, design: .monospaced))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(subtitleTextColor)
                     }
                 }
             }
@@ -590,12 +600,11 @@ struct SettingsModalView: View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("LOCAL VAULT STORAGE")
-                    .font(.caption2)
-                    .fontWeight(.bold)
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundColor(sectionHeaderTextColor)
                 Text("Stored safely on disk in ~/Library/Application Support/com.whispnotes.app/notes.json.")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(subtitleTextColor)
             }
             .padding(16)
             .background(Color.cardBackground(isDarkMode))
@@ -611,8 +620,8 @@ struct SettingsModalView: View {
                     .fontWeight(.bold)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
-                    .background(ThemeColors.secondary(colorTheme))
-                    .foregroundColor(.white)
+                    .background(primaryAccent)
+                    .foregroundColor(onPrimaryAccentTextColor)
                     .cornerRadius(8)
                 }
                 .buttonStyle(.plain)
@@ -626,12 +635,12 @@ struct SettingsModalView: View {
                     .fontWeight(.bold)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
-                    .background(Color.cardBackground(isDarkMode))
-                    .foregroundColor(primaryAccent)
+                    .background(isDarkMode ? Color.white.opacity(0.12) : Color.black.opacity(0.06))
+                    .foregroundColor(isDarkMode ? .white : Color(red: 15/255, green: 23/255, blue: 42/255))
                     .cornerRadius(8)
                     .overlay(
                         RoundedRectangle(cornerRadius: 8)
-                            .stroke(primaryAccent.opacity(0.5), lineWidth: 1)
+                            .stroke(Color.subtleBorder(isDarkMode), lineWidth: 1)
                     )
                 }
                 .buttonStyle(.plain)
@@ -649,9 +658,8 @@ struct SettingsModalView: View {
                         .font(.title2)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("MICROPHONE INPUT DEVICE")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .foregroundColor(.secondary)
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .foregroundColor(sectionHeaderTextColor)
                         
                         Picker("", selection: $selectedInputMicrophone) {
                             ForEach(deviceManager.inputDevices, id: \.self) { mic in
@@ -675,9 +683,8 @@ struct SettingsModalView: View {
                         .font(.title2)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("AUDIO OUTPUT SPEAKER")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .foregroundColor(.secondary)
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .foregroundColor(sectionHeaderTextColor)
                         
                         Picker("", selection: $selectedOutputSpeaker) {
                             ForEach(deviceManager.outputDevices, id: \.self) { speaker in
@@ -751,14 +758,14 @@ struct SettingsModalView: View {
                             .fontWeight(.bold)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(primaryAccent.opacity(0.15))
-                            .foregroundColor(primaryAccent)
+                            .background(isDarkMode ? Color.white.opacity(0.16) : primaryAccent.opacity(0.12))
+                            .foregroundColor(isDarkMode ? .white : primaryAccent)
                             .cornerRadius(4)
                     }
                     
                     Text("Native Intelligent Lecture & Document Notes with Local AI & Vault Sync.")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(subtitleTextColor)
                 }
                 
                 Spacer()
@@ -780,7 +787,7 @@ struct SettingsModalView: View {
                             .fontWeight(.bold)
                         Text("Silently check for new versions on GitHub releases when WhispNotes launches.")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(subtitleTextColor)
                     }
                     
                     Spacer()
@@ -799,7 +806,7 @@ struct SettingsModalView: View {
                             .fontWeight(.bold)
                         Text("Public Stable Releases (GitHub: GIlbertoRCP/whispNotes)")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(subtitleTextColor)
                     }
                     
                     Spacer()
@@ -818,7 +825,7 @@ struct SettingsModalView: View {
                         }
                         .font(.caption)
                         .fontWeight(.bold)
-                        .foregroundColor(.white)
+                        .foregroundColor(onPrimaryAccentTextColor)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 8)
                         .background(primaryAccent)
@@ -832,10 +839,10 @@ struct SettingsModalView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "clock")
                             .font(.caption2)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(subtitleTextColor)
                         Text("Last checked: \(lastCheck.formatted(date: .abbreviated, time: .standard))")
                             .font(.caption2)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(subtitleTextColor)
                     }
                     .padding(.top, 2)
                 }
