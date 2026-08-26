@@ -397,7 +397,16 @@ struct SidebarView: View {
                                             Label("Duplicate Note", systemImage: "doc.on.doc")
                                         }
                                         
-                                        if note.pdfPath != nil {
+                                        if note.pptxPath != nil {
+                                            Button(action: {
+                                                if let idx = notes.firstIndex(where: { $0.id == note.id }) {
+                                                    notes[idx].pptxPath = nil
+                                                    NotesDataManager.shared.saveNotes(notes)
+                                                }
+                                            }) {
+                                                Label("Detach Presentation", systemImage: "sparkles.tv")
+                                            }
+                                        } else if note.pdfPath != nil {
                                             Button(action: {
                                                 if let idx = notes.firstIndex(where: { $0.id == note.id }) {
                                                     notes[idx].pdfPath = nil
@@ -407,8 +416,8 @@ struct SidebarView: View {
                                                 Label("Detach PDF Document", systemImage: "doc.badge.ellipsis")
                                             }
                                         } else {
-                                            Button(action: { attachPDFToNote(note) }) {
-                                                Label("Attach PDF Document...", systemImage: "paperclip")
+                                            Button(action: { attachDocumentToNote(note) }) {
+                                                Label("Attach PDF or Presentation...", systemImage: "paperclip")
                                             }
                                         }
                                         
@@ -767,24 +776,33 @@ struct SidebarView: View {
     private func importNewPDFNote() {
         let panel = NSOpenPanel()
         panel.title = "Import PDF Document as New Note"
-        panel.allowedContentTypes = [UTType.pdf]
+        var contentTypes: [UTType] = [.pdf]
+        if let pptxType = UTType(filenameExtension: "pptx") {
+            contentTypes.append(pptxType)
+        }
+        if let pptxTypeOrg = UTType("org.openxmlformats.presentationml.presentation") {
+            contentTypes.append(pptxTypeOrg)
+        }
+        panel.allowedContentTypes = contentTypes
         panel.allowsMultipleSelection = false
         panel.begin { response in
             if response == .OK, let url = panel.url {
                 let noteId = UUID()
                 let title = (url.lastPathComponent as NSString).deletingPathExtension
+                let ext = url.pathExtension.lowercased()
                 if let (relPath, _) = NotesDataManager.shared.importAttachment(from: url, for: noteId) {
                     let newNote = NoteItem(
                         id: noteId,
                         title: title,
                         folder: "General",
-                        content: "# \(title)\n\nAttached Document: `\(url.lastPathComponent)`",
+                        content: "# \(title)\n\nAttached \(ext == "pptx" ? "Presentation" : "Document"): `\(url.lastPathComponent)`",
                         timestamp: Date(),
                         audioPath: nil,
                         transcript: [],
                         isStandalone: true,
                         bookmarks: [],
-                        pdfPath: relPath
+                        pdfPath: ext == "pdf" ? relPath : nil,
+                        pptxPath: ext == "pptx" ? relPath : nil
                     )
                     notes.insert(newNote, at: 0)
                     selectedNoteId = newNote.id
@@ -794,16 +812,28 @@ struct SidebarView: View {
         }
     }
 
-    private func attachPDFToNote(_ note: NoteItem) {
+    private func attachDocumentToNote(_ note: NoteItem) {
         let panel = NSOpenPanel()
-        panel.title = "Attach PDF to Note"
-        panel.allowedContentTypes = [UTType.pdf]
+        panel.title = "Attach PDF or Presentation to Note"
+        var contentTypes: [UTType] = [.pdf]
+        if let pptxType = UTType(filenameExtension: "pptx") {
+            contentTypes.append(pptxType)
+        }
+        if let pptxTypeOrg = UTType("org.openxmlformats.presentationml.presentation") {
+            contentTypes.append(pptxTypeOrg)
+        }
+        panel.allowedContentTypes = contentTypes
         panel.allowsMultipleSelection = false
         panel.begin { response in
             if response == .OK, let url = panel.url {
+                let ext = url.pathExtension.lowercased()
                 if let (relPath, _) = NotesDataManager.shared.importAttachment(from: url, for: note.id) {
                     if let idx = notes.firstIndex(where: { $0.id == note.id }) {
-                        notes[idx].pdfPath = relPath
+                        if ext == "pptx" {
+                            notes[idx].pptxPath = relPath
+                        } else {
+                            notes[idx].pdfPath = relPath
+                        }
                         NotesDataManager.shared.saveNotes(notes)
                     }
                 }
@@ -867,6 +897,10 @@ struct SidebarNoteRowView: View {
                         Image(systemName: "pin.fill")
                             .font(.system(size: 10))
                             .foregroundColor(isSelected ? selectedIconColor : primaryAccent)
+                    } else if note.pptxPath != nil {
+                        Image(systemName: "sparkles.tv")
+                            .font(.system(size: 11))
+                            .foregroundColor(isSelected ? selectedIconColor : primaryAccent)
                     } else if note.pdfPath != nil {
                         Image(systemName: "doc.richtext.fill")
                             .font(.system(size: 11))
@@ -905,10 +939,18 @@ struct SidebarNoteRowView: View {
                         .foregroundColor(isSelected ? selectedExcerptColor : (isDark ? Color(red: 203/255, green: 213/255, blue: 225/255) : Color(red: 71/255, green: 85/255, blue: 105/255)))
                         .lineLimit(1)
                     
-                    // Badges (PDF, Folder)
-                    if note.pdfPath != nil || isPinned {
+                    // Badges (PDF, Slides, Folder)
+                    if note.pdfPath != nil || note.pptxPath != nil || isPinned {
                         HStack(spacing: 4) {
-                            if note.pdfPath != nil {
+                            if note.pptxPath != nil {
+                                Text("SLIDES")
+                                    .font(.system(size: 8, weight: .bold))
+                                    .padding(.horizontal, 4)
+                                    .padding(.vertical, 1)
+                                    .background(isSelected ? (isLightAccent ? Color.black.opacity(0.12) : Color.white.opacity(0.25)) : primaryAccent.opacity(0.15))
+                                    .foregroundColor(isSelected ? (isLightAccent ? Color(red: 15/255, green: 23/255, blue: 42/255) : .white) : primaryAccent)
+                                    .cornerRadius(3)
+                            } else if note.pdfPath != nil {
                                 Text("PDF")
                                     .font(.system(size: 8, weight: .bold))
                                     .padding(.horizontal, 4)

@@ -8,6 +8,7 @@ public enum SearchMatchType: String {
     case body = "Content"
     case transcript = "Audio Transcript"
     case tag = "Tag"
+    case slides = "Slide Deck"
     
     public var iconName: String {
         switch self {
@@ -15,6 +16,7 @@ public enum SearchMatchType: String {
         case .body: return "doc.text"
         case .transcript: return "waveform"
         case .tag: return "tag"
+        case .slides: return "sparkles.tv"
         }
     }
 }
@@ -38,6 +40,7 @@ public enum SearchFilterType: String, CaseIterable, Identifiable {
     case all = "All"
     case notes = "Notes"
     case pdfs = "PDFs"
+    case presentations = "Slides"
     case audio = "Audio"
     
     public var id: String { rawValue }
@@ -47,6 +50,7 @@ public enum SearchFilterType: String, CaseIterable, Identifiable {
         case .all: return "square.grid.2x2"
         case .notes: return "doc.text"
         case .pdfs: return "doc.richtext"
+        case .presentations: return "sparkles.tv"
         case .audio: return "waveform"
         }
     }
@@ -83,8 +87,9 @@ public class VaultSearchEngine: ObservableObject {
             
             // Filter by type
             if filterType == .pdfs && note.pdfPath == nil { continue }
+            if filterType == .presentations && note.pptxPath == nil { continue }
             if filterType == .audio && note.audioPath == nil { continue }
-            if filterType == .notes && (note.pdfPath != nil || note.audioPath != nil) { continue }
+            if filterType == .notes && (note.pdfPath != nil || note.pptxPath != nil || note.audioPath != nil) { continue }
             
             // Filter by selected folder
             if let folder = selectedFolder, note.folder != folder { continue }
@@ -131,6 +136,25 @@ public class VaultSearchEngine: ObservableObject {
                         matchType: .transcript,
                         highlightRange: m.range
                     ))
+                }
+            }
+
+            // 4. Search Attached Presentation Slides (if available)
+            if let pptxPath = note.pptxPath, let pptxURL = NotesDataManager.shared.resolveAttachmentURL(pptxPath),
+               let presentation = PPTXEngine.shared.parsePresentation(url: pptxURL) {
+                for slide in presentation.slides {
+                    let slideText = slide.fullText
+                    let slideRange = NSRange(slideText.startIndex..., in: slideText)
+                    let slideMatches = regex.matches(in: slideText, range: slideRange)
+                    if !slideMatches.isEmpty {
+                        let previewText = slide.bulletPoints.first ?? slide.title
+                        matches.append(SearchMatchItem(
+                            lineNumber: slide.id,
+                            lineContent: "Slide \(slide.id) [\(slide.title)]: \(previewText)",
+                            matchType: .slides,
+                            highlightRange: slideMatches[0].range
+                        ))
+                    }
                 }
             }
             

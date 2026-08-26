@@ -350,9 +350,11 @@ struct ContentView: View {
                 tabManager.openNote(id)
             }
             if let note = notes.first(where: { $0.id == id }) {
-                if note.pdfPath != nil {
+                if note.pptxPath != nil {
+                    if editMode != .pptx { editMode = .pptx }
+                } else if note.pdfPath != nil {
                     if editMode != .pdf { editMode = .pdf }
-                } else if editMode == .pdf {
+                } else if editMode == .pdf || editMode == .pptx {
                     editMode = .edit
                 }
             }
@@ -361,8 +363,12 @@ struct ContentView: View {
             NotesDataManager.shared.undoManager = undoManager
             if let id = selectedNoteId ?? notes.first?.id {
                 tabManager.openNote(id)
-                if let note = notes.first(where: { $0.id == id }), note.pdfPath != nil {
-                    editMode = .pdf
+                if let note = notes.first(where: { $0.id == id }) {
+                    if note.pptxPath != nil {
+                        editMode = .pptx
+                    } else if note.pdfPath != nil {
+                        editMode = .pdf
+                    }
                 }
             }
             NSApplication.shared.setActivationPolicy(.regular)

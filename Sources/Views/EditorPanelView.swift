@@ -74,6 +74,10 @@ struct EditorPanelView: View {
         NotesDataManager.shared.resolveAttachmentURL(note.pdfPath)
     }
 
+    var resolvedPPTXURL: URL? {
+        NotesDataManager.shared.resolveAttachmentURL(note.pptxPath)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Streamlined Markdown Formatting & Document Stats Bar (Hidden in Zen Focus Mode)
@@ -151,6 +155,23 @@ struct EditorPanelView: View {
                         .padding(.vertical, 3)
                         .background(primaryAccent.opacity(0.12))
                         .cornerRadius(4)
+                    } else if let pptxURL = resolvedPPTXURL, editMode == .edit {
+                        HStack(spacing: 4) {
+                            Image(systemName: "sparkles.tv")
+                                .font(.system(size: 10))
+                                .foregroundColor(primaryAccent)
+                            Text(pptxURL.lastPathComponent)
+                                .font(.system(size: 10, weight: .medium))
+                                .lineLimit(1)
+                            Button("View Slides") { editMode = .pptx }
+                                .font(.system(size: 9, weight: .bold))
+                                .buttonStyle(.plain)
+                                .foregroundColor(primaryAccent)
+                        }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(primaryAccent.opacity(0.12))
+                        .cornerRadius(4)
                     }
 
                     // Interactive Document Live Word & Character Stats Inspector
@@ -182,7 +203,7 @@ struct EditorPanelView: View {
                     .background(Color.subtleBorder(isDark))
             }
             
-            // Editor Body View (Single Edit, Split View, Full Preview, or Native PDF Viewer)
+            // Editor Body View (Single Edit, Split View, Full Preview, Native PDF Viewer, or Native PPTX Slide Viewer)
             if editMode == .pdf, let pdfURL = resolvedPDFURL {
                 PDFDocumentViewerView(
                     pdfURL: pdfURL,
@@ -193,6 +214,23 @@ struct EditorPanelView: View {
                     secondaryAccent: secondaryAccent,
                     onDetachPDF: {
                         note.pdfPath = nil
+                        editMode = .edit
+                        NotesDataManager.shared.saveNotes(notes)
+                    },
+                    onQuoteSelection: { _ in
+                        localContent = note.content
+                    }
+                )
+            } else if editMode == .pptx, let pptxURL = resolvedPPTXURL {
+                PPTXDocumentViewerView(
+                    pptxURL: pptxURL,
+                    note: $note,
+                    notes: $notes,
+                    isDark: isDark,
+                    primaryAccent: primaryAccent,
+                    secondaryAccent: secondaryAccent,
+                    onDetachPPTX: {
+                        note.pptxPath = nil
                         editMode = .edit
                         NotesDataManager.shared.saveNotes(notes)
                     },
@@ -730,6 +768,12 @@ struct EditorPanelView: View {
                     if let (relPath, _) = NotesDataManager.shared.importAttachment(from: url, for: note.id) {
                         note.pdfPath = relPath
                         editMode = .pdf
+                        NotesDataManager.shared.saveNotes(notes)
+                    }
+                } else if ext == "pptx" {
+                    if let (relPath, _) = NotesDataManager.shared.importAttachment(from: url, for: note.id) {
+                        note.pptxPath = relPath
+                        editMode = .pptx
                         NotesDataManager.shared.saveNotes(notes)
                     }
                 } else if ["mp3", "wav", "m4a", "aac", "ogg"].contains(ext) {

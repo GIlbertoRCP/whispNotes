@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 // MARK: - Main SwiftUI Application Entry
 public struct WhispNotesSwiftApp: App {
@@ -79,13 +80,13 @@ public struct WhispNotesSwiftApp: App {
                 }
                 .keyboardShortcut("m", modifiers: [.command, .shift])
 
-                Button("Import PDF Document as Note...") {
-                    importPDFAsNewNote()
+                Button("Import PDF or Presentation (.pptx) as Note...") {
+                    importDocumentAsNewNote()
                 }
                 .keyboardShortcut("o", modifiers: [.command, .shift])
 
-                Button("Attach PDF to Current Note...") {
-                    attachPDFToActiveNote()
+                Button("Attach PDF or Presentation to Current Note...") {
+                    attachDocumentToActiveNote()
                 }
 
                 Button("Import Lecture Audio File...") {
@@ -332,27 +333,36 @@ public struct WhispNotesSwiftApp: App {
         }
     }
 
-    private func importPDFAsNewNote() {
+    private func importDocumentAsNewNote() {
         let panel = NSOpenPanel()
-        panel.title = "Import PDF Document as New Note"
-        panel.allowedContentTypes = [.pdf]
+        panel.title = "Import PDF or Presentation (.pptx) as New Note"
+        var contentTypes: [UTType] = [.pdf]
+        if let pptxType = UTType(filenameExtension: "pptx") {
+            contentTypes.append(pptxType)
+        }
+        if let pptxTypeOrg = UTType("org.openxmlformats.presentationml.presentation") {
+            contentTypes.append(pptxTypeOrg)
+        }
+        panel.allowedContentTypes = contentTypes
         panel.allowsMultipleSelection = false
         panel.begin { response in
             if response == .OK, let url = panel.url {
                 let noteId = UUID()
                 let title = (url.lastPathComponent as NSString).deletingPathExtension
+                let ext = url.pathExtension.lowercased()
                 if let (relPath, _) = NotesDataManager.shared.importAttachment(from: url, for: noteId) {
                     let newNote = NoteItem(
                         id: noteId,
                         title: title,
                         folder: "General",
-                        content: "# \(title)\n\nAttached Document: `\(url.lastPathComponent)`",
+                        content: "# \(title)\n\nAttached \(ext == "pptx" ? "Presentation" : "Document"): `\(url.lastPathComponent)`",
                         timestamp: Date(),
                         audioPath: nil,
                         transcript: [],
                         isStandalone: true,
                         bookmarks: [],
-                        pdfPath: relPath
+                        pdfPath: ext == "pdf" ? relPath : nil,
+                        pptxPath: ext == "pptx" ? relPath : nil
                     )
                     notes.insert(newNote, at: 0)
                     selectedNoteId = newNote.id
@@ -362,16 +372,28 @@ public struct WhispNotesSwiftApp: App {
         }
     }
 
-    private func attachPDFToActiveNote() {
+    private func attachDocumentToActiveNote() {
         guard let id = selectedNoteId, let idx = notes.firstIndex(where: { $0.id == id }) else { return }
         let panel = NSOpenPanel()
-        panel.title = "Attach PDF Document to Note"
-        panel.allowedContentTypes = [.pdf]
+        panel.title = "Attach PDF or Presentation (.pptx) to Note"
+        var contentTypes: [UTType] = [.pdf]
+        if let pptxType = UTType(filenameExtension: "pptx") {
+            contentTypes.append(pptxType)
+        }
+        if let pptxTypeOrg = UTType("org.openxmlformats.presentationml.presentation") {
+            contentTypes.append(pptxTypeOrg)
+        }
+        panel.allowedContentTypes = contentTypes
         panel.allowsMultipleSelection = false
         panel.begin { response in
             if response == .OK, let url = panel.url {
+                let ext = url.pathExtension.lowercased()
                 if let (relPath, _) = NotesDataManager.shared.importAttachment(from: url, for: notes[idx].id) {
-                    notes[idx].pdfPath = relPath
+                    if ext == "pptx" {
+                        notes[idx].pptxPath = relPath
+                    } else {
+                        notes[idx].pdfPath = relPath
+                    }
                     NotesDataManager.shared.saveNotes(notes)
                 }
             }

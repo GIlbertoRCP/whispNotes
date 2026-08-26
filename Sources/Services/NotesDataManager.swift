@@ -295,6 +295,17 @@ class NotesDataManager: ObservableObject {
                     }
                 }
             }
+
+            // Secure PPTX Path
+            if let pptx = notes[i].pptxPath, !pptx.isEmpty {
+                let pptxURL = URL(fileURLWithPath: pptx)
+                if !pptx.contains(attachmentsDir.path) && fileManager.fileExists(atPath: pptxURL.path) {
+                    if let (rel, _) = importAttachment(from: pptxURL, for: notes[i].id) {
+                        notes[i].pptxPath = rel
+                        modified = true
+                    }
+                }
+            }
         }
         return modified
     }
@@ -321,6 +332,21 @@ class NotesDataManager: ObservableObject {
         
         let clean = fullText.trimmingCharacters(in: .whitespacesAndNewlines)
         return clean.isEmpty ? nil : clean
+    }
+
+    /// Extracts plain text from a PPTX presentation safely with maxSlides limit.
+    func extractTextFromPPTX(url: URL, maxSlides: Int = 15) -> String? {
+        return PPTXEngine.shared.extractText(url: url, maxSlides: maxSlides)
+    }
+
+    /// Unified document text extractor supporting both PDF and PPTX attachments.
+    func extractTextFromAttachedDocument(for note: NoteItem, maxUnits: Int = 15) -> String? {
+        if let pptxPath = note.pptxPath, let url = resolveAttachmentURL(pptxPath) {
+            return extractTextFromPPTX(url: url, maxSlides: maxUnits)
+        } else if let pdfPath = note.pdfPath, let url = resolveAttachmentURL(pdfPath) {
+            return extractTextFromPDF(url: url, maxPages: maxUnits)
+        }
+        return nil
     }
 
     /// Asynchronously extracts text from large PDF documents without blocking the main UI thread.
@@ -357,6 +383,21 @@ class NotesDataManager: ObservableObject {
                 continuation.resume(returning: clean.isEmpty ? nil : clean)
             }
         }
+    }
+
+    /// Asynchronously extracts text from large PPTX presentations without blocking the main UI thread.
+    func extractFullTextFromPPTXAsync(url: URL, maxSlides: Int = 50) async -> String? {
+        return await PPTXEngine.shared.extractFullTextAsync(url: url, maxSlides: maxSlides)
+    }
+
+    /// Asynchronously extracts full text from any attached document (PDF or PPTX).
+    func extractFullTextFromAttachedDocumentAsync(for note: NoteItem, maxUnits: Int = 50) async -> String? {
+        if let pptxPath = note.pptxPath, let url = resolveAttachmentURL(pptxPath) {
+            return await extractFullTextFromPPTXAsync(url: url, maxSlides: maxUnits)
+        } else if let pdfPath = note.pdfPath, let url = resolveAttachmentURL(pdfPath) {
+            return await extractFullTextFromPDFAsync(url: url, maxPages: maxUnits)
+        }
+        return nil
     }
 
     // MARK: - Full Vault Export

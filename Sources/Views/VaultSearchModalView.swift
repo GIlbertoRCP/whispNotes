@@ -281,7 +281,7 @@ struct NoteSearchResultCard: View {
                         .font(.caption2)
                         .foregroundColor(.secondary)
                     
-                    Image(systemName: result.note.pdfPath != nil ? "doc.richtext" : (result.note.audioPath != nil ? "waveform" : "doc.text"))
+                    Image(systemName: result.note.pptxPath != nil ? "sparkles.tv" : (result.note.pdfPath != nil ? "doc.richtext" : (result.note.audioPath != nil ? "waveform" : "doc.text")))
                         .font(.caption)
                         .foregroundColor(primaryAccent)
                     

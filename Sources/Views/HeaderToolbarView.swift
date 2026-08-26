@@ -272,7 +272,14 @@ struct HeaderToolbarView: View {
 
                 // Group 3: View Mode Picker Segmented Control
                 if let noteBinding = selectedNote {
-                    let availableModes: [EditModeType] = noteBinding.wrappedValue.pdfPath != nil ? EditModeType.allCases : [.edit, .split, .preview]
+                    let availableModes: [EditModeType] = {
+                        if noteBinding.wrappedValue.pptxPath != nil {
+                            return [.edit, .split, .preview, .pptx]
+                        } else if noteBinding.wrappedValue.pdfPath != nil {
+                            return [.edit, .split, .preview, .pdf]
+                        }
+                        return [.edit, .split, .preview]
+                    }()
                     HStack(spacing: 1) {
                         ForEach(availableModes, id: \.self) { mode in
                             Button(action: { editMode = mode }) {
@@ -302,17 +309,31 @@ struct HeaderToolbarView: View {
                             WaveformVisualizerView(level: recorderVM.audioLevel, primaryColor: SemanticColor.record)
                         }
 
-                        // Attach PDF / Document Action Button
+                        // Attach PDF / PPTX Document Action Button
+                        let docIcon: String = {
+                            if noteBinding.wrappedValue.pptxPath != nil { return "sparkles.tv" }
+                            if noteBinding.wrappedValue.pdfPath != nil { return "doc.richtext.fill" }
+                            return "paperclip"
+                        }()
+                        let docHelp: String = {
+                            if noteBinding.wrappedValue.pptxPath != nil { return "View Attached Presentation Slides" }
+                            if noteBinding.wrappedValue.pdfPath != nil { return "View Attached PDF Document" }
+                            return "Attach PDF or Presentation (PPTX)..."
+                        }()
+                        let isDocActive = noteBinding.wrappedValue.hasAttachedDocument
+
                         ToolbarIconButton(
-                            icon: noteBinding.wrappedValue.pdfPath != nil ? "doc.richtext.fill" : "paperclip",
-                            helpText: noteBinding.wrappedValue.pdfPath != nil ? "View Attached PDF Document" : "Attach PDF Document...",
-                            isActive: noteBinding.wrappedValue.pdfPath != nil,
-                            activeColor: SemanticColor.pdfBadge
+                            icon: docIcon,
+                            helpText: docHelp,
+                            isActive: isDocActive,
+                            activeColor: noteBinding.wrappedValue.pptxPath != nil ? primaryAccent : SemanticColor.pdfBadge
                         ) {
-                            if noteBinding.wrappedValue.pdfPath != nil {
+                            if noteBinding.wrappedValue.pptxPath != nil {
+                                editMode = (editMode == .pptx ? .split : .pptx)
+                            } else if noteBinding.wrappedValue.pdfPath != nil {
                                 editMode = (editMode == .pdf ? .split : .pdf)
                             } else {
-                                attachPDFDocument()
+                                attachDocument()
                             }
                         }
 
@@ -473,17 +494,30 @@ struct HeaderToolbarView: View {
         }
     }
 
-    private func attachPDFDocument() {
+    private func attachDocument() {
         guard let noteBinding = selectedNote else { return }
         let panel = NSOpenPanel()
-        panel.title = "Attach PDF Document"
-        panel.allowedContentTypes = [UTType.pdf]
+        panel.title = "Attach PDF or Presentation (PPTX)"
+        var contentTypes: [UTType] = [.pdf]
+        if let pptxType = UTType(filenameExtension: "pptx") {
+            contentTypes.append(pptxType)
+        }
+        if let pptxTypeOrg = UTType("org.openxmlformats.presentationml.presentation") {
+            contentTypes.append(pptxTypeOrg)
+        }
+        panel.allowedContentTypes = contentTypes
         panel.allowsMultipleSelection = false
         panel.begin { response in
             if response == .OK, let url = panel.url {
+                let ext = url.pathExtension.lowercased()
                 if let (relPath, _) = NotesDataManager.shared.importAttachment(from: url, for: noteBinding.wrappedValue.id) {
-                    noteBinding.wrappedValue.pdfPath = relPath
-                    editMode = .pdf
+                    if ext == "pptx" {
+                        noteBinding.wrappedValue.pptxPath = relPath
+                        editMode = .pptx
+                    } else {
+                        noteBinding.wrappedValue.pdfPath = relPath
+                        editMode = .pdf
+                    }
                     NotesDataManager.shared.saveNotes(notes)
                 }
             }

@@ -31,6 +31,14 @@ struct AIStudyAssistantView: View {
         NotesDataManager.shared.resolveAttachmentURL(note.pdfPath)
     }
 
+    var resolvedPPTXURL: URL? {
+        NotesDataManager.shared.resolveAttachmentURL(note.pptxPath)
+    }
+
+    var hasAttachedDocument: Bool {
+        note.hasAttachedDocument
+    }
+
     var summaryTakeaways: [String] {
         if !cachedTakeaways.isEmpty { return cachedTakeaways }
         let lines = note.content.components(separatedBy: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
@@ -297,15 +305,21 @@ struct AIStudyAssistantView: View {
                 .background(Color.cardBackground(isDark))
                 .cornerRadius(10)
 
-                // Section 3: Interactive Prompt / Q&A Bar with PDF Awareness
+                // Section 3: Interactive Prompt / Q&A Bar with Document & Presentation Awareness
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("ASK GEMMA (PDF & NOTE AWARE)")
+                    let docLabel = note.pptxPath != nil ? "SLIDES & NOTE AWARE" : (note.pdfPath != nil ? "PDF & NOTE AWARE" : "NOTE AWARE")
+                    Text("ASK GEMMA (\(docLabel))")
                         .font(.caption2)
                         .fontWeight(.bold)
                         .foregroundColor(.secondary)
                     
                     HStack(spacing: 6) {
-                        TextField(resolvedPDFURL != nil ? "Ask question about PDF or note..." : "Ask anything about this note...", text: $customPrompt, onCommit: executePromptQuery)
+                        let placeholderText: String = {
+                            if note.pptxPath != nil { return "Ask question about slides or note..." }
+                            if note.pdfPath != nil { return "Ask question about PDF or note..." }
+                            return "Ask anything about this note..."
+                        }()
+                        TextField(placeholderText, text: $customPrompt, onCommit: executePromptQuery)
                             .textFieldStyle(.plain)
                             .font(.caption)
                             .padding(6)
@@ -333,7 +347,10 @@ struct AIStudyAssistantView: View {
 
                     // Preset Quick Prompt Chips
                     HStack(spacing: 4) {
-                        if resolvedPDFURL != nil {
+                        if note.pptxPath != nil {
+                            quickChip("Main ideas in slides")
+                            quickChip("Key slide takeaways")
+                        } else if note.pdfPath != nil {
                             quickChip("Main ideas in PDF")
                             quickChip("Key definitions")
                         } else {

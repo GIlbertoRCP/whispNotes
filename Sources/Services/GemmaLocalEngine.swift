@@ -29,6 +29,8 @@ class GemmaLocalEngine: ObservableObject {
         }
         if let pdfPath = note.pdfPath, let pdfURL = NotesDataManager.shared.resolveAttachmentURL(pdfPath), let pdfText = NotesDataManager.shared.extractTextFromPDF(url: pdfURL, maxPages: 5) {
             combinedText += "\n\nAttached Document Excerpts:\n" + pdfText.prefix(2000)
+        } else if let pptxPath = note.pptxPath, let pptxURL = NotesDataManager.shared.resolveAttachmentURL(pptxPath), let pptxText = NotesDataManager.shared.extractTextFromPPTX(url: pptxURL, maxSlides: 8) {
+            combinedText += "\n\nAttached Presentation Slide Excerpts:\n" + pptxText.prefix(2500)
         }
         combinedText = truncateToContextWindow(combinedText)
         
@@ -176,7 +178,7 @@ class GemmaLocalEngine: ObservableObject {
             }
         }
 
-        // Card 3 & 4: Concepts extracted directly from attached PDF Document
+        // Card 3 & 4: Concepts extracted directly from attached PDF or PPTX Document
         if let pdfPath = note.pdfPath, let pdfURL = NotesDataManager.shared.resolveAttachmentURL(pdfPath),
            let pdfText = NotesDataManager.shared.extractTextFromPDF(url: pdfURL, maxPages: 8) {
             let pdfLines = pdfText.components(separatedBy: "\n")
@@ -197,6 +199,18 @@ class GemmaLocalEngine: ObservableObject {
                     if cards.count >= 6 { break }
                 }
             }
+        } else if let pptxPath = note.pptxPath, let pptxURL = NotesDataManager.shared.resolveAttachmentURL(pptxPath),
+                  let presentation = PPTXEngine.shared.parsePresentation(url: pptxURL) {
+            for slide in presentation.slides.prefix(8) {
+                if !slide.bulletPoints.isEmpty {
+                    let firstBullet = slide.bulletPoints.first ?? ""
+                    cards.append(Flashcard(
+                        question: "What is the key takeaway on Slide \(slide.id): '\(slide.title)'?",
+                        answer: firstBullet
+                    ))
+                    if cards.count >= 6 { break }
+                }
+            }
         }
         
         // Card 5: Transcript Highlight (if available)
@@ -210,22 +224,33 @@ class GemmaLocalEngine: ObservableObject {
         return Array(cards.prefix(6))
     }
 
-    /// Generates structured executive key takeaways directly from an attached PDF document.
+    /// Generates structured executive key takeaways directly from an attached PDF or PPTX document.
     func generatePDFSummary(pdfURL: URL) async -> String {
+        return await generateDocumentSummary(url: pdfURL)
+    }
+
+    /// Generates structured executive key takeaways directly from an attached document (PDF or PPTX).
+    func generateDocumentSummary(url: URL) async -> String {
         isGenerating = true
         defer { isGenerating = false }
 
-        guard let pdfText = NotesDataManager.shared.extractTextFromPDF(url: pdfURL, maxPages: 15) else {
-            return "### 📑 PDF Summary: \(pdfURL.lastPathComponent)\n- Attached document ready in vault."
+        let isPPTX = url.pathExtension.lowercased() == "pptx"
+        let docText = isPPTX
+            ? NotesDataManager.shared.extractTextFromPPTX(url: url, maxSlides: 20)
+            : NotesDataManager.shared.extractTextFromPDF(url: url, maxPages: 15)
+
+        guard let text = docText else {
+            let icon = isPPTX ? "📊" : "📑"
+            return "### \(icon) Document Summary: \(url.lastPathComponent)\n- Attached document ready in vault."
         }
 
-        let sentences = extractSentences(from: pdfText)
-        let wordCounts = calculateWordFrequencies(in: pdfText)
+        let sentences = extractSentences(from: text)
+        let wordCounts = calculateWordFrequencies(in: text)
         
         var scoredSentences: [(sentence: String, score: Double)] = []
         for (index, sentence) in sentences.enumerated() {
             autoreleasepool {
-                if sentence.hasPrefix("--- Page") { return }
+                if sentence.hasPrefix("--- Page") || sentence.hasPrefix("--- Slide") { return }
                 var score = 0.0
                 score += max(0.0, 1.5 - (Double(index) * 0.05))
                 
@@ -242,15 +267,16 @@ class GemmaLocalEngine: ObservableObject {
         }
 
         let topTakeaways = scoredSentences.sorted(by: { $0.score > $1.score }).prefix(5).map { $0.sentence }
+        let headerIcon = isPPTX ? "📊 AI Presentation Summary" : "📑 AI PDF Summary"
         
-        var output = "### 📑 AI Summary: *\(pdfURL.lastPathComponent)*\n\n"
+        var output = "### \(headerIcon): *\(url.lastPathComponent)*\n\n"
         for t in topTakeaways {
             output += "- \(t)\n"
         }
         return output
     }
     
-    /// Custom Q&A performing semantic excerpt extraction across note, transcript, and attached PDF.
+    /// Custom Q&A performing semantic excerpt extraction across note, transcript, and attached PDF/PPTX.
     func askGemma(prompt: String, note: NoteItem) async -> String {
         isGenerating = true
         defer { isGenerating = false }
@@ -313,6 +339,25 @@ class GemmaLocalEngine: ObservableObject {
                                 matchingSnippets.append(cited)
                             }
                         }
+                    }
+                }
+            }
+        }
+
+        // 4. Search in attached PPTX presentation with exact slide citation
+        if let pptxPath = note.pptxPath, let pptxURL = NotesDataManager.shared.resolveAttachmentURL(pptxPath),
+           let presentation = PPTXEngine.shared.parsePresentation(url: pptxURL) {
+            for slide in presentation.slides {
+                let slideText = slide.fullText
+                let lower = slideText.lowercased()
+                for kw in keywords {
+                    if lower.contains(kw) {
+                        let snippet = slide.bulletPoints.first(where: { $0.lowercased().contains(kw) }) ?? slide.title
+                        let cited = "📊 Slide \(slide.id) (*\(slide.title)*): \"\(snippet)\""
+                        if !matchingSnippets.contains(cited) {
+                            matchingSnippets.append(cited)
+                        }
+                        break
                     }
                 }
             }

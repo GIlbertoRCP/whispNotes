@@ -114,7 +114,9 @@ struct TabItemView: View {
     @State private var isHovered = false
     
     var iconName: String {
-        if note.pdfPath != nil {
+        if note.pptxPath != nil {
+            return "sparkles.tv"
+        } else if note.pdfPath != nil {
             return "doc.richtext"
         } else if note.audioPath != nil {
             return "waveform"

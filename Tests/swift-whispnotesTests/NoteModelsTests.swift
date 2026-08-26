@@ -37,6 +37,28 @@ final class NoteModelsTests: XCTestCase {
         XCTAssertEqual(decodedNote.bookmarks.first?.label, "Flag 1")
     }
     
+    func testNoteItemPPTXEncodingDecoding() throws {
+        let noteWithPPTX = NoteItem(
+            title: "Physics Lecture 3",
+            folder: "Physics",
+            content: "Quantum Mechanics slides",
+            timestamp: Date(timeIntervalSince1970: 200000),
+            pptxPath: "physics_lec3.pptx"
+        )
+        
+        let encoder = JSONEncoder()
+        let data = try encoder.encode(noteWithPPTX)
+        
+        let decoder = JSONDecoder()
+        let decoded = try decoder.decode(NoteItem.self, from: data)
+        
+        XCTAssertEqual(decoded.title, "Physics Lecture 3")
+        XCTAssertEqual(decoded.pptxPath, "physics_lec3.pptx")
+        XCTAssertEqual(decoded.documentType, .pptx)
+        XCTAssertTrue(decoded.hasAttachedDocument)
+        XCTAssertEqual(decoded.attachedDocumentPath, "physics_lec3.pptx")
+    }
+    
     func testBackwardCompatibilityDecodingMissingBookmarks() throws {
         let json = """
         {
@@ -57,5 +79,8 @@ final class NoteModelsTests: XCTestCase {
         XCTAssertEqual(note.title, "Legacy Note")
         XCTAssertTrue(note.bookmarks.isEmpty)
         XCTAssertNil(note.audioPath)
+        XCTAssertNil(note.pdfPath)
+        XCTAssertNil(note.pptxPath)
+        XCTAssertEqual(note.documentType, .none)
     }
 }

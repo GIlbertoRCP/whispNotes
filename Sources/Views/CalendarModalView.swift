@@ -257,7 +257,7 @@ struct CalendarModalView: View {
                                     isOpen = false
                                 }) {
                                     HStack(alignment: .top, spacing: 10) {
-                                        Image(systemName: item.pdfPath != nil ? "doc.richtext.fill" : (item.audioPath != nil ? "waveform" : "doc.text"))
+                                        Image(systemName: item.pptxPath != nil ? "sparkles.tv" : (item.pdfPath != nil ? "doc.richtext.fill" : (item.audioPath != nil ? "waveform" : "doc.text")))
                                             .font(.system(size: 12))
                                             .foregroundColor(primaryAccent)
                                             .padding(.top, 2)
