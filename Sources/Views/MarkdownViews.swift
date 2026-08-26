@@ -832,7 +832,16 @@ struct MarkdownRendererView: View {
 
     @ViewBuilder
     private func renderLine(_ line: String) -> some View {
-        if line.hasPrefix("# ") {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        
+        // 1. Horizontal Rule (---, ***, ___)
+        if trimmed == "---" || trimmed == "***" || trimmed == "___" {
+            Divider()
+                .background(Color.subtleBorder(isDark))
+                .padding(.vertical, 6)
+        }
+        // 2. Headings
+        else if line.hasPrefix("# ") {
             Text(line.replacingOccurrences(of: "# ", with: ""))
                 .font(.title)
                 .fontWeight(.bold)
@@ -844,13 +853,24 @@ struct MarkdownRendererView: View {
             Text(line.replacingOccurrences(of: "### ", with: ""))
                 .font(.headline)
                 .fontWeight(.medium)
-        } else if line.hasPrefix("> ") {
+        } else if line.hasPrefix("#### ") {
+            Text(line.replacingOccurrences(of: "#### ", with: ""))
+                .font(.subheadline)
+                .fontWeight(.bold)
+        } else if line.hasPrefix("##### ") {
+            Text(line.replacingOccurrences(of: "##### ", with: ""))
+                .font(.caption)
+                .fontWeight(.bold)
+        }
+        // 3. Blockquotes (> ...)
+        else if line.hasPrefix("> ") || line == ">" {
+            let quoteContent = line.hasPrefix("> ") ? String(line.dropFirst(2)) : ""
             HStack(alignment: .top, spacing: 8) {
                 Rectangle()
                     .fill(primaryAccent)
                     .frame(width: 3)
                 FormattedTextLine(
-                    text: line.replacingOccurrences(of: "> ", with: ""),
+                    text: quoteContent,
                     notes: $notes,
                     selectedNoteId: $selectedNoteId,
                     playerVM: playerVM,
@@ -865,19 +885,29 @@ struct MarkdownRendererView: View {
             .padding(.horizontal, 10)
             .background(Color.cardBackground(true))
             .cornerRadius(6)
-        } else if line.hasPrefix("- [ ] ") || line.hasPrefix("- [x] ") {
-            let isChecked = line.hasPrefix("- [x] ")
-            let clean = line.replacingOccurrences(of: "- [ ] ", with: "").replacingOccurrences(of: "- [x] ", with: "")
+        }
+        // 4. Interactive Checklists (^([ \t]*)([-*+]) \[( |x|X)\] (.*)$)
+        else if let chkMatch = line.range(of: "^([ \\t]*)([-*+]) \\[( |x|X)\\] (.*)$", options: .regularExpression) {
+            let _ = chkMatch
+            let isChecked = line.range(of: "^[ \\t]*[-*+] \\[[xX]\\]", options: .regularExpression) != nil
+            let indentCount = line.prefix(while: { $0 == " " || $0 == "\t" }).count
+            let cleanText = line.replacingOccurrences(of: "^[ \\t]*[-*+] \\[[ xX]\\] ", with: "", options: .regularExpression)
+            
             HStack(alignment: .top, spacing: 8) {
+                if indentCount > 0 {
+                    Spacer().frame(width: CGFloat(indentCount) * 8)
+                }
+                
                 Button(action: { toggleCheckbox(targetLine: line) }) {
                     Image(systemName: isChecked ? "checkmark.square.fill" : "square")
-                        .font(.system(size: 14))
+                        .font(.system(size: 13, weight: .medium))
                         .foregroundColor(isChecked ? primaryAccent : .secondary)
                 }
                 .buttonStyle(.plain)
+                .padding(.top, 2)
                 
                 FormattedTextLine(
-                    text: clean,
+                    text: cleanText,
                     notes: $notes,
                     selectedNoteId: $selectedNoteId,
                     playerVM: playerVM,
@@ -885,13 +915,27 @@ struct MarkdownRendererView: View {
                     primaryAccent: primaryAccent,
                     secondaryAccent: secondaryAccent
                 )
-                .strikethrough(isChecked, color: .secondary)
+                .strikethrough(isChecked, color: .secondary.opacity(0.8))
+                .foregroundColor(isChecked ? .secondary : (isDark ? .white : Color(red: 15/255, green: 23/255, blue: 42/255)))
             }
-        } else if line.hasPrefix("- ") {
+        }
+        // 5. Bullet Lists (^([ \t]*)([-*+]) (.*)$)
+        else if let _ = line.range(of: "^([ \\t]*)([-*+]) (.*)$", options: .regularExpression) {
+            let indentCount = line.prefix(while: { $0 == " " || $0 == "\t" }).count
+            let cleanText = line.replacingOccurrences(of: "^[ \\t]*[-*+] ", with: "", options: .regularExpression)
+            
             HStack(alignment: .top, spacing: 6) {
+                if indentCount > 0 {
+                    Spacer().frame(width: CGFloat(indentCount) * 8)
+                }
+                
                 Text("•")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(primaryAccent.opacity(0.85))
+                    .padding(.top, -1)
+                
                 FormattedTextLine(
-                    text: line.replacingOccurrences(of: "- ", with: ""),
+                    text: cleanText,
                     notes: $notes,
                     selectedNoteId: $selectedNoteId,
                     playerVM: playerVM,
@@ -900,7 +944,36 @@ struct MarkdownRendererView: View {
                     secondaryAccent: secondaryAccent
                 )
             }
-        } else {
+        }
+        // 6. Numbered Lists (^([ \t]*)(\d+)\. (.*)$)
+        else if let _ = line.range(of: "^([ \\t]*)(\\d+)\\. (.*)$", options: .regularExpression) {
+            let indentCount = line.prefix(while: { $0 == " " || $0 == "\t" }).count
+            let numMatch = line.replacingOccurrences(of: "^[ \\t]*(\\d+)\\. .*", with: "$1", options: .regularExpression)
+            let cleanText = line.replacingOccurrences(of: "^[ \\t]*\\d+\\. ", with: "", options: .regularExpression)
+            
+            HStack(alignment: .top, spacing: 6) {
+                if indentCount > 0 {
+                    Spacer().frame(width: CGFloat(indentCount) * 8)
+                }
+                
+                Text("\(numMatch).")
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundColor(secondaryAccent)
+                    .padding(.top, 1)
+                
+                FormattedTextLine(
+                    text: cleanText,
+                    notes: $notes,
+                    selectedNoteId: $selectedNoteId,
+                    playerVM: playerVM,
+                    currentFolder: currentNoteFolder,
+                    primaryAccent: primaryAccent,
+                    secondaryAccent: secondaryAccent
+                )
+            }
+        }
+        // 7. Plain Paragraph Line
+        else {
             FormattedTextLine(
                 text: line,
                 notes: $notes,
@@ -916,7 +989,14 @@ struct MarkdownRendererView: View {
     private func toggleCheckbox(targetLine: String) {
         guard let id = selectedNoteId, let idx = notes.firstIndex(where: { $0.id == id }) else { return }
         let currentContent = notes[idx].content
-        let replacement = targetLine.hasPrefix("- [x] ") ? targetLine.replacingOccurrences(of: "- [x] ", with: "- [ ] ") : targetLine.replacingOccurrences(of: "- [ ] ", with: "- [x] ")
+        
+        var replacement = targetLine
+        if let rangeX = targetLine.range(of: "\\[[xX]\\]", options: .regularExpression) {
+            replacement = targetLine.replacingCharacters(in: rangeX, with: "[ ]")
+        } else if let rangeEmpty = targetLine.range(of: "\\[ \\]", options: .regularExpression) {
+            replacement = targetLine.replacingCharacters(in: rangeEmpty, with: "[x]")
+        }
+        
         if let range = currentContent.range(of: targetLine) {
             notes[idx].content.replaceSubrange(range, with: replacement)
             NotesDataManager.shared.saveNotes(notes)

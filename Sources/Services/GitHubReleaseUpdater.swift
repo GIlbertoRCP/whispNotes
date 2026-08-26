@@ -60,7 +60,7 @@ public class GitHubReleaseUpdater: NSObject, ObservableObject, URLSessionDownloa
         if let ver = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String, !ver.isEmpty {
             return ver
         }
-        return "1.4.0"
+        return "1.5.0"
     }
 
     override private init() {
@@ -155,8 +155,9 @@ public class GitHubReleaseUpdater: NSObject, ObservableObject, URLSessionDownloa
                     dmgSize: dmgSize
                 )
                 
+                self.latestRelease = release
+                
                 if Self.isVersion(tagName, newerThan: self.currentVersion) {
-                    self.latestRelease = release
                     self.status = .updateAvailable(release: release)
                     self.showUpdateModal = true
                 } else {

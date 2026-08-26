@@ -8,6 +8,7 @@ class WhisperModelDownloader: NSObject, ObservableObject, URLSessionDownloadDele
     @Published var downloadingModelId: String? = nil
     @Published var downloadProgress: Double = 0.0
     @Published var downloadedModelIds: Set<String> = []
+    @Published var statusMessage: String = "Ready"
     
     let availableModels: [WhisperModelInfo] = [
         WhisperModelInfo(
@@ -37,6 +38,7 @@ class WhisperModelDownloader: NSObject, ObservableObject, URLSessionDownloadDele
     ]
     
     private var downloadTask: URLSessionDownloadTask?
+    private var activeSession: URLSession?
     
     override init() {
         super.init()
@@ -59,21 +61,27 @@ class WhisperModelDownloader: NSObject, ObservableObject, URLSessionDownloadDele
         guard downloadingModelId == nil else { return }
         downloadingModelId = model.id
         downloadProgress = 0.0
+        statusMessage = "Starting download of \(model.name)..."
         
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 30.0
-        config.timeoutIntervalForResource = 600.0
+        config.timeoutIntervalForRequest = 60.0
+        config.timeoutIntervalForResource = 1800.0
         config.waitsForConnectivity = true
-        let session = URLSession(configuration: config, delegate: self, delegateQueue: nil)
-        downloadTask = session.downloadTask(with: model.downloadURL)
-        downloadTask?.resume()
+        
+        let session = URLSession(configuration: config, delegate: self, delegateQueue: OperationQueue.main)
+        self.activeSession = session
+        self.downloadTask = session.downloadTask(with: model.downloadURL)
+        self.downloadTask?.resume()
     }
     
     func cancelDownload() {
         downloadTask?.cancel()
         downloadTask = nil
+        activeSession?.invalidateAndCancel()
+        activeSession = nil
         downloadingModelId = nil
         downloadProgress = 0.0
+        statusMessage = "Download Cancelled"
     }
     
     nonisolated func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
@@ -82,9 +90,10 @@ class WhisperModelDownloader: NSObject, ObservableObject, URLSessionDownloadDele
         
         Task { @MainActor in
             guard statusCode == 200 else {
-                print("Whisper download failed: Server returned HTTP \(statusCode)")
+                self.statusMessage = "Download failed: Server returned HTTP \(statusCode)"
                 self.downloadingModelId = nil
                 self.downloadProgress = 0.0
+                self.activeSession = nil
                 return
             }
             
@@ -94,16 +103,22 @@ class WhisperModelDownloader: NSObject, ObservableObject, URLSessionDownloadDele
             let dir = LocalSpeechTranscriber.modelDirectory
             _ = try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             let destURL = dir.appendingPathComponent(model.fileName)
-            try? FileManager.default.removeItem(at: destURL)
+            
+            if FileManager.default.fileExists(atPath: destURL.path) {
+                try? FileManager.default.removeItem(at: destURL)
+            }
+            
             do {
                 try FileManager.default.moveItem(at: location, to: destURL)
                 self.checkDownloadedModels()
+                self.statusMessage = "\(model.name) downloaded successfully"
             } catch {
-                print("Failed to save downloaded Whisper model: \(error)")
+                self.statusMessage = "Failed to save model: \(error.localizedDescription)"
             }
             
             self.downloadingModelId = nil
             self.downloadProgress = 0.0
+            self.activeSession = nil
         }
     }
     
@@ -112,6 +127,9 @@ class WhisperModelDownloader: NSObject, ObservableObject, URLSessionDownloadDele
             let progress = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
             Task { @MainActor in
                 self.downloadProgress = progress
+                let mbWritten = Double(totalBytesWritten) / (1024 * 1024)
+                let mbTotal = Double(totalBytesExpectedToWrite) / (1024 * 1024)
+                self.statusMessage = String(format: "Downloading: %.1f MB / %.1f MB (%.0f%%)", mbWritten, mbTotal, progress * 100)
             }
         }
     }
@@ -119,9 +137,12 @@ class WhisperModelDownloader: NSObject, ObservableObject, URLSessionDownloadDele
     nonisolated func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         if let err = error {
             Task { @MainActor in
-                print("Download error: \(err.localizedDescription)")
+                if (err as NSError).code != NSURLErrorCancelled {
+                    self.statusMessage = "Download error: \(err.localizedDescription)"
+                }
                 self.downloadingModelId = nil
                 self.downloadProgress = 0.0
+                self.activeSession = nil
             }
         }
     }
@@ -158,6 +179,7 @@ class GemmaModelDownloader: NSObject, ObservableObject, URLSessionDownloadDelega
     }
     
     private var downloadTask: URLSessionDownloadTask?
+    private var activeSession: URLSession?
     
     override init() {
         super.init()
@@ -172,20 +194,24 @@ class GemmaModelDownloader: NSObject, ObservableObject, URLSessionDownloadDelega
         guard !isDownloading else { return }
         isDownloading = true
         downloadProgress = 0.0
-        statusMessage = "Downloading Gemma 2B (1.6 GB)..."
+        statusMessage = "Starting download of Gemma 2B (1.6 GB)..."
         
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 60.0
-        config.timeoutIntervalForResource = 3600.0
+        config.timeoutIntervalForResource = 7200.0
         config.waitsForConnectivity = true
-        let session = URLSession(configuration: config, delegate: self, delegateQueue: nil)
-        downloadTask = session.downloadTask(with: defaultModel.downloadURL)
-        downloadTask?.resume()
+        
+        let session = URLSession(configuration: config, delegate: self, delegateQueue: OperationQueue.main)
+        self.activeSession = session
+        self.downloadTask = session.downloadTask(with: defaultModel.downloadURL)
+        self.downloadTask?.resume()
     }
     
     func cancelDownload() {
         downloadTask?.cancel()
         downloadTask = nil
+        activeSession?.invalidateAndCancel()
+        activeSession = nil
         isDownloading = false
         downloadProgress = 0.0
         statusMessage = "Download Cancelled"
@@ -206,12 +232,17 @@ class GemmaModelDownloader: NSObject, ObservableObject, URLSessionDownloadDelega
                 self.statusMessage = "Download failed: Server returned HTTP \(statusCode)"
                 self.isDownloading = false
                 self.downloadProgress = 0.0
+                self.activeSession = nil
                 return
             }
             
             let destURL = self.modelFileURL
             _ = try? FileManager.default.createDirectory(at: Self.modelDirectory, withIntermediateDirectories: true)
-            try? FileManager.default.removeItem(at: destURL)
+            
+            if FileManager.default.fileExists(atPath: destURL.path) {
+                try? FileManager.default.removeItem(at: destURL)
+            }
+            
             do {
                 try FileManager.default.moveItem(at: location, to: destURL)
                 self.checkDownloadedStatus()
@@ -219,8 +250,10 @@ class GemmaModelDownloader: NSObject, ObservableObject, URLSessionDownloadDelega
             } catch {
                 self.statusMessage = "Download failed to save: \(error.localizedDescription)"
             }
+            
             self.isDownloading = false
             self.downloadProgress = 0.0
+            self.activeSession = nil
         }
     }
     
@@ -244,6 +277,7 @@ class GemmaModelDownloader: NSObject, ObservableObject, URLSessionDownloadDelega
                 }
                 self.isDownloading = false
                 self.downloadProgress = 0.0
+                self.activeSession = nil
             }
         }
     }

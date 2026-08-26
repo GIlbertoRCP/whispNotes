@@ -897,16 +897,16 @@ struct SettingsModalView: View {
 
     // MARK: - Updates & About Tab
     private var updatesTabContent: some View {
-        VStack(spacing: 20) {
-            // App Branding & Version Card
-            HStack(spacing: 16) {
+        VStack(spacing: 16) {
+            // App Identity Card
+            HStack(spacing: 14) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: 12)
                         .fill(primaryAccent.opacity(0.15))
-                        .frame(width: 56, height: 56)
+                        .frame(width: 48, height: 48)
                     
                     Image(systemName: "sparkles")
-                        .font(.system(size: 28, weight: .bold))
+                        .font(.system(size: 22, weight: .bold))
                         .foregroundColor(primaryAccent)
                 }
                 
@@ -941,7 +941,10 @@ struct SettingsModalView: View {
                     .stroke(Color.subtleBorder(isDarkMode), lineWidth: 1)
             )
 
-            // Auto-Update Configuration & Status Card
+            // Real-Time Release Status Card
+            liveUpdateStatusCard
+
+            // Auto-Update Configuration & Manual Check Card
             VStack(alignment: .leading, spacing: 14) {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
@@ -1056,6 +1059,233 @@ struct SettingsModalView: View {
                     .foregroundColor(.secondary)
             }
             .padding(.horizontal, 4)
+        }
+    }
+
+    // MARK: - Real-Time Update Status Card
+    @ViewBuilder
+    private var liveUpdateStatusCard: some View {
+        switch updater.status {
+        case .checking:
+            HStack(spacing: 14) {
+                ProgressView()
+                    .controlSize(.small)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Checking for Updates...")
+                        .font(.subheadline)
+                        .fontWeight(.bold)
+                    Text("Contacting GitHub releases repository...")
+                        .font(.caption)
+                        .foregroundColor(subtitleTextColor)
+                }
+                Spacer()
+            }
+            .padding(16)
+            .background(Color.cardBackground(isDarkMode))
+            .cornerRadius(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.subtleBorder(isDarkMode), lineWidth: 1)
+            )
+            
+        case .updateAvailable(let release):
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(primaryAccent.opacity(0.18))
+                            .frame(width: 36, height: 36)
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(primaryAccent)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Update Available: \(release.tagName)")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundColor(isDarkMode ? .white : Color(red: 15/255, green: 23/255, blue: 42/255))
+                        
+                        Text("Published on \(release.formattedDate)")
+                            .font(.caption)
+                            .foregroundColor(subtitleTextColor)
+                    }
+                    
+                    Spacer()
+                    
+                    Button(action: { updater.showUpdateModal = true }) {
+                        HStack(spacing: 5) {
+                            Image(systemName: "arrow.down.circle.fill")
+                            Text("View & Install")
+                        }
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(onPrimaryAccentTextColor)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(primaryAccent)
+                        .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
+                }
+                
+                HStack(spacing: 8) {
+                    Text("Current: v\(updater.currentVersion)")
+                        .font(.caption2)
+                        .foregroundColor(subtitleTextColor)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(isDarkMode ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
+                        .cornerRadius(4)
+                    
+                    Image(systemName: "arrow.right")
+                        .font(.caption2)
+                        .foregroundColor(primaryAccent)
+                    
+                    Text("Latest: \(release.tagName)")
+                        .font(.caption2)
+                        .fontWeight(.bold)
+                        .foregroundColor(primaryAccent)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(primaryAccent.opacity(0.15))
+                        .cornerRadius(4)
+                }
+            }
+            .padding(16)
+            .background(primaryAccent.opacity(0.06))
+            .cornerRadius(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(primaryAccent.opacity(0.35), lineWidth: 1)
+            )
+            
+        case .upToDate:
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.emerald.opacity(0.18))
+                            .frame(width: 36, height: 36)
+                        Image(systemName: "checkmark.seal.fill")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.emerald)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("You're Up to Date")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundColor(isDarkMode ? .white : Color(red: 15/255, green: 23/255, blue: 42/255))
+                        
+                        Text("WhispNotes v\(updater.currentVersion) is currently the newest version.")
+                            .font(.caption)
+                            .foregroundColor(subtitleTextColor)
+                    }
+                    
+                    Spacer()
+                    
+                    Text("Latest Release")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.emerald)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Color.emerald.opacity(0.14))
+                        .cornerRadius(4)
+                }
+                
+                if let release = updater.latestRelease {
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.circle")
+                            .font(.caption2)
+                            .foregroundColor(.emerald)
+                        Text("Verified on GitHub: \(release.tagName) (\(release.formattedDate))")
+                            .font(.caption2)
+                            .foregroundColor(subtitleTextColor)
+                    }
+                }
+            }
+            .padding(16)
+            .background(Color.emerald.opacity(0.06))
+            .cornerRadius(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.emerald.opacity(0.3), lineWidth: 1)
+            )
+            
+        case .error(let msg):
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(Color.orange.opacity(0.18))
+                        .frame(width: 36, height: 36)
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(.orange)
+                }
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Update Check Incomplete")
+                        .font(.subheadline)
+                        .fontWeight(.bold)
+                    Text(msg)
+                        .font(.caption)
+                        .foregroundColor(subtitleTextColor)
+                }
+                
+                Spacer()
+                
+                Button(action: { updater.checkForUpdates(silent: false) }) {
+                    Text("Retry")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(primaryAccent)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(primaryAccent.opacity(0.12))
+                        .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(16)
+            .background(Color.cardBackground(isDarkMode))
+            .cornerRadius(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.subtleBorder(isDarkMode), lineWidth: 1)
+            )
+            
+        default:
+            // Idle state before first manual check
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(Color.secondary.opacity(0.12))
+                        .frame(width: 36, height: 36)
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.secondary)
+                }
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("WhispNotes v\(updater.currentVersion)")
+                        .font(.subheadline)
+                        .fontWeight(.bold)
+                    Text("Click 'Check for Updates Now' to verify with GitHub.")
+                        .font(.caption)
+                        .foregroundColor(subtitleTextColor)
+                }
+                
+                Spacer()
+            }
+            .padding(16)
+            .background(Color.cardBackground(isDarkMode))
+            .cornerRadius(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.subtleBorder(isDarkMode), lineWidth: 1)
+            )
         }
     }
     

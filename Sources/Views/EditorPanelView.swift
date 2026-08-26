@@ -1152,8 +1152,8 @@ struct MacMarkdownEditorView: NSViewRepresentable {
                 
                 if content.isEmpty {
                     let repRange = lineRange
-                    if self.shouldChangeText(in: repRange, replacementString: "\n") {
-                        self.replaceCharacters(in: repRange, with: "\n")
+                    if self.shouldChangeText(in: repRange, replacementString: "") {
+                        self.replaceCharacters(in: repRange, with: "")
                         self.didChangeText()
                         return
                     }
@@ -1181,8 +1181,8 @@ struct MacMarkdownEditorView: NSViewRepresentable {
                 
                 if content.isEmpty {
                     let repRange = lineRange
-                    if self.shouldChangeText(in: repRange, replacementString: "\n") {
-                        self.replaceCharacters(in: repRange, with: "\n")
+                    if self.shouldChangeText(in: repRange, replacementString: "") {
+                        self.replaceCharacters(in: repRange, with: "")
                         self.didChangeText()
                         return
                     }
@@ -1209,8 +1209,8 @@ struct MacMarkdownEditorView: NSViewRepresentable {
                 
                 if content.isEmpty {
                     let repRange = lineRange
-                    if self.shouldChangeText(in: repRange, replacementString: "\n") {
-                        self.replaceCharacters(in: repRange, with: "\n")
+                    if self.shouldChangeText(in: repRange, replacementString: "") {
+                        self.replaceCharacters(in: repRange, with: "")
                         self.didChangeText()
                         return
                     }
@@ -1237,8 +1237,8 @@ struct MacMarkdownEditorView: NSViewRepresentable {
                 
                 if content.isEmpty {
                     let repRange = lineRange
-                    if self.shouldChangeText(in: repRange, replacementString: "\n") {
-                        self.replaceCharacters(in: repRange, with: "\n")
+                    if self.shouldChangeText(in: repRange, replacementString: "") {
+                        self.replaceCharacters(in: repRange, with: "")
                         self.didChangeText()
                         return
                     }
@@ -1265,7 +1265,7 @@ struct MacMarkdownEditorView: NSViewRepresentable {
             let lineRange = currentText.lineRange(for: NSRange(location: selectedRange.location, length: 0))
             let currentLine = currentText.substring(with: lineRange)
             
-            if currentLine.range(of: "^[ \\t]*([\\*\\-\\+]|\\d+\\.|- \\[[ xX]\\]) ", options: .regularExpression) != nil {
+            if currentLine.range(of: "^[ \\t]*([\\*\\-\\+]|\\d+\\.|[-*+] \\[[ xX]\\]) ", options: .regularExpression) != nil {
                 let insertRange = NSRange(location: lineRange.location, length: 0)
                 if self.shouldChangeText(in: insertRange, replacementString: "  ") {
                     self.replaceCharacters(in: insertRange, with: "  ")
@@ -1311,7 +1311,7 @@ struct MacMarkdownEditorView: NSViewRepresentable {
                 let lineRange = currentText.lineRange(for: NSRange(location: selectedRange.location, length: 0))
                 let textBeforeCursor = currentText.substring(with: NSRange(location: lineRange.location, length: selectedRange.location - lineRange.location))
                 
-                if textBeforeCursor.range(of: "^[ \\t]*([\\*\\-\\+]|- \\[[ xX]\\]|\\d+\\.) $", options: .regularExpression) != nil {
+                if textBeforeCursor.range(of: "^[ \\t]*([\\*\\-\\+]|[-*+] \\[[ xX]\\]|\\d+\\.) $", options: .regularExpression) != nil {
                     let deleteRange = NSRange(location: lineRange.location, length: selectedRange.location - lineRange.location)
                     if self.shouldChangeText(in: deleteRange, replacementString: "") {
                         self.replaceCharacters(in: deleteRange, with: "")
