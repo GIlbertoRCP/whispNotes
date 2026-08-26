@@ -9,7 +9,7 @@ public struct WhispEmptyStateView: View {
     public var shortcutHint: String? = nil
     public var action: (() -> Void)? = nil
     
-    @AppStorage("colorTheme") private var colorTheme = "Midnight Rose"
+    @AppStorage("colorTheme") private var colorTheme = "Classic Minimal"
     @AppStorage("isDarkMode") private var isDarkMode = true
     
     public init(

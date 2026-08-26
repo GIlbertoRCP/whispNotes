@@ -4,7 +4,7 @@ import SwiftUI
 public struct AppUpdateModalView: View {
     @ObservedObject var updater: GitHubReleaseUpdater
     @AppStorage("isDarkMode") private var isDarkMode = true
-    @AppStorage("colorTheme") private var colorTheme = "Midnight Rose"
+    @AppStorage("colorTheme") private var colorTheme = "Classic Minimal"
     
     public init(updater: GitHubReleaseUpdater) {
         self.updater = updater

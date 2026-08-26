@@ -29,9 +29,9 @@ struct SettingsModalView: View {
     @Binding var notes: [NoteItem]
     
     @AppStorage("isDarkMode") private var isDarkMode = true
-    @AppStorage("colorTheme") private var colorTheme = "Midnight Rose"
+    @AppStorage("colorTheme") private var colorTheme = "Classic Minimal"
     @AppStorage("editorFontSize") private var editorFontSize = 14.0
-    @AppStorage("editorFontDesign") private var editorFontDesign = "Monospaced"
+    @AppStorage("editorFontDesign") private var editorFontDesign = "Sans-Serif"
     @AppStorage("defaultSpeakerTemplate") private var defaultSpeakerTemplate = "Speaker 1 / Speaker 2"
     @AppStorage("transcriptionLanguage") private var transcriptionLanguage = "Auto-Detect Language"
     @AppStorage("whisperModelSize") private var whisperModelSize = "Base (Recommended)"
@@ -908,9 +908,10 @@ struct ThemeSwatchButton: View {
     
     var subtitle: String {
         switch theme {
-        case .midnightRose: return "Indigo & Crimson"
+        case .classicMinimal: return "Apple Slate Monochrome"
         case .obsidianBlack: return "Pitch & Cold Cyan"
         case .nordArctic: return "Polar Frost & Ice"
+        case .midnightRose: return "Indigo & Crimson"
         case .rosePine: return "Lavender & Rose"
         case .slateMinimal: return "Sky & Emerald"
         }

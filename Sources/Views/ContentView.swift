@@ -57,7 +57,7 @@ struct ContentView: View {
     @AppStorage("sidebarWidth") private var sidebarWidth: Double = 280.0
     @AppStorage("rightPanelWidth") private var rightPanelWidth: Double = 380.0
     @AppStorage("isDarkMode") private var isDarkMode: Bool = true
-    @AppStorage("colorTheme") private var colorTheme: String = "Midnight Rose"
+    @AppStorage("colorTheme") private var colorTheme: String = "Classic Minimal"
     @StateObject private var updater = GitHubReleaseUpdater.shared
     @StateObject private var tabManager = TabNavigationManager.shared
     @Environment(\.undoManager) private var undoManager

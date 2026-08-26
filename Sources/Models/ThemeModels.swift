@@ -38,17 +38,53 @@ public struct ThemeDefinition: Identifiable, Hashable {
 
 // MARK: - App Color Theme Enum
 public enum AppColorTheme: String, CaseIterable, Identifiable {
-    case midnightRose = "Midnight Rose"
+    case classicMinimal = "Classic Minimal"
     case obsidianBlack = "Obsidian Black"
     case nordArctic = "Nord Arctic"
-    case slateMinimal = "Slate Minimal"
+    case midnightRose = "Midnight Rose"
     case rosePine = "Rose Pine"
+    case slateMinimal = "Slate Minimal"
     
     public var id: String { rawValue }
 }
 
 // MARK: - Curated Theme Library
 public struct ThemeLibrary {
+    
+    // 0. Classic Minimal (Dark & Light) - Pure clean Apple monochrome with neutral slate/graphite accents
+    public static let classicMinimalDark = ThemeDefinition(
+        name: "Classic Minimal",
+        displayName: "Classic Minimal",
+        isDark: true,
+        primary: Color(red: 241/255, green: 245/255, blue: 249/255),      // Pure Slate White (#f1f5f9)
+        secondary: Color(red: 148/255, green: 163/255, blue: 184/255),  // Neutral Slate (#94a3b8)
+        appBackground: Color(red: 18/255, green: 18/255, blue: 20/255),   // Pure Native Dark (#121214)
+        sidebarBackground: Color(red: 24/255, green: 24/255, blue: 27/255), // Native Sidebar Layer (#18181b)
+        panelBackground: Color(red: 30/255, green: 30/255, blue: 34/255),   // Editor Canvas Layer (#1e1e22)
+        cardBackground: Color(red: 39/255, green: 39/255, blue: 42/255).opacity(0.65),
+        cardBackgroundElevated: Color(red: 45/255, green: 45/255, blue: 48/255),
+        border: Color(red: 55/255, green: 55/255, blue: 60/255),
+        borderStrong: Color(red: 148/255, green: 163/255, blue: 184/255).opacity(0.5),
+        shadowColor: Color.black,
+        shadowOpacity: 0.35
+    )
+    
+    public static let classicMinimalLight = ThemeDefinition(
+        name: "Classic Minimal",
+        displayName: "Classic Minimal",
+        isDark: false,
+        primary: Color(red: 15/255, green: 23/255, blue: 42/255),        // Deep Charcoal Slate (#0f172a)
+        secondary: Color(red: 100/255, green: 116/255, blue: 139/255),  // Neutral Slate (#64748b)
+        appBackground: Color(red: 250/255, green: 250/255, blue: 250/255), // Pure Clean White (#fafafa)
+        sidebarBackground: Color(red: 244/255, green: 244/255, blue: 245/255), // System Sidebar (#f4f4f5)
+        panelBackground: Color.white,
+        cardBackground: Color(red: 240/255, green: 240/255, blue: 242/255),
+        cardBackgroundElevated: Color.white,
+        border: Color(red: 228/255, green: 228/255, blue: 231/255),
+        borderStrong: Color(red: 15/255, green: 23/255, blue: 42/255).opacity(0.4),
+        shadowColor: Color.black,
+        shadowOpacity: 0.06
+    )
     
     // 1. Midnight Rose (Dark & Light) - Warm, moody indigo-charcoal with soft crimson rose
     public static let midnightRoseDark = ThemeDefinition(
@@ -227,11 +263,13 @@ public struct ThemeLibrary {
     
     public static func getDefinition(name: String, isDark: Bool) -> ThemeDefinition {
         switch name {
+        case "Classic Minimal", "Default": return isDark ? classicMinimalDark : classicMinimalLight
         case "Obsidian Black": return isDark ? obsidianBlackDark : obsidianBlackLight
         case "Nord Arctic": return isDark ? nordArcticDark : nordArcticLight
         case "Rose Pine": return isDark ? rosePineDark : rosePineLight
+        case "Midnight Rose": return isDark ? midnightRoseDark : midnightRoseLight
         case "Slate Minimal", "Solarized": return isDark ? slateMinimalDark : slateMinimalLight
-        default: return isDark ? midnightRoseDark : midnightRoseLight
+        default: return isDark ? classicMinimalDark : classicMinimalLight
         }
     }
 }
@@ -285,7 +323,7 @@ extension Color {
     public static let amber = Color(red: 245/255, green: 158/255, blue: 11/255)
     
     private static func activeTheme() -> String {
-        UserDefaults.standard.string(forKey: "colorTheme") ?? "Midnight Rose"
+        UserDefaults.standard.string(forKey: "colorTheme") ?? "Classic Minimal"
     }
 
     public static func appBackground(_ isDark: Bool, themeName: String? = nil) -> Color {
@@ -333,11 +371,11 @@ public struct SemanticColor {
     public static let aiAccentGlow = Color(red: 168/255, green: 85/255, blue: 247/255) // Purple 400 (#A855F7)
     public static let aiAccentSurface = Color(red: 139/255, green: 92/255, blue: 246/255).opacity(0.12)
     
-    // 3. File-Type Badges & Content Categorization
-    public static let pdfBadge = Color(red: 245/255, green: 158/255, blue: 11/255) // Amber 500
-    public static let pdfSurface = Color(red: 245/255, green: 158/255, blue: 11/255).opacity(0.15)
-    public static let audioBadge = Color(red: 59/255, green: 130/255, blue: 246/255) // Blue 500
-    public static let audioSurface = Color(red: 59/255, green: 130/255, blue: 246/255).opacity(0.15)
+    // 3. File-Type Badges & Content Categorization (Clean Neutral - No Yellow Tint)
+    public static let pdfBadge = Color(red: 100/255, green: 116/255, blue: 139/255) // Slate 500 (#64748B)
+    public static let pdfSurface = Color(red: 100/255, green: 116/255, blue: 139/255).opacity(0.12)
+    public static let audioBadge = Color(red: 71/255, green: 85/255, blue: 105/255) // Slate 600
+    public static let audioSurface = Color(red: 71/255, green: 85/255, blue: 105/255).opacity(0.12)
     public static let markdownBadge = Color(red: 100/255, green: 116/255, blue: 139/255) // Slate 500
     public static let markdownSurface = Color(red: 100/255, green: 116/255, blue: 139/255).opacity(0.12)
     

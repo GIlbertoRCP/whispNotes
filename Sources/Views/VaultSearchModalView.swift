@@ -8,7 +8,7 @@ struct VaultSearchModalView: View {
     
     @StateObject private var searchEngine = VaultSearchEngine.shared
     @AppStorage("isDarkMode") private var isDarkMode = true
-    @AppStorage("colorTheme") private var colorTheme = "Midnight Rose"
+    @AppStorage("colorTheme") private var colorTheme = "Classic Minimal"
     
     @State private var searchResults: [NoteSearchResult] = []
     @State private var selectedMatchIndex: Int = 0

@@ -7,7 +7,7 @@ public struct AppLoadingIndicatorView: View {
     public var progress: Double? = nil
     public var accentColor: Color? = nil
     
-    @AppStorage("colorTheme") private var colorTheme = "Midnight Rose"
+    @AppStorage("colorTheme") private var colorTheme = "Classic Minimal"
     @AppStorage("isDarkMode") private var isDarkMode = true
     
     public init(
