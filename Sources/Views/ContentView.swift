@@ -67,6 +67,7 @@ struct ContentView: View {
     @State private var isFocusMode = false
     @State private var isVaultSearchOpen = false
     @State private var isTemplateModalOpen = false
+    @State private var isCalendarOpen = false
     @State private var editMode: EditModeType = .split
 
     var primaryAccent: Color {
@@ -300,11 +301,42 @@ struct ContentView: View {
                 secondaryAccent: secondaryAccent
             )
         }
+        .sheet(isPresented: $isCalendarOpen) {
+            CalendarModalView(
+                isOpen: $isCalendarOpen,
+                notes: $notes,
+                selectedNoteId: $selectedNoteId
+            )
+        }
+        .overlay(alignment: .bottom) {
+            EmacsMinibufferView(
+                isDark: isDarkMode,
+                primaryAccent: primaryAccent,
+                onExecute: handleEmacsMinibufferAction
+            )
+        }
         .onReceive(NotificationCenter.default.publisher(for: .openVaultSearch)) { _ in
             isVaultSearchOpen = true
         }
+        .onReceive(NotificationCenter.default.publisher(for: .openTemplatePicker)) { _ in
+            isTemplateModalOpen = true
+        }
         .onReceive(NotificationCenter.default.publisher(for: .openTemplateModal)) { _ in
             isTemplateModalOpen = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openCalendarHub)) { _ in
+            isCalendarOpen = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openKnowledgeGraph)) { _ in
+            isGraphViewOpen = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .createDailyNote)) { _ in
+            openOrCreateDailyNote()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ToggleZenFocusMode"))) { _ in
+            withAnimation(.easeInOut(duration: 0.18)) {
+                isFocusMode.toggle()
+            }
         }
         .onChange(of: tabManager.activeTabId) { _, newActiveId in
             guard let id = newActiveId, selectedNoteId != id else { return }
@@ -344,6 +376,78 @@ struct ContentView: View {
                     updater.checkForUpdates(silent: true)
                 }
             }
+        }
+    }
+    
+    private func handleEmacsMinibufferAction(_ action: EmacsAction) {
+        switch action {
+        case .none, .message:
+            break
+        case .save:
+            NotesDataManager.shared.saveNotesImmediately(notes)
+            EmacsController.shared.setStatus("Wrote note to vault")
+        case .openVaultSearch:
+            isVaultSearchOpen = true
+        case .switchTab:
+            tabManager.nextTab()
+            selectedNoteId = tabManager.activeTabId
+        case .closeTab:
+            if let active = tabManager.activeTabId {
+                tabManager.closeTab(active)
+                selectedNoteId = tabManager.openTabIds.first
+            }
+        case .openCalendar:
+            isCalendarOpen = true
+        case .openGraph:
+            isGraphViewOpen = true
+        case .toggleFocus:
+            withAnimation(.easeInOut(duration: 0.18)) {
+                isFocusMode.toggle()
+            }
+        case .openTOC:
+            break
+        case .openAI:
+            NotificationCenter.default.post(name: NSNotification.Name("OpenAIAssistant"), object: nil)
+        case .orgTableAlign:
+            break
+        case .orgCycleTask:
+            break
+        case .showHelp:
+            EmacsController.shared.showHelpModal = true
+        case .newDailyNote:
+            openOrCreateDailyNote()
+        case .newNoteFromTemplate:
+            isTemplateModalOpen = true
+        case .exportPDF:
+            break
+        case .exportSRT:
+            break
+        }
+    }
+    
+    private func openOrCreateDailyNote() {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let dateString = formatter.string(from: Date())
+        
+        if let existing = notes.first(where: { $0.folder == "Daily Notes" && $0.title == dateString }) {
+            selectedNoteId = existing.id
+            tabManager.openNote(existing.id)
+        } else {
+            let dailyNote = NoteItem(
+                title: dateString,
+                folder: "Daily Notes",
+                content: "# Daily Journal — \(dateString)\n\n### Morning Focus & Intentions\n- [ ] Review lecture notes & priorities\n- [ ] Focus study goals\n\n### Daily Meeting & Study Notes\nType notes here...\n\n### Evening Reflections & Learnings\nKey takeaways from today:\n",
+                timestamp: Date(),
+                audioPath: nil,
+                transcript: [],
+                isStandalone: true,
+                bookmarks: []
+            )
+            notes.insert(dailyNote, at: 0)
+            selectedNoteId = dailyNote.id
+            tabManager.openNote(dailyNote.id)
+            NotesDataManager.shared.saveNotes(notes)
         }
     }
     

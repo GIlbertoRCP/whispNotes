@@ -384,6 +384,11 @@ struct HeaderToolbarView: View {
 
                     // Group 5: Tools & Window Utilities
                     HStack(spacing: 4) {
+                        // Calendar & Daily Notes Hub Toggle
+                        ToolbarIconButton(icon: "calendar", helpText: "Calendar & Daily Journal Hub (⌘⌥C)", isActive: false, activeColor: primaryAccent) {
+                            NotificationCenter.default.post(name: .openCalendarHub, object: nil)
+                        }
+
                         // Knowledge Graph Canvas Toggle
                         ToolbarIconButton(icon: "circle.hexagonpath", helpText: "Knowledge Graph Canvas (⌘G)", isActive: isGraphViewOpen, activeColor: secondaryAccent) {
                             isGraphViewOpen = true

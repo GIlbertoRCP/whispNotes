@@ -183,4 +183,8 @@ public class VaultSearchEngine: ObservableObject {
 extension Notification.Name {
     public static let openVaultSearch = Notification.Name("openVaultSearch")
     public static let filterNotesByTag = Notification.Name("filterNotesByTag")
+    public static let openCalendarHub = Notification.Name("openCalendarHub")
+    public static let openKnowledgeGraph = Notification.Name("openKnowledgeGraph")
+    public static let openTemplatePicker = Notification.Name("openTemplatePicker")
+    public static let createDailyNote = Notification.Name("createDailyNote")
 }

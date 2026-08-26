@@ -69,6 +69,11 @@ public struct WhispNotesSwiftApp: App {
                 }
                 .keyboardShortcut("d", modifiers: .command)
 
+                Button("Calendar & Daily Journal Hub...") {
+                    NotificationCenter.default.post(name: .openCalendarHub, object: nil)
+                }
+                .keyboardShortcut("c", modifiers: [.command, .option])
+
                 Button("Import Obsidian Vault (Folder)...") {
                     importObsidianVault()
                 }

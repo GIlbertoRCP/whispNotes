@@ -16,9 +16,16 @@ struct EditorPanelView: View {
     @AppStorage("editorFontDesign") private var editorFontDesign: String = "Sans-Serif"
     @AppStorage("editorSplitRatio") private var splitRatio: Double = 0.5
     @AppStorage("enableVimMode") private var enableVimMode = false
+    @AppStorage("enableEmacsMode") private var enableEmacsMode = false
+    @AppStorage("enableOrgTableAlign") private var enableOrgTableAlign = true
+    @AppStorage("enableOrgTaskCycle") private var enableOrgTaskCycle = true
+    @AppStorage("enableTypewriterScroll") private var enableTypewriterScroll = false
+    @AppStorage("enableAIAutoTagging") private var enableAIAutoTagging = false
     
     @ObservedObject private var vimController = VimController.shared
+    @ObservedObject private var emacsController = EmacsController.shared
     @State private var showVimHelpModal = false
+    @State private var showEmacsHelpModal = false
     
     @State private var localContent: String = ""
     @State private var saveTimer: Timer? = nil
@@ -204,7 +211,12 @@ struct EditorPanelView: View {
                             fontDesign: selectedFontDesign,
                             isDark: isDark,
                             enableVimMode: enableVimMode,
+                            enableEmacsMode: enableEmacsMode,
+                            enableOrgTableAlign: enableOrgTableAlign,
+                            enableOrgTaskCycle: enableOrgTaskCycle,
+                            enableTypewriterScroll: enableTypewriterScroll,
                             onVimAction: handleVimAction,
+                            onEmacsAction: handleEmacsAction,
                             onImagePasted: {
                                 withAnimation {
                                     showImagePastedToast = true
@@ -252,7 +264,12 @@ struct EditorPanelView: View {
                                 fontDesign: selectedFontDesign,
                                 isDark: isDark,
                                 enableVimMode: enableVimMode,
+                                enableEmacsMode: enableEmacsMode,
+                                enableOrgTableAlign: enableOrgTableAlign,
+                                enableOrgTaskCycle: enableOrgTaskCycle,
+                                enableTypewriterScroll: enableTypewriterScroll,
                                 onVimAction: handleVimAction,
+                                onEmacsAction: handleEmacsAction,
                                 onImagePasted: {
                                     withAnimation {
                                         showImagePastedToast = true
@@ -547,6 +564,61 @@ struct EditorPanelView: View {
                 isDark: isDark,
                 primaryAccent: primaryAccent
             )
+        }
+        .sheet(isPresented: $showEmacsHelpModal) {
+            EmacsHelpModalView(
+                isPresented: $showEmacsHelpModal,
+                isDark: isDark,
+                primaryAccent: primaryAccent
+            )
+        }
+    }
+
+    private func handleEmacsAction(_ action: EmacsAction) {
+        switch action {
+        case .none:
+            break
+        case .message(let msg):
+            emacsController.setStatus(msg)
+        case .save:
+            let clean = localContent.replacingOccurrences(of: "\\n", with: "\n")
+            note.content = clean
+            NotesDataManager.shared.saveNotesImmediately(notes)
+            emacsController.setStatus("Wrote note to vault")
+        case .openVaultSearch:
+            NotificationCenter.default.post(name: .openVaultSearch, object: nil)
+        case .switchTab:
+            TabNavigationManager.shared.nextTab()
+            selectedNoteId = TabNavigationManager.shared.activeTabId
+        case .closeTab:
+            TabNavigationManager.shared.closeTab(note.id)
+            if let first = TabNavigationManager.shared.openTabIds.first {
+                selectedNoteId = first
+            }
+        case .openCalendar:
+            NotificationCenter.default.post(name: .openCalendarHub, object: nil)
+        case .openGraph:
+            NotificationCenter.default.post(name: .openKnowledgeGraph, object: nil)
+        case .toggleFocus:
+            NotificationCenter.default.post(name: NSNotification.Name("ToggleZenFocusMode"), object: nil)
+        case .openTOC:
+            withAnimation { showTOCDrawer.toggle() }
+        case .openAI:
+            NotificationCenter.default.post(name: NSNotification.Name("OpenAIAssistant"), object: nil)
+        case .orgTableAlign:
+            break
+        case .orgCycleTask:
+            break
+        case .showHelp:
+            showEmacsHelpModal = true
+        case .newDailyNote:
+            NotificationCenter.default.post(name: .createDailyNote, object: nil)
+        case .newNoteFromTemplate:
+            NotificationCenter.default.post(name: .openTemplatePicker, object: nil)
+        case .exportPDF:
+            break
+        case .exportSRT:
+            break
         }
     }
 
@@ -877,7 +949,7 @@ struct EditorPanelView: View {
     }
 }
 
-// MARK: - Native Mac Markdown Text Editor with Deep Image Paste & Vim Interception
+// MARK: - Native Mac Markdown Text Editor with Deep Image Paste, Vim & Emacs Interception
 struct MacMarkdownEditorView: NSViewRepresentable {
     @Binding var text: String
     let noteId: UUID
@@ -885,7 +957,12 @@ struct MacMarkdownEditorView: NSViewRepresentable {
     let fontDesign: Font.Design
     let isDark: Bool
     var enableVimMode: Bool = false
+    var enableEmacsMode: Bool = false
+    var enableOrgTableAlign: Bool = true
+    var enableOrgTaskCycle: Bool = true
+    var enableTypewriterScroll: Bool = false
     var onVimAction: ((VimAction) -> Void)? = nil
+    var onEmacsAction: ((EmacsAction) -> Void)? = nil
     var onImagePasted: (() -> Void)? = nil
     var onTextChanged: ((String) -> Void)? = nil
 
@@ -920,7 +997,12 @@ struct MacMarkdownEditorView: NSViewRepresentable {
     class CustomNSTextView: NSTextView {
         var noteId: UUID?
         var enableVimMode: Bool = false
+        var enableEmacsMode: Bool = false
+        var enableOrgTableAlign: Bool = true
+        var enableOrgTaskCycle: Bool = true
+        var enableTypewriterScroll: Bool = false
         var onVimAction: ((VimAction) -> Void)?
+        var onEmacsAction: ((EmacsAction) -> Void)?
         var onImagePasted: (() -> Void)?
 
         override func performKeyEquivalent(with event: NSEvent) -> Bool {
@@ -934,6 +1016,7 @@ struct MacMarkdownEditorView: NSViewRepresentable {
         }
 
         override func keyDown(with event: NSEvent) {
+            // 1. Vim Mode Interception
             if enableVimMode {
                 let handled = VimController.shared.handleKeyDown(event: event, in: self) { [weak self] action in
                     self?.onVimAction?(action)
@@ -943,7 +1026,60 @@ struct MacMarkdownEditorView: NSViewRepresentable {
                     return
                 }
             }
+            
+            // 2. GNU Emacs Keybinding Interception
+            if enableEmacsMode {
+                let handled = EmacsController.shared.handleKeyDown(event: event, in: self) { [weak self] action in
+                    self?.onEmacsAction?(action)
+                }
+                if handled {
+                    self.didChangeText()
+                    return
+                }
+            }
+            
+            // 3. Org-Table Auto-Alignment on TAB key (keyCode 48)
+            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            if enableOrgTableAlign && event.keyCode == 48 && flags.isEmpty {
+                if OrgModeEngine.isInsideTable(in: self) {
+                    if OrgModeEngine.alignTableAtCursor(in: self) {
+                        self.didChangeText()
+                        return
+                    }
+                }
+            }
+            
+            // 4. Org-Mode Task State Cycling (Ctrl-C Ctrl-C or C-c)
+            if enableOrgTaskCycle && event.modifierFlags.contains(.control) && (event.charactersIgnoringModifiers ?? "").lowercased() == "c" && !enableEmacsMode {
+                if OrgModeEngine.cycleTaskState(in: self) {
+                    self.didChangeText()
+                    return
+                }
+            }
+
             super.keyDown(with: event)
+            
+            // 5. Typewriter Center Scrolling
+            if enableTypewriterScroll {
+                centerActiveLineInScrollView()
+            }
+        }
+        
+        private func centerActiveLineInScrollView() {
+            guard let layoutManager = self.layoutManager,
+                  let textContainer = self.textContainer,
+                  let scrollView = self.enclosingScrollView else { return }
+            
+            let selectedRange = self.selectedRange()
+            let glyphRange = layoutManager.glyphRange(forCharacterRange: selectedRange, actualCharacterRange: nil)
+            let rect = layoutManager.boundingRect(forGlyphRange: glyphRange, in: textContainer)
+            
+            let clipView = scrollView.contentView
+            let visibleHeight = clipView.bounds.height
+            let targetY = max(0, rect.midY - (visibleHeight / 2))
+            
+            clipView.scroll(to: NSPoint(x: 0, y: targetY))
+            scrollView.reflectScrolledClipView(clipView)
         }
 
         override func paste(_ sender: Any?) {
@@ -1020,7 +1156,12 @@ struct MacMarkdownEditorView: NSViewRepresentable {
         textView.delegate = context.coordinator
         textView.noteId = noteId
         textView.enableVimMode = enableVimMode
+        textView.enableEmacsMode = enableEmacsMode
+        textView.enableOrgTableAlign = enableOrgTableAlign
+        textView.enableOrgTaskCycle = enableOrgTaskCycle
+        textView.enableTypewriterScroll = enableTypewriterScroll
         textView.onVimAction = onVimAction
+        textView.onEmacsAction = onEmacsAction
         textView.onImagePasted = onImagePasted
         
         applyFontAndColors(to: textView)
@@ -1035,7 +1176,12 @@ struct MacMarkdownEditorView: NSViewRepresentable {
         context.coordinator.parent = self
         textView.noteId = noteId
         textView.enableVimMode = enableVimMode
+        textView.enableEmacsMode = enableEmacsMode
+        textView.enableOrgTableAlign = enableOrgTableAlign
+        textView.enableOrgTaskCycle = enableOrgTaskCycle
+        textView.enableTypewriterScroll = enableTypewriterScroll
         textView.onVimAction = onVimAction
+        textView.onEmacsAction = onEmacsAction
         textView.onImagePasted = onImagePasted
 
         if textView.string != text {

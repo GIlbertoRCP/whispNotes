@@ -133,7 +133,7 @@ struct SidebarView: View {
 
                 // + New Note from Template Button
                 Button(action: {
-                    NotificationCenter.default.post(name: .openTemplateModal, object: nil)
+                    NotificationCenter.default.post(name: .openTemplatePicker, object: nil)
                 }) {
                     Image(systemName: "square.grid.2x2")
                         .font(.system(size: 11, weight: .medium))
@@ -144,6 +144,20 @@ struct SidebarView: View {
                 }
                 .buttonStyle(.plain)
                 .help("New Note from Template (⌘T)")
+
+                // Calendar & Daily Notes Hub Button
+                Button(action: {
+                    NotificationCenter.default.post(name: .openCalendarHub, object: nil)
+                }) {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 11.5, weight: .medium))
+                        .foregroundColor(.secondary)
+                        .frame(width: 26, height: 26)
+                        .background(Color.primary.opacity(0.05))
+                        .cornerRadius(AppRadius.sm)
+                }
+                .buttonStyle(.plain)
+                .help("Calendar & Daily Journal Hub (⌘⌥C)")
 
                 // + New Note Button
                 Button(action: createNewNote) {

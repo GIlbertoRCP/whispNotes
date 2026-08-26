@@ -8,6 +8,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     case aiProvider = "AI Provider"
     case cloudSync = "Cloud Sync & Vault"
     case audioDevices = "Audio Devices"
+    case labs = "Experimental Labs"
     case updates = "Updates & About"
     
     var id: String { rawValue }
@@ -19,6 +20,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .aiProvider: return "sparkles"
         case .cloudSync: return "folder.badge.gearshape"
         case .audioDevices: return "mic"
+        case .labs: return "flask.fill"
         case .updates: return "arrow.triangle.2.circlepath.circle"
         }
     }
@@ -39,8 +41,14 @@ struct SettingsModalView: View {
     @AppStorage("selectedInputMicrophone") private var selectedInputMicrophone = "Default System Microphone"
     @AppStorage("selectedOutputSpeaker") private var selectedOutputSpeaker = "Default System Speaker"
     @AppStorage("enableVimMode") private var enableVimMode = false
+    @AppStorage("enableEmacsMode") private var enableEmacsMode = false
+    @AppStorage("enableOrgTableAlign") private var enableOrgTableAlign = true
+    @AppStorage("enableOrgTaskCycle") private var enableOrgTaskCycle = true
+    @AppStorage("enableTypewriterScroll") private var enableTypewriterScroll = false
+    @AppStorage("enableAIAutoTagging") private var enableAIAutoTagging = false
     
     @State private var showVimHelpSheet = false
+    @State private var showEmacsHelpSheet = false
     @State private var selectedTab: SettingsTab = .preferences
     @StateObject private var deviceManager = AudioDeviceManager.shared
     @StateObject private var downloader = WhisperModelDownloader.shared
@@ -158,6 +166,8 @@ struct SettingsModalView: View {
                             cloudSyncTabContent
                         case .audioDevices:
                             audioDevicesTabContent
+                        case .labs:
+                            labsTabContent
                         case .updates:
                             updatesTabContent
                         }
@@ -209,6 +219,13 @@ struct SettingsModalView: View {
                 primaryAccent: primaryAccent
             )
         }
+        .sheet(isPresented: $showEmacsHelpSheet) {
+            EmacsHelpModalView(
+                isPresented: $showEmacsHelpSheet,
+                isDark: isDarkMode,
+                primaryAccent: primaryAccent
+            )
+        }
         .onAppear {
             deviceManager.refreshDevices()
             downloader.checkDownloadedModels()
@@ -222,6 +239,7 @@ struct SettingsModalView: View {
         case .aiProvider: return "AI Speech & Transcriber Engine"
         case .cloudSync: return "Vault Storage & Backup"
         case .audioDevices: return "Audio Capture & Hardware"
+        case .labs: return "Experimental Features & Labs"
         case .updates: return "Software Updates & About"
         }
     }
@@ -233,6 +251,7 @@ struct SettingsModalView: View {
         case .aiProvider: return "Download offline Whisper GGUF models for local execution."
         case .cloudSync: return "Manage vault storage backup and JSON export."
         case .audioDevices: return "Select active input microphone and speaker hardware."
+        case .labs: return "Test power-user GNU Emacs modal keybindings, Org-Mode tools, and typewriter scrolling."
         case .updates: return "Check for new versions, changelogs, and manage release updates."
         }
     }
@@ -729,6 +748,150 @@ struct SettingsModalView: View {
                     NotesDataManager.shared.saveNotes(notes)
                 }
             }
+        }
+    }
+
+    // MARK: - Experimental Labs Tab
+    private var labsTabContent: some View {
+        VStack(spacing: 16) {
+            // Card 1: GNU Emacs Keybindings & M-x Minibuffer
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 14) {
+                    Image(systemName: "terminal.fill")
+                        .font(.title2)
+                        .foregroundColor(primaryAccent)
+                        .frame(width: 32)
+                    
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("GNU Emacs Modal Keybindings & M-x")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                        Text("Navigate using C-a, C-e, C-f, C-b, C-p, C-n, kill-ring (C-k/C-y/M-y), C-x buffer chords, and M-x command runner.")
+                            .font(.caption)
+                            .foregroundColor(subtitleTextColor)
+                    }
+                    
+                    Spacer()
+                    
+                    Toggle("", isOn: $enableEmacsMode)
+                        .toggleStyle(.switch)
+                }
+                
+                if enableEmacsMode {
+                    Divider()
+                        .background(Color.subtleBorder(isDarkMode))
+                    
+                    HStack {
+                        Text("Includes Kill Ring stack, C-x C-s (save), C-x C-f (search), C-x b (buffer), and ⌥X (M-x minibuffer).")
+                            .font(.caption)
+                            .foregroundColor(subtitleTextColor)
+                        
+                        Spacer()
+                        
+                        Button(action: { showEmacsHelpSheet = true }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "book.pages")
+                                    .font(.caption)
+                                Text("Cheat Sheet")
+                                    .font(.caption)
+                                    .fontWeight(.bold)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(isDarkMode ? Color.white.opacity(0.14) : primaryAccent.opacity(0.12))
+                            .foregroundColor(isDarkMode ? .white : primaryAccent)
+                            .cornerRadius(6)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .padding(16)
+            .background(Color.cardBackground(isDarkMode))
+            .cornerRadius(12)
+
+            // Card 2: Org-Mode Productivity Tools
+            VStack(alignment: .leading, spacing: 12) {
+                Text("ORG-MODE PRODUCTIVITY SUITE")
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundColor(sectionHeaderTextColor)
+                
+                // Toggle 2A: Org-Table Auto-Alignment
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Org-Table Auto-Alignment on TAB")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                        Text("Pressing TAB inside Markdown tables automatically recalculates column widths and formats pipes.")
+                            .font(.caption)
+                            .foregroundColor(subtitleTextColor)
+                    }
+                    Spacer()
+                    Toggle("", isOn: $enableOrgTableAlign)
+                        .toggleStyle(.switch)
+                }
+                
+                Divider()
+                    .background(Color.subtleBorder(isDarkMode))
+                
+                // Toggle 2B: Org Task Cycling
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Task State Cycling (Ctrl-C Ctrl-C)")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                        Text("Quickly cycle task lines between [ ] (TODO), [-] (IN-PROGRESS), and [x] (DONE).")
+                            .font(.caption)
+                            .foregroundColor(subtitleTextColor)
+                    }
+                    Spacer()
+                    Toggle("", isOn: $enableOrgTaskCycle)
+                        .toggleStyle(.switch)
+                }
+            }
+            .padding(16)
+            .background(Color.cardBackground(isDarkMode))
+            .cornerRadius(12)
+
+            // Card 3: Typewriter Center Scrolling
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Typewriter Vertical Center Scrolling")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                        Text("Locks your active cursor line at the vertical center of the editor canvas during long writing sessions.")
+                            .font(.caption)
+                            .foregroundColor(subtitleTextColor)
+                    }
+                    Spacer()
+                    Toggle("", isOn: $enableTypewriterScroll)
+                        .toggleStyle(.switch)
+                }
+            }
+            .padding(16)
+            .background(Color.cardBackground(isDarkMode))
+            .cornerRadius(12)
+
+            // Card 4: Local AI Auto-Tagging
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Local AI Auto-Tagging on Save")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                        Text("Gemma AI analyzes note contents on save and automatically proposes and inserts relevant #tags.")
+                            .font(.caption)
+                            .foregroundColor(subtitleTextColor)
+                    }
+                    Spacer()
+                    Toggle("", isOn: $enableAIAutoTagging)
+                        .toggleStyle(.switch)
+                }
+            }
+            .padding(16)
+            .background(Color.cardBackground(isDarkMode))
+            .cornerRadius(12)
         }
     }
 
