@@ -37,6 +37,13 @@ class WhisperModelDownloader: NSObject, ObservableObject, URLSessionDownloadDele
         )
     ]
     
+    nonisolated static var whisperDirectory: URL {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let dir = appSupport.appendingPathComponent("com.whispnotes.app/models", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+    
     private var downloadTask: URLSessionDownloadTask?
     private var activeSession: URLSession?
     
@@ -46,7 +53,7 @@ class WhisperModelDownloader: NSObject, ObservableObject, URLSessionDownloadDele
     }
     
     func checkDownloadedModels() {
-        let dir = LocalSpeechTranscriber.modelDirectory
+        let dir = Self.whisperDirectory
         var downloaded: Set<String> = []
         for model in availableModels {
             let fileURL = dir.appendingPathComponent(model.fileName)
@@ -88,34 +95,72 @@ class WhisperModelDownloader: NSObject, ObservableObject, URLSessionDownloadDele
         let httpResponse = downloadTask.response as? HTTPURLResponse
         let statusCode = httpResponse?.statusCode ?? 200
         
-        Task { @MainActor in
-            guard statusCode == 200 else {
+        guard statusCode == 200 else {
+            Task { @MainActor in
                 self.statusMessage = "Download failed: Server returned HTTP \(statusCode)"
                 self.downloadingModelId = nil
                 self.downloadProgress = 0.0
                 self.activeSession = nil
-                return
             }
-            
-            guard let modelId = self.downloadingModelId,
-                  let model = self.availableModels.first(where: { $0.id == modelId }) else { return }
-            
-            let dir = LocalSpeechTranscriber.modelDirectory
-            _ = try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-            let destURL = dir.appendingPathComponent(model.fileName)
-            
-            if FileManager.default.fileExists(atPath: destURL.path) {
-                try? FileManager.default.removeItem(at: destURL)
+            return
+        }
+        
+        let dir = Self.whisperDirectory
+        
+        // Match target filename based on download URL or fallback to base model
+        let reqURL = downloadTask.originalRequest?.url ?? downloadTask.currentRequest?.url
+        let fileName: String
+        let modelDisplayName: String
+        
+        if let url = reqURL {
+            let lastComponent = url.lastPathComponent
+            if lastComponent.contains("tiny") {
+                fileName = "ggml-tiny.bin"
+                modelDisplayName = "Tiny"
+            } else if lastComponent.contains("small") {
+                fileName = "ggml-small.bin"
+                modelDisplayName = "Small"
+            } else {
+                fileName = "ggml-base.bin"
+                modelDisplayName = "Base"
             }
-            
+        } else {
+            fileName = "ggml-base.bin"
+            modelDisplayName = "Base"
+        }
+        
+        let destURL = dir.appendingPathComponent(fileName)
+        
+        if FileManager.default.fileExists(atPath: destURL.path) {
+            try? FileManager.default.removeItem(at: destURL)
+        }
+        
+        var isSuccess = false
+        var errorMsg: String? = nil
+        
+        do {
+            try FileManager.default.moveItem(at: location, to: destURL)
+            isSuccess = true
+        } catch {
             do {
-                try FileManager.default.moveItem(at: location, to: destURL)
-                self.checkDownloadedModels()
-                self.statusMessage = "\(model.name) downloaded successfully"
-            } catch {
-                self.statusMessage = "Failed to save model: \(error.localizedDescription)"
+                try FileManager.default.copyItem(at: location, to: destURL)
+                isSuccess = true
+            } catch let copyErr {
+                errorMsg = copyErr.localizedDescription
             }
-            
+        }
+        
+        let finalSuccess = isSuccess
+        let finalName = modelDisplayName
+        let finalError = errorMsg
+        
+        Task { @MainActor in
+            if finalSuccess {
+                self.checkDownloadedModels()
+                self.statusMessage = "\(finalName) downloaded and ready"
+            } else {
+                self.statusMessage = "Failed to save model: \(finalError ?? "Unknown error")"
+            }
             self.downloadingModelId = nil
             self.downloadProgress = 0.0
             self.activeSession = nil
@@ -125,10 +170,10 @@ class WhisperModelDownloader: NSObject, ObservableObject, URLSessionDownloadDele
     nonisolated func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
         if totalBytesExpectedToWrite > 0 {
             let progress = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
+            let mbWritten = Double(totalBytesWritten) / (1024 * 1024)
+            let mbTotal = Double(totalBytesExpectedToWrite) / (1024 * 1024)
             Task { @MainActor in
                 self.downloadProgress = progress
-                let mbWritten = Double(totalBytesWritten) / (1024 * 1024)
-                let mbTotal = Double(totalBytesExpectedToWrite) / (1024 * 1024)
                 self.statusMessage = String(format: "Downloading: %.1f MB / %.1f MB (%.0f%%)", mbWritten, mbTotal, progress * 100)
             }
         }
@@ -136,9 +181,11 @@ class WhisperModelDownloader: NSObject, ObservableObject, URLSessionDownloadDele
 
     nonisolated func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         if let err = error {
+            let errorText = err.localizedDescription
+            let isCancelled = (err as NSError).code == NSURLErrorCancelled
             Task { @MainActor in
-                if (err as NSError).code != NSURLErrorCancelled {
-                    self.statusMessage = "Download error: \(err.localizedDescription)"
+                if !isCancelled {
+                    self.statusMessage = "Download error: \(errorText)"
                 }
                 self.downloadingModelId = nil
                 self.downloadProgress = 0.0
@@ -167,7 +214,7 @@ class GemmaModelDownloader: NSObject, ObservableObject, URLSessionDownloadDelega
         downloadURL: URL(string: "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf")!
     )
     
-    static var modelDirectory: URL {
+    nonisolated static var gemmaDirectory: URL {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let dir = appSupport.appendingPathComponent("com.whispnotes.app/models/gemma")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -175,7 +222,7 @@ class GemmaModelDownloader: NSObject, ObservableObject, URLSessionDownloadDelega
     }
     
     var modelFileURL: URL {
-        Self.modelDirectory.appendingPathComponent(defaultModel.fileName)
+        Self.gemmaDirectory.appendingPathComponent(defaultModel.fileName)
     }
     
     private var downloadTask: URLSessionDownloadTask?
@@ -227,30 +274,46 @@ class GemmaModelDownloader: NSObject, ObservableObject, URLSessionDownloadDelega
         let httpResponse = downloadTask.response as? HTTPURLResponse
         let statusCode = httpResponse?.statusCode ?? 200
         
-        Task { @MainActor in
-            guard statusCode == 200 else {
+        guard statusCode == 200 else {
+            Task { @MainActor in
                 self.statusMessage = "Download failed: Server returned HTTP \(statusCode)"
                 self.isDownloading = false
                 self.downloadProgress = 0.0
                 self.activeSession = nil
-                return
             }
-            
-            let destURL = self.modelFileURL
-            _ = try? FileManager.default.createDirectory(at: Self.modelDirectory, withIntermediateDirectories: true)
-            
-            if FileManager.default.fileExists(atPath: destURL.path) {
-                try? FileManager.default.removeItem(at: destURL)
-            }
-            
+            return
+        }
+        
+        let destURL = Self.gemmaDirectory.appendingPathComponent("gemma-2-2b-it.gguf")
+        
+        if FileManager.default.fileExists(atPath: destURL.path) {
+            try? FileManager.default.removeItem(at: destURL)
+        }
+        
+        var isSuccess = false
+        var errorMsg: String? = nil
+        do {
+            try FileManager.default.moveItem(at: location, to: destURL)
+            isSuccess = true
+        } catch {
             do {
-                try FileManager.default.moveItem(at: location, to: destURL)
-                self.checkDownloadedStatus()
-                self.statusMessage = "Downloaded & Ready"
-            } catch {
-                self.statusMessage = "Download failed to save: \(error.localizedDescription)"
+                try FileManager.default.copyItem(at: location, to: destURL)
+                isSuccess = true
+            } catch let copyErr {
+                errorMsg = copyErr.localizedDescription
             }
-            
+        }
+        
+        let finalSuccess = isSuccess
+        let finalError = errorMsg
+        
+        Task { @MainActor in
+            if finalSuccess {
+                self.checkDownloadedStatus()
+                self.statusMessage = "Gemma 2B Downloaded & Ready"
+            } else {
+                self.statusMessage = "Download failed to save: \(finalError ?? "Unknown error")"
+            }
             self.isDownloading = false
             self.downloadProgress = 0.0
             self.activeSession = nil
@@ -260,10 +323,10 @@ class GemmaModelDownloader: NSObject, ObservableObject, URLSessionDownloadDelega
     nonisolated func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
         if totalBytesExpectedToWrite > 0 {
             let progress = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
+            let mbWritten = Double(totalBytesWritten) / (1024 * 1024)
+            let mbTotal = Double(totalBytesExpectedToWrite) / (1024 * 1024)
             Task { @MainActor in
                 self.downloadProgress = progress
-                let mbWritten = Double(totalBytesWritten) / (1024 * 1024)
-                let mbTotal = Double(totalBytesExpectedToWrite) / (1024 * 1024)
                 self.statusMessage = String(format: "Downloading: %.1f MB / %.1f MB (%.0f%%)", mbWritten, mbTotal, progress * 100)
             }
         }
@@ -271,9 +334,11 @@ class GemmaModelDownloader: NSObject, ObservableObject, URLSessionDownloadDelega
 
     nonisolated func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         if let err = error {
+            let errorText = err.localizedDescription
+            let isCancelled = (err as NSError).code == NSURLErrorCancelled
             Task { @MainActor in
-                if (err as NSError).code != NSURLErrorCancelled {
-                    self.statusMessage = "Download error: \(err.localizedDescription)"
+                if !isCancelled {
+                    self.statusMessage = "Download error: \(errorText)"
                 }
                 self.isDownloading = false
                 self.downloadProgress = 0.0

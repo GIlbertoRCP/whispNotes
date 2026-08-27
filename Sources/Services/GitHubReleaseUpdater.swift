@@ -60,7 +60,7 @@ public class GitHubReleaseUpdater: NSObject, ObservableObject, URLSessionDownloa
         if let ver = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String, !ver.isEmpty {
             return ver
         }
-        return "1.5.1"
+        return "1.5.2"
     }
 
     override private init() {

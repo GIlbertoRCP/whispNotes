@@ -2,19 +2,15 @@ import SwiftUI
 import AppKit
 import QuickLookUI
 
+// MARK: - PPTX Display Mode
+enum PPTXDisplayMode: String, CaseIterable {
+    case slides = "Slide Deck"
+    case quickLook = "Document Preview"
+}
+
 // MARK: - Native QuickLook Presentation NSViewRepresentable Wrapper
 struct QLPreviewRepresentable: NSViewRepresentable {
     let url: URL
-    var currentSlideIndex: Int = 1
-    var totalSlides: Int = 1
-    
-    class Coordinator: NSObject {
-        var lastSlideIndex: Int = 1
-    }
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
     
     func makeNSView(context: Context) -> QLPreviewView {
         let preview = QLPreviewView(frame: .zero, style: .normal) ?? QLPreviewView()
@@ -29,42 +25,146 @@ struct QLPreviewRepresentable: NSViewRepresentable {
         } else if nsView.previewItem == nil {
             nsView.previewItem = url as NSURL
         }
-        
-        if context.coordinator.lastSlideIndex != currentSlideIndex {
-            context.coordinator.lastSlideIndex = currentSlideIndex
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                self.scrollToSlide(slideIndex: currentSlideIndex, totalSlides: totalSlides, in: nsView)
-            }
-        }
     }
+}
+
+// MARK: - High-Fidelity Slide Presentation Canvas
+struct SlidePresentationCanvas: View {
+    let slide: PPTXSlide
+    let slideIndex: Int
+    let totalSlides: Int
+    let isDark: Bool
+    let primaryAccent: Color
+    let secondaryAccent: Color
     
-    private func scrollToSlide(slideIndex: Int, totalSlides: Int, in view: NSView) {
-        if let scrollView = findScrollView(in: view), let docView = scrollView.documentView {
-            let clipView = scrollView.contentView
-            let totalHeight = docView.bounds.height
-            let visibleHeight = clipView.bounds.height
+    var body: some View {
+        GeometryReader { geo in
+            let availableWidth = max(280, geo.size.width - 48)
+            let availableHeight = max(200, geo.size.height - 48)
+            let targetAspect: CGFloat = 16.0 / 9.0
             
-            if totalHeight > visibleHeight && totalSlides > 1 {
-                let slideFraction = CGFloat(max(0, slideIndex - 1)) / CGFloat(max(1, totalSlides - 1))
-                let maxScrollY = totalHeight - visibleHeight
-                let targetY = max(0, min(slideFraction * maxScrollY, maxScrollY))
+            let cardWidth: CGFloat = min(availableWidth, availableHeight * targetAspect)
+            let cardHeight: CGFloat = cardWidth / targetAspect
+            
+            VStack {
+                Spacer()
                 
-                NSAnimationContext.runAnimationGroup { ctx in
-                    ctx.duration = 0.22
-                    ctx.allowsImplicitAnimation = true
-                    clipView.animator().scroll(to: NSPoint(x: 0, y: targetY))
+                VStack(alignment: .leading, spacing: 14) {
+                    // Slide Top Meta Strip
+                    HStack {
+                        Text("SLIDE \(slideIndex) OF \(totalSlides)")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(primaryAccent.opacity(0.15))
+                            .foregroundColor(primaryAccent)
+                            .cornerRadius(4)
+                        
+                        Spacer()
+                        
+                        if !slide.title.isEmpty {
+                            Text(slide.title)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                    
+                    Divider()
+                        .background(Color.subtleBorder(isDark))
+                    
+                    // Main Slide Title
+                    if !slide.title.isEmpty {
+                        Text(slide.title)
+                            .font(.system(size: max(16, min(24, cardWidth * 0.038)), weight: .heavy))
+                            .foregroundColor(isDark ? .white : Color(red: 15/255, green: 23/255, blue: 42/255))
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    
+                    // Bullet Points List
+                    if !slide.bulletPoints.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(Array(slide.bulletPoints.prefix(8).enumerated()), id: \.offset) { _, bullet in
+                                HStack(alignment: .top, spacing: 8) {
+                                    Circle()
+                                        .fill(primaryAccent)
+                                        .frame(width: 5, height: 5)
+                                        .padding(.top, 5)
+                                    
+                                    Text(bullet)
+                                        .font(.system(size: max(11, min(14, cardWidth * 0.024)), weight: .medium))
+                                        .foregroundColor(isDark ? Color(red: 226/255, green: 232/255, blue: 240/255) : Color(red: 30/255, green: 41/255, blue: 59/255))
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                        }
+                    } else if slide.title.isEmpty && slide.tables.isEmpty {
+                        VStack(spacing: 8) {
+                            Spacer()
+                            Image(systemName: "photo.on.rectangle.angled")
+                                .font(.system(size: 28))
+                                .foregroundColor(.secondary.opacity(0.6))
+                            Text("Visual Slide Media")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    
+                    // Tables (if any)
+                    if !slide.tables.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(Array(slide.tables.prefix(4).enumerated()), id: \.offset) { _, row in
+                                HStack(spacing: 6) {
+                                    ForEach(Array(row.enumerated()), id: \.offset) { _, cell in
+                                        Text(cell)
+                                            .font(.system(size: 10, design: .monospaced))
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 3)
+                                            .background(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+                                            .cornerRadius(4)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    Spacer(minLength: 0)
+                    
+                    // Speaker Notes Footer if present
+                    if let notes = slide.speakerNotes, !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        HStack(alignment: .top, spacing: 6) {
+                            Image(systemName: "bubble.left.fill")
+                                .font(.system(size: 8))
+                                .foregroundColor(secondaryAccent)
+                                .padding(.top, 2)
+                            Text(notes)
+                                .font(.system(size: 10, design: .monospaced))
+                                .foregroundColor(secondaryAccent)
+                                .lineLimit(2)
+                        }
+                        .padding(6)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(secondaryAccent.opacity(0.08))
+                        .cornerRadius(6)
+                    }
                 }
-                scrollView.reflectScrolledClipView(clipView)
+                .padding(20)
+                .frame(width: cardWidth, height: cardHeight)
+                .background(Color.cardBackground(isDark))
+                .cornerRadius(12)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.subtleBorder(isDark), lineWidth: 1)
+                )
+                .shadow(color: Color.black.opacity(isDark ? 0.4 : 0.1), radius: 10, x: 0, y: 5)
+                
+                Spacer()
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-    }
-    
-    private func findScrollView(in view: NSView) -> NSScrollView? {
-        if let sv = view as? NSScrollView { return sv }
-        for sub in view.subviews {
-            if let sv = findScrollView(in: sub) { return sv }
-        }
-        return nil
     }
 }
 
@@ -90,6 +190,7 @@ struct PPTXDocumentViewerView: View {
     @State private var searchQuery: String = ""
     @State private var isSearching: Bool = false
     @State private var matchingSlideIds: Set<Int> = []
+    @State private var displayMode: PPTXDisplayMode = .slides
     
     var currentSlide: PPTXSlide? {
         guard let pres = presentation, currentSlideIndex >= 1 && currentSlideIndex <= pres.slides.count else { return nil }
@@ -98,7 +199,7 @@ struct PPTXDocumentViewerView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let isCompact = geo.size.width < 600
+            let isCompact = geo.size.width < 640
             
             VStack(spacing: 0) {
                 // Sleek Presentation Toolbar
@@ -118,13 +219,28 @@ struct PPTXDocumentViewerView: View {
                 HStack(spacing: 0) {
                     // Presentation Visual Rendering Canvas
                     ZStack(alignment: .topTrailing) {
-                        QLPreviewRepresentable(
-                            url: pptxURL,
-                            currentSlideIndex: currentSlideIndex,
-                            totalSlides: totalSlides
-                        )
-                        .id(pptxURL)
-                        .background(Color.black.opacity(isDark ? 0.35 : 0.05))
+                        if displayMode == .slides {
+                            if let slide = currentSlide {
+                                SlidePresentationCanvas(
+                                    slide: slide,
+                                    slideIndex: currentSlideIndex,
+                                    totalSlides: totalSlides,
+                                    isDark: isDark,
+                                    primaryAccent: primaryAccent,
+                                    secondaryAccent: secondaryAccent
+                                )
+                                .id(currentSlideIndex)
+                                .transition(.opacity)
+                                .background(Color.black.opacity(isDark ? 0.35 : 0.05))
+                            } else {
+                                ProgressView("Loading slide \(currentSlideIndex)...")
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            }
+                        } else {
+                            QLPreviewRepresentable(url: pptxURL)
+                                .id(pptxURL)
+                                .background(Color.black.opacity(isDark ? 0.35 : 0.05))
+                        }
                         
                         // Floating Citation Toast
                         if showQuoteNotification {
@@ -165,7 +281,7 @@ struct PPTXDocumentViewerView: View {
     private func loadPresentation() {
         if let cached = PPTXDocumentCache.shared.cachedPresentation(for: pptxURL) {
             self.presentation = cached
-            self.totalSlides = cached.slideCount
+            self.totalSlides = max(1, cached.slideCount)
             return
         }
         
@@ -231,7 +347,9 @@ struct PPTXDocumentViewerView: View {
                     }
                     
                     Button("Go to Slide \(Int(jumpTargetSlide))") {
-                        currentSlideIndex = Int(jumpTargetSlide)
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            currentSlideIndex = Int(jumpTargetSlide)
+                        }
                         showJumpPopover = false
                     }
                     .buttonStyle(.borderedProminent)
@@ -243,7 +361,9 @@ struct PPTXDocumentViewerView: View {
             // Previous & Next Slide Controls
             HStack(spacing: 1) {
                 Button(action: {
-                    if currentSlideIndex > 1 { currentSlideIndex -= 1 }
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        if currentSlideIndex > 1 { currentSlideIndex -= 1 }
+                    }
                 }) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 10, weight: .medium))
@@ -254,7 +374,9 @@ struct PPTXDocumentViewerView: View {
                 .help("Previous Slide")
                 
                 Button(action: {
-                    if currentSlideIndex < totalSlides { currentSlideIndex += 1 }
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        if currentSlideIndex < totalSlides { currentSlideIndex += 1 }
+                    }
                 }) {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 10, weight: .medium))
@@ -282,6 +404,15 @@ struct PPTXDocumentViewerView: View {
             }
 
             Spacer()
+
+            // Display Mode Switcher (Slides vs QuickLook)
+            Picker("", selection: $displayMode) {
+                Text("Slides").tag(PPTXDisplayMode.slides)
+                Text("Document").tag(PPTXDisplayMode.quickLook)
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 140)
+            .help("Switch between Interactive Slide Deck and Document Preview")
 
             // In-Document Search Toggle
             Button(action: {
@@ -398,35 +529,22 @@ struct PPTXDocumentViewerView: View {
             TextField("Search in slides & speaker notes...", text: $searchQuery)
                 .textFieldStyle(.plain)
                 .font(.caption)
-                .onChange(of: searchQuery) { _, newValue in
-                    performSlideSearch(query: newValue)
+                .onChange(of: searchQuery) { _, newQuery in
+                    performSlideSearch(query: newQuery)
                 }
             
-            if !matchingSlideIds.isEmpty {
-                Text("\(matchingSlideIds.count) matching slides")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(primaryAccent)
-            }
-            
             if !searchQuery.isEmpty {
-                Button(action: {
-                    searchQuery = ""
-                    matchingSlideIds.removeAll()
-                }) {
+                Button(action: { searchQuery = "" }) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.caption2)
                         .foregroundColor(.secondary)
                 }
                 .buttonStyle(.plain)
+                
+                Text("\(matchingSlideIds.count) matches")
+                    .font(.caption2)
+                    .foregroundColor(matchingSlideIds.isEmpty ? .red : .secondary)
             }
-            
-            Button("Done") {
-                isSearching = false
-                searchQuery = ""
-                matchingSlideIds.removeAll()
-            }
-            .font(.caption2)
-            .buttonStyle(.plain)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
@@ -490,7 +608,7 @@ struct PPTXDocumentViewerView: View {
                                         .foregroundColor(isSelected ? .white : .secondary)
                                         .cornerRadius(4)
                                     
-                                    Text(slide.title)
+                                    Text(slide.title.isEmpty ? "Untitled Slide" : slide.title)
                                         .font(.system(size: 11, weight: .bold))
                                         .foregroundColor(isSelected ? primaryAccent : (isDark ? .white : .black))
                                         .lineLimit(1)
@@ -545,7 +663,9 @@ struct PPTXDocumentViewerView: View {
                             )
                             .contentShape(Rectangle())
                             .onTapGesture {
-                                currentSlideIndex = slide.id
+                                withAnimation(.easeInOut(duration: 0.18)) {
+                                    currentSlideIndex = slide.id
+                                }
                             }
                         }
                     }
@@ -572,7 +692,7 @@ struct PPTXDocumentViewerView: View {
     }
     
     private func quoteSlide(_ slide: PPTXSlide) {
-        var citation = "\n> 📊 **Slide \(slide.id): \(slide.title)**\n"
+        var citation = "\n> **Slide \(slide.id): \(slide.title)**\n"
         for bullet in slide.bulletPoints {
             citation += "> • \(bullet)\n"
         }
@@ -599,14 +719,14 @@ struct PPTXDocumentViewerView: View {
     private func insertFullOutline() {
         guard let pres = presentation, !pres.slides.isEmpty else { return }
         
-        var outline = "\n## 📊 Presentation Outline: \(pres.title)\n\n"
+        var outline = "\n## Presentation Outline: \(pres.title)\n\n"
         for slide in pres.slides {
             outline += "### Slide \(slide.id): \(slide.title)\n"
             for bullet in slide.bulletPoints {
                 outline += "- \(bullet)\n"
             }
             if let notes = slide.speakerNotes, !notes.isEmpty {
-                outline += "> 🎙️ *Presenter Notes: \(notes)*\n"
+                outline += "> *Presenter Notes: \(notes)*\n"
             }
             outline += "\n"
         }

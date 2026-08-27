@@ -5,6 +5,22 @@ All notable changes to **WhispNotes** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semanticsver.org/spec/v2.0.0.html).
 
+## [1.5.2] - 2026-08-26
+
+### Added
+- **Interactive Slide Deck Presentation Canvas**:
+  - High-fidelity 16:9 widescreen slide presentation canvas displaying active slide titles, formatted bullet points, structured data tables, and speaker notes.
+  - Instant slide transitions when using Next Slide, Previous Slide, Jump to Slide popover, or selecting slides in the Outline & Speaker Notes Drawer.
+  - Display mode toggle between "Slides" (interactive slide deck) and "Document" (QuickLook preview).
+
+### Improved & Fixed
+- **Permanent Offline Model Download Persistence**:
+  - Resolved an issue where completed Whisper and Gemma model downloads reset after reaching 100%.
+  - Synchronously moved temporary download files into the persistent application support directory before delegate method return, preventing temporary file purging.
+  - Downloaded models immediately reflect as downloaded and active across app launches.
+
+---
+
 ## [1.5.1] - 2026-08-26
 
 ### Added
