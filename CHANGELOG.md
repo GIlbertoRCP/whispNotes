@@ -5,6 +5,30 @@ All notable changes to **WhispNotes** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semanticsver.org/spec/v2.0.0.html).
 
+## [1.5.1] - 2026-08-26
+
+### Added
+- **Real-Time Release & Update Status in Settings**:
+  - Live status cards in Preferences under the Updates tab displaying current version status (`v1.5.1`).
+  - Clear confirmation badge when the app is up to date, including the latest verified GitHub release tag and release date.
+  - Interactive "Check for Updates Now" button with real-time connection spinner and last checked timestamp.
+  - One-click update detection displaying version differences, release notes previews, and direct DMG download links.
+
+### Improved & Fixed
+- **Markdown Bullet Points & List Rendering**:
+  - Full support for `* `, `- `, and `+ ` bullet markers with arbitrary leading whitespace indentation in Split and Preview views.
+  - Support for interactive checklists (`* [ ]`, `* [x]`, `- [ ]`, `- [x]`) and numbered lists (`1. `, `2. `) across all reading modes.
+  - Refined editor auto-continuation on Return, tab indentation, and backspace marker termination in `CustomNSTextView`.
+- **Repaired Offline AI Model Downloader**:
+  - Resolved an issue where downloads for Whisper and Gemma 2B models were cancelled prematurely due to session deallocation.
+  - Retained persistent download sessions with live progress reporting in megabytes and percentages.
+- **Programmatic Slide Navigation in PPTX Viewer**:
+  - QuickLook presentation canvas now automatically scrolls to target slides when clicking Next, Previous, Jump to Slide, or selecting a slide in the Outline Drawer.
+- **Resolved AttributeGraph Cycle Warning**:
+  - Eliminated the startup cycle warning by decoupling bidirectional tab navigation sync.
+
+---
+
 ## [1.5.0] - 2026-08-26
 
 ### Added
