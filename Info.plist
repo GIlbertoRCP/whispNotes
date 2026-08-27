@@ -26,6 +26,11 @@
     <string>WhispNotes requires microphone access to record and transcribe lecture audio locally on your Mac.</string>
     <key>NSSpeechRecognitionUsageDescription</key>
     <string>WhispNotes needs speech recognition access to transcribe audio on-device.</string>
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoads</key>
+        <true/>
+    </dict>
     <key>CFBundleDocumentTypes</key>
     <array>
         <dict>
