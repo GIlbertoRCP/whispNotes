@@ -49,6 +49,7 @@ struct EditorPanelView: View {
     @State private var showWikiAutocomplete = false
     @State private var wikiQuery = ""
     @State private var showImagePastedToast = false
+    @State private var pasteToastMessage: String? = nil
 
     private var stats: (words: Int, chars: Int) {
         (docStats.words, docStats.characters)
@@ -101,6 +102,7 @@ struct EditorPanelView: View {
                             MarkdownToolbarButton(icon: "tablecells", help: "Insert Table Template") { insertMarkdown("\n| Header 1 | Header 2 |\n| --- | --- |\n| Item 1 | Item 2 |\n", "") }
                             MarkdownToolbarButton(icon: "quote.opening", help: "Blockquote (> Quote)") { insertMarkdown("\n> ", "") }
                             MarkdownToolbarButton(icon: "photo.badge.plus", help: "Paste Screenshot / Image", shortcut: "⌘⇧V") { pasteImageFromClipboard() }
+                            MarkdownToolbarButton(icon: "wand.and.stars", help: "Format & Beautify Structure", shortcut: "⌥⌘F") { smartFormatCurrentNote() }
                         }
                     }
 
@@ -323,7 +325,8 @@ struct EditorPanelView: View {
                                     handleAutoSave(formatted)
                                 }
                             )
-                            .padding(6)
+                            .padding(.horizontal, 8)
+                            .padding(.top, 4)
                             .background(Color.panelBackground(isDark))
                             .frame(width: effectiveLeftWidth)
                             
@@ -541,25 +544,46 @@ struct EditorPanelView: View {
             }
         }
         .overlay(alignment: .topTrailing) {
-            if showImagePastedToast {
-                HStack(spacing: 6) {
-                    Image(systemName: "photo.fill")
-                        .foregroundColor(primaryAccent)
-                    Text("Image Pasted into Vault")
-                        .font(.system(size: 11, weight: .bold))
+            VStack(alignment: .trailing, spacing: 8) {
+                if showImagePastedToast {
+                    HStack(spacing: 6) {
+                        Image(systemName: "photo.fill")
+                            .foregroundColor(primaryAccent)
+                        Text("Image Pasted into Vault")
+                            .font(.system(size: 11, weight: .bold))
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color.panelBackground(isDark))
+                    .cornerRadius(8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(primaryAccent.opacity(0.3), lineWidth: 1)
+                    )
+                    .shadow(color: Color.black.opacity(0.25), radius: 6, x: 0, y: 3)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Color.panelBackground(isDark))
-                .cornerRadius(8)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(primaryAccent.opacity(0.3), lineWidth: 1)
-                )
-                .shadow(color: Color.black.opacity(0.25), radius: 6, x: 0, y: 3)
-                .padding(16)
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                
+                if let message = pasteToastMessage {
+                    HStack(spacing: 6) {
+                        Image(systemName: "sparkles")
+                            .foregroundColor(primaryAccent)
+                        Text(message)
+                            .font(.system(size: 11, weight: .semibold))
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color.panelBackground(isDark))
+                    .cornerRadius(8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(primaryAccent.opacity(0.35), lineWidth: 1)
+                    )
+                    .shadow(color: Color.black.opacity(0.25), radius: 6, x: 0, y: 3)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
             }
+            .padding(16)
         }
         .onAppear {
             localContent = note.content.replacingOccurrences(of: "\\n", with: "\n")
@@ -593,6 +617,20 @@ struct EditorPanelView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .pasteImageAsAttachment)) { _ in
             pasteImageFromClipboard()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SmartPasteApplied"))) { notif in
+            let type = notif.object as? String ?? "Markdown"
+            withAnimation {
+                pasteToastMessage = "✨ \(type) Pasted (⌘Z to undo)"
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                withAnimation {
+                    pasteToastMessage = nil
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SmartFormatNoteRequested"))) { _ in
+            smartFormatCurrentNote()
         }
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             handleFileDrop(providers: providers)
@@ -655,9 +693,9 @@ struct EditorPanelView: View {
         case .newNoteFromTemplate:
             NotificationCenter.default.post(name: .openTemplatePicker, object: nil)
         case .exportPDF:
-            break
+            NotificationCenter.default.post(name: .openExportModal, object: nil)
         case .exportSRT:
-            break
+            NoteExporter.shared.exportSRT(note)
         }
     }
 
@@ -748,6 +786,22 @@ struct EditorPanelView: View {
             }
         } else {
             NSSound.beep()
+        }
+    }
+
+    private func smartFormatCurrentNote() {
+        let cleaned = SmartPasteEngine.shared.cleanClutteredPlainText(localContent)
+        if cleaned != localContent {
+            localContent = cleaned
+            handleAutoSave(cleaned)
+            withAnimation {
+                pasteToastMessage = "✨ Note Formatted & Cleaned"
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                withAnimation {
+                    pasteToastMessage = nil
+                }
+            }
         }
     }
 
@@ -1052,7 +1106,12 @@ struct MacMarkdownEditorView: NSViewRepresentable {
 
         override func performKeyEquivalent(with event: NSEvent) -> Bool {
             let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-            // Intercept ⌘V keyboard shortcut
+            // Intercept ⌥⇧⌘V: Paste as raw unformatted plain text
+            if flags == [.command, .option, .shift] && (event.charactersIgnoringModifiers ?? "").lowercased() == "v" {
+                self.pasteAsPlainText(self)
+                return true
+            }
+            // Intercept ⌘V keyboard shortcut: Smart Paste
             if flags == .command && event.charactersIgnoringModifiers == "v" {
                 self.paste(self)
                 return true
@@ -1324,7 +1383,7 @@ struct MacMarkdownEditorView: NSViewRepresentable {
         }
 
         override func paste(_ sender: Any?) {
-            // Check if clipboard contains image data (e.g. from ⌘⌃⇧4 screenshot or copied image)
+            // 1. Check if clipboard contains image data (e.g. from ⌘⌃⇧4 screenshot or copied image)
             if let noteId = noteId, let res = NotesDataManager.shared.saveClipboardImage(for: noteId) {
                 let markdownTag = "\n\n" + res.markdown + "\n\n"
                 self.insertText(markdownTag, replacementRange: self.selectedRange())
@@ -1332,8 +1391,26 @@ struct MacMarkdownEditorView: NSViewRepresentable {
                 onImagePasted?()
                 return
             }
-            // Normal text paste
+            // 2. Smart Paste: convert HTML rich text to Markdown or clean cluttered plain text
+            if let result = SmartPasteEngine.shared.processPasteboard(NSPasteboard.general) {
+                self.insertText(result.text, replacementRange: self.selectedRange())
+                self.didChangeText()
+                if result.wasFormatted {
+                    NotificationCenter.default.post(name: NSNotification.Name("SmartPasteApplied"), object: result.formatType)
+                }
+                return
+            }
+            // 3. Fallback to normal text paste
             super.paste(sender)
+        }
+
+        override func pasteAsPlainText(_ sender: Any?) {
+            if let plainText = NSPasteboard.general.string(forType: .string) {
+                self.insertText(plainText, replacementRange: self.selectedRange())
+                self.didChangeText()
+            } else {
+                super.pasteAsPlainText(sender)
+            }
         }
 
         override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
@@ -1389,7 +1466,7 @@ struct MacMarkdownEditorView: NSViewRepresentable {
         textView.autoresizingMask = [.width]
         textView.textContainer?.containerSize = NSSize(width: contentSize.width, height: CGFloat.greatestFiniteMagnitude)
         textView.textContainer?.widthTracksTextView = true
-        textView.textContainerInset = NSSize(width: 14, height: 14)
+        textView.textContainerInset = NSSize(width: 22, height: 18)
         
         textView.isRichText = false
         textView.allowsUndo = true
@@ -1453,12 +1530,12 @@ struct MacMarkdownEditorView: NSViewRepresentable {
         textView.font = nsFont
         
         let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.lineSpacing = 5.0
-        paragraphStyle.paragraphSpacing = 8.0
+        paragraphStyle.lineSpacing = 6.0
+        paragraphStyle.paragraphSpacing = 10.0
         textView.defaultParagraphStyle = paragraphStyle
         
-        textView.textColor = isDark ? NSColor(red: 226/255, green: 232/255, blue: 240/255, alpha: 1.0) : NSColor(red: 15/255, green: 23/255, blue: 42/255, alpha: 1.0)
-        textView.insertionPointColor = isDark ? NSColor.white : NSColor.black
+        textView.textColor = isDark ? NSColor(red: 232/255, green: 238/255, blue: 246/255, alpha: 1.0) : NSColor(red: 15/255, green: 23/255, blue: 42/255, alpha: 1.0)
+        textView.insertionPointColor = isDark ? NSColor(red: 241/255, green: 245/255, blue: 249/255, alpha: 1.0) : NSColor(red: 15/255, green: 23/255, blue: 42/255, alpha: 1.0)
     }
 }
 

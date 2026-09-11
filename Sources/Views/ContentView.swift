@@ -9,37 +9,56 @@ struct ResizableDivider: View {
     let isDark: Bool
     let primaryColor: Color
 
-    @State private var initialWidth: Double? = nil
+    @State private var startLocationX: CGFloat? = nil
+    @State private var startWidth: Double? = nil
     @State private var isHovering = false
+    @State private var isDragging = false
 
     var body: some View {
-        Rectangle()
-            .fill(isHovering ? primaryColor.opacity(0.6) : Color.subtleBorder(isDark))
-            .frame(width: 1)
-            .contentShape(Rectangle())
-            .onHover { hovering in
-                isHovering = hovering
+        ZStack {
+            Rectangle()
+                .fill(isDragging || isHovering ? primaryColor.opacity(0.85) : Color.subtleBorder(isDark))
+                .frame(width: 1)
+        }
+        .frame(width: 9)
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            isHovering = hovering
+            if !isDragging {
                 if hovering {
                     NSCursor.resizeLeftRight.push()
                 } else {
                     NSCursor.pop()
                 }
             }
-            .gesture(
-                DragGesture(minimumDistance: 1)
-                    .onChanged { value in
-                        if initialWidth == nil {
-                            initialWidth = width
-                        }
-                        if let start = initialWidth {
-                            let delta = isLeading ? Double(value.translation.width) : -Double(value.translation.width)
-                            width = min(max(start + delta, minWidth), maxWidth)
+        }
+        .gesture(
+            DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                .onChanged { value in
+                    if startLocationX == nil {
+                        startLocationX = value.startLocation.x
+                        startWidth = width
+                        isDragging = true
+                    }
+                    if let startX = startLocationX, let initialW = startWidth {
+                        let delta = isLeading ? Double(value.location.x - startX) : Double(startX - value.location.x)
+                        let newW = min(max(initialW + delta, minWidth), maxWidth)
+                        if width != newW {
+                            width = newW
                         }
                     }
-                    .onEnded { _ in
-                        initialWidth = nil
+                }
+                .onEnded { _ in
+                    startLocationX = nil
+                    startWidth = nil
+                    if isDragging {
+                        isDragging = false
+                        if !isHovering {
+                            NSCursor.pop()
+                        }
                     }
-            )
+                }
+        )
     }
 }
 
@@ -54,7 +73,7 @@ struct ContentView: View {
     @Binding var isSettingsOpen: Bool
     @Binding var isGraphViewOpen: Bool
     
-    @AppStorage("sidebarWidth") private var sidebarWidth: Double = 280.0
+    @AppStorage("sidebarWidth") private var sidebarWidth: Double = 220.0
     @AppStorage("rightPanelWidth") private var rightPanelWidth: Double = 380.0
     @AppStorage("isDarkMode") private var isDarkMode: Bool = true
     @AppStorage("colorTheme") private var colorTheme: String = "Classic Minimal"
@@ -68,6 +87,7 @@ struct ContentView: View {
     @State private var isVaultSearchOpen = false
     @State private var isTemplateModalOpen = false
     @State private var isCalendarOpen = false
+    @State private var isExportModalOpen = false
     @State private var editMode: EditModeType = .split
 
     var primaryAccent: Color {
@@ -107,7 +127,7 @@ struct ContentView: View {
                 .frame(width: CGFloat(sidebarWidth))
                 .transition(.move(edge: .leading))
                 
-                ResizableDivider(width: $sidebarWidth, minWidth: 200, maxWidth: 450, isLeading: true, isDark: isDarkMode, primaryColor: primaryAccent)
+                ResizableDivider(width: $sidebarWidth, minWidth: 170, maxWidth: 450, isLeading: true, isDark: isDarkMode, primaryColor: primaryAccent)
             }
             
             // Middle Main Editor Panel
@@ -129,6 +149,7 @@ struct ContentView: View {
                     NoteTabBarView(
                         tabManager: tabManager,
                         notes: $notes,
+                        isSidebarOpen: isSidebarOpen,
                         isDark: isDarkMode,
                         primaryAccent: primaryAccent,
                         secondaryAccent: secondaryAccent,
@@ -308,6 +329,17 @@ struct ContentView: View {
                 selectedNoteId: $selectedNoteId
             )
         }
+        .sheet(isPresented: $isExportModalOpen) {
+            if let noteBinding = selectedNote {
+                NoteExportModalView(
+                    isOpen: $isExportModalOpen,
+                    note: noteBinding.wrappedValue,
+                    isDark: isDarkMode,
+                    primaryAccent: primaryAccent,
+                    secondaryAccent: secondaryAccent
+                )
+            }
+        }
         .overlay(alignment: .bottom) {
             EmacsMinibufferView(
                 isDark: isDarkMode,
@@ -330,6 +362,11 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .openKnowledgeGraph)) { _ in
             isGraphViewOpen = true
         }
+        .onReceive(NotificationCenter.default.publisher(for: .openExportModal)) { _ in
+            if selectedNote != nil {
+                isExportModalOpen = true
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .createDailyNote)) { _ in
             openOrCreateDailyNote()
         }
@@ -340,7 +377,9 @@ struct ContentView: View {
         }
         .onChange(of: tabManager.activeTabId) { _, newActiveId in
             guard let id = newActiveId, selectedNoteId != id else { return }
-            self.selectedNoteId = id
+            DispatchQueue.main.async {
+                self.selectedNoteId = id
+            }
         }
         .onChange(of: selectedNoteId) { _, newId in
             guard let id = newId else { return }
@@ -358,6 +397,9 @@ struct ContentView: View {
             }
         }
         .onAppear {
+            if sidebarWidth > 260 {
+                sidebarWidth = 220.0
+            }
             NotesDataManager.shared.undoManager = undoManager
             if let id = selectedNoteId ?? notes.first?.id {
                 tabManager.openNote(id)
@@ -423,9 +465,13 @@ struct ContentView: View {
         case .newNoteFromTemplate:
             isTemplateModalOpen = true
         case .exportPDF:
-            break
+            if selectedNote != nil {
+                isExportModalOpen = true
+            }
         case .exportSRT:
-            break
+            if let note = selectedNote?.wrappedValue {
+                NoteExporter.shared.exportSRT(note)
+            }
         }
     }
     

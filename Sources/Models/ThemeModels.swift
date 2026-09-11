@@ -63,8 +63,8 @@ public struct ThemeLibrary {
         panelBackground: Color(red: 30/255, green: 30/255, blue: 34/255),   // Editor Canvas Layer (#1e1e22)
         cardBackground: Color(red: 39/255, green: 39/255, blue: 42/255).opacity(0.65),
         cardBackgroundElevated: Color(red: 45/255, green: 45/255, blue: 48/255),
-        border: Color(red: 55/255, green: 55/255, blue: 60/255),
-        borderStrong: Color(red: 148/255, green: 163/255, blue: 184/255).opacity(0.5),
+        border: Color.white.opacity(0.09),
+        borderStrong: Color(red: 148/255, green: 163/255, blue: 184/255).opacity(0.4),
         shadowColor: Color.black,
         shadowOpacity: 0.35
     )
@@ -133,7 +133,7 @@ public struct ThemeLibrary {
         panelBackground: Color(red: 22/255, green: 22/255, blue: 26/255),   // Pitch Layer 2 (#16161a)
         cardBackground: Color(red: 30/255, green: 30/255, blue: 36/255),   // Crisp neutral dark card
         cardBackgroundElevated: Color(red: 38/255, green: 38/255, blue: 46/255),
-        border: Color(red: 45/255, green: 45/255, blue: 54/255),          // Subtle neutral border
+        border: Color.white.opacity(0.1),                                  // Crisp translucent border
         borderStrong: Color(red: 56/255, green: 189/255, blue: 248/255).opacity(0.45),
         shadowColor: Color.black,
         shadowOpacity: 0.45

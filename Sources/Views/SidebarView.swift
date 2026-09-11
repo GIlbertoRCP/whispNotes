@@ -61,15 +61,15 @@ struct SidebarView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Sidebar Header
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 if let nsImg = NSImage(named: "AppIcon") {
                     Image(nsImage: nsImg)
                         .resizable()
-                        .frame(width: 22, height: 22)
-                        .cornerRadius(5)
+                        .frame(width: 18, height: 18)
+                        .cornerRadius(4)
                 } else {
                     ZStack {
-                        RoundedRectangle(cornerRadius: 6)
+                        RoundedRectangle(cornerRadius: 4)
                             .fill(
                                 LinearGradient(
                                     colors: [primaryAccent, primaryAccent.opacity(0.8)],
@@ -77,103 +77,133 @@ struct SidebarView: View {
                                     endPoint: .bottomTrailing
                                 )
                             )
-                            .frame(width: 22, height: 22)
+                            .frame(width: 17, height: 17)
                         Image(systemName: "note.text")
-                            .font(.system(size: 11, weight: .bold))
+                            .font(.system(size: 9, weight: .bold))
                             .foregroundColor(.white)
                     }
                 }
                 
                 Text("whispNotes")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.system(size: 11.5, weight: .bold))
                     .foregroundColor(isDark ? .white : Color(red: 15/255, green: 23/255, blue: 42/255))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
                 
-                Spacer()
+                Spacer(minLength: 2)
                 
-                // + New Folder Button
-                Button(action: { showNewFolderPopover.toggle() }) {
-                    Image(systemName: "folder.badge.plus")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.secondary)
-                        .frame(width: 26, height: 26)
-                        .background(Color.primary.opacity(0.05))
-                        .cornerRadius(AppRadius.sm)
-                }
-                .buttonStyle(.plain)
-                .obsidianTooltip("New Folder")
-                .popover(isPresented: $showNewFolderPopover) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Create New Folder")
-                            .font(.caption)
-                            .fontWeight(.bold)
-                        TextField("Folder name...", text: $newFolderName, onCommit: {
-                            createFolder()
-                        })
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 180)
-                        
-                        Button("Create") { createFolder() }
-                            .buttonStyle(.borderedProminent)
-                            .controlSize(.small)
+                if width >= 265 {
+                    // Full button cluster when wide
+                    Button(action: { showNewFolderPopover.toggle() }) {
+                        Image(systemName: "folder.badge.plus")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.secondary)
+                            .frame(width: 20, height: 20)
+                            .background(Color.primary.opacity(0.05))
+                            .cornerRadius(AppRadius.sm)
                     }
-                    .padding()
-                }
+                    .buttonStyle(.plain)
+                    .obsidianTooltip("New Folder")
 
-                // + Import PDF / Presentation Document Button
-                Button(action: importNewPDFNote) {
-                    Image(systemName: "doc.badge.plus")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.secondary)
-                        .frame(width: 26, height: 26)
-                        .background(Color.primary.opacity(0.05))
-                        .cornerRadius(AppRadius.sm)
-                }
-                .buttonStyle(.plain)
-                .obsidianTooltip("Import Document (PDF / PPTX)")
+                    Button(action: importNewPDFNote) {
+                        Image(systemName: "doc.badge.plus")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.secondary)
+                            .frame(width: 20, height: 20)
+                            .background(Color.primary.opacity(0.05))
+                            .cornerRadius(AppRadius.sm)
+                    }
+                    .buttonStyle(.plain)
+                    .obsidianTooltip("Import Document (PDF / PPTX)")
 
-                // + New Note from Template Button
-                Button(action: {
-                    NotificationCenter.default.post(name: .openTemplatePicker, object: nil)
-                }) {
-                    Image(systemName: "square.grid.2x2")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.secondary)
-                        .frame(width: 26, height: 26)
-                        .background(Color.primary.opacity(0.05))
-                        .cornerRadius(AppRadius.sm)
+                    Button(action: {
+                        NotificationCenter.default.post(name: .openTemplatePicker, object: nil)
+                    }) {
+                        Image(systemName: "square.grid.2x2")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.secondary)
+                            .frame(width: 20, height: 20)
+                            .background(Color.primary.opacity(0.05))
+                            .cornerRadius(AppRadius.sm)
+                    }
+                    .buttonStyle(.plain)
+                    .obsidianTooltip("New Note from Template", shortcut: "⌘T")
+                } else {
+                    // Compact dropdown menu for secondary actions when sidebar is slim
+                    Menu {
+                        Button(action: {
+                            showNewFolderPopover = true
+                        }) {
+                            Label("New Folder...", systemImage: "folder.badge.plus")
+                        }
+                        Button(action: importNewPDFNote) {
+                            Label("Import Document (PDF / PPTX)...", systemImage: "doc.badge.plus")
+                        }
+                        Button(action: {
+                            NotificationCenter.default.post(name: .openTemplatePicker, object: nil)
+                        }) {
+                            Label("New Note from Template...", systemImage: "square.grid.2x2")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.secondary)
+                            .frame(width: 20, height: 20)
+                            .background(Color.primary.opacity(0.05))
+                            .cornerRadius(AppRadius.sm)
+                    }
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .frame(width: 20, height: 20)
+                    .obsidianTooltip("More Note Actions")
                 }
-                .buttonStyle(.plain)
-                .obsidianTooltip("New Note from Template", shortcut: "⌘T")
 
                 // Calendar & Daily Notes Hub Button
                 Button(action: {
                     NotificationCenter.default.post(name: .openCalendarHub, object: nil)
                 }) {
                     Image(systemName: "calendar")
-                        .font(.system(size: 11.5, weight: .medium))
+                        .font(.system(size: 10, weight: .medium))
                         .foregroundColor(.secondary)
-                        .frame(width: 26, height: 26)
+                        .frame(width: 20, height: 20)
                         .background(Color.primary.opacity(0.05))
                         .cornerRadius(AppRadius.sm)
                 }
                 .buttonStyle(.plain)
                 .obsidianTooltip("Calendar & Daily Journal Hub", shortcut: "⌘⌥C")
 
-                // + New Note Button
+                // + New Note Button (always prominent)
                 Button(action: createNewNote) {
                     Image(systemName: "square.and.pencil")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: 10.5, weight: .semibold))
                         .foregroundColor(primaryAccent)
-                        .frame(width: 26, height: 26)
+                        .frame(width: 20, height: 20)
                         .background(primaryAccent.opacity(0.12))
                         .cornerRadius(AppRadius.sm)
                 }
                 .buttonStyle(.plain)
                 .obsidianTooltip("New Note", shortcut: "⌘N")
             }
-            .padding(.horizontal, 14)
-            .frame(height: 44)
+            .padding(.horizontal, 8)
+            .frame(height: 28)
             .background(Color.sidebarBackground(isDark))
+            .popover(isPresented: $showNewFolderPopover) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Create New Folder")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                    TextField("Folder name...", text: $newFolderName, onCommit: {
+                        createFolder()
+                    })
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 180)
+                    
+                    Button("Create") { createFolder() }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                }
+                .padding()
+            }
             .overlay(
                 Rectangle()
                     .frame(height: 1)

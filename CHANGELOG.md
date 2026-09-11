@@ -5,6 +5,32 @@ All notable changes to **WhispNotes** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semanticsver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-09-10
+
+### Added
+- **Intelligent Paste Formatting & Structure Reconstruction**:
+  - Automatically parses rich HTML tables into GitHub-flavored Markdown tables.
+  - Converts KaTeX math elements (`<annotation encoding="application/x-tex">`) to `$math$` notation.
+  - Heuristic plain-text formatting: detects un-bulleted definitions, unglues concatenated headings, and reconstructs flattened multi-column web tables into clean Markdown pipe tables.
+  - Native shortcuts: `⌘V` (Smart Paste with toast notification), `⌥⇧⌘V` (Raw Plain Text Paste), and `⌥⌘F` (Format & Beautify Note).
+  - Non-destructive transformation fully integrated with native Undo (`⌘Z`).
+- **Obsidian-Style Global GUI Zoom**:
+  - Proportional UI scaling from `0.70x` to `1.80x` (10% increments) with `⌘+` / `⌘=` (Zoom In), `⌘-` (Zoom Out), and `⌘0` (Reset to 100%).
+  - Fast path for native 1:1 rendering at 100% zoom.
+  - Floating Obsidian-style glassmorphism HUD pill displaying zoom percentage.
+  - Zoom factor persists across app launches via `@AppStorage`.
+
+### Improved & Fixed
+- **Markdown Word-Level Flow Layout & Multiline Wrapping**:
+  - Implemented `splitMarkdownIntoWordViews`, allowing paragraphs with inline math formulas (`$K$`, `$\overline{K}$`), wiki links, and tags to wrap words naturally without horizontal clipping or truncation.
+- **Typography & Aesthetic Polish**:
+  - Centralized design tokens (`AppTypography`) for line heights and balanced heading weights.
+  - Redesigned Markdown tables with rounded corners, subtle column dividers, and zebra striping.
+  - Translucent border refinements in Dark themes (`Color.white.opacity(0.08)`).
+  - Relaxed editor padding `(22, 18)` with `lineSpacing: 6.0` and `paragraphSpacing: 10.0`.
+
+---
+
 ## [1.5.2] - 2026-08-26
 
 ### Added

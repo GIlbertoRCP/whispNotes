@@ -143,12 +143,18 @@ struct MarkdownTableView: View {
                 // Header Row
                 HStack(spacing: 0) {
                     ForEach(Array(header.enumerated()), id: \.offset) { colIdx, cell in
-                        Text(cell)
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 8)
+                        Text(LocalizedStringKey(cell))
+                            .font(.system(size: 11.5, weight: .bold))
+                            .foregroundColor(isDark ? Color(red: 241/255, green: 245/255, blue: 249/255) : Color(red: 15/255, green: 23/255, blue: 42/255))
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 9)
                             .frame(maxWidth: .infinity, alignment: .leading)
+                        
+                        if colIdx < header.count - 1 {
+                            Rectangle()
+                                .fill(Color.subtleBorder(isDark))
+                                .frame(width: 1, height: 18)
+                        }
                     }
                 }
                 .background(Color.sidebarBackground(isDark))
@@ -160,22 +166,35 @@ struct MarkdownTableView: View {
                 ForEach(Array(dataRows.enumerated()), id: \.offset) { rowIdx, row in
                     HStack(spacing: 0) {
                         ForEach(Array(row.enumerated()), id: \.offset) { colIdx, cell in
-                            Text(cell)
-                                .font(.caption)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
+                            Text(LocalizedStringKey(cell))
+                                .font(AppTypography.callout)
+                                .foregroundColor(isDark ? Color(red: 226/255, green: 232/255, blue: 240/255) : Color(red: 15/255, green: 23/255, blue: 42/255))
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 8)
                                 .frame(maxWidth: .infinity, alignment: .leading)
+                            
+                            if colIdx < row.count - 1 {
+                                Rectangle()
+                                    .fill(Color.subtleBorder(isDark).opacity(0.5))
+                                    .frame(width: 1, height: 16)
+                            }
                         }
                     }
-                    .background(rowIdx % 2 == 0 ? Color.clear : Color.cardBackground(isDark))
+                    .background(rowIdx % 2 == 0 ? Color.clear : Color.cardBackground(isDark).opacity(0.5))
+                    
+                    if rowIdx < dataRows.count - 1 {
+                        Divider()
+                            .background(Color.subtleBorder(isDark).opacity(0.35))
+                    }
                 }
             }
-            .cornerRadius(8)
+            .cornerRadius(AppRadius.md)
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: AppRadius.md)
                     .stroke(Color.subtleBorder(isDark), lineWidth: 1)
             )
-            .padding(.vertical, 4)
+            .shadow(color: Color.black.opacity(isDark ? 0.2 : 0.04), radius: 6, x: 0, y: 2)
+            .padding(.vertical, 6)
         }
     }
 }
@@ -244,6 +263,100 @@ func parseLineTokens(_ line: String) -> [TextToken] {
     return tokens
 }
 
+// MARK: - Modern Flow Layout for Natural Multiline Token Wrapping
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 4
+    var lineSpacing: CGFloat = 5
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var currentX: CGFloat = 0
+        var currentY: CGFloat = 0
+        var lineHeight: CGFloat = 0
+        var totalWidth: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if currentX + size.width > maxWidth && currentX > 0 {
+                totalWidth = max(totalWidth, currentX)
+                currentX = 0
+                currentY += lineHeight + lineSpacing
+                lineHeight = 0
+            }
+            currentX += size.width + spacing
+            lineHeight = max(lineHeight, size.height)
+        }
+        totalWidth = max(totalWidth, currentX)
+        let totalHeight = currentY + lineHeight
+        return CGSize(width: min(maxWidth, totalWidth), height: totalHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let maxWidth = bounds.width
+        var currentX: CGFloat = bounds.minX
+        var currentY: CGFloat = bounds.minY
+        var lineHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if currentX + size.width > bounds.minX + maxWidth && currentX > bounds.minX {
+                currentX = bounds.minX
+                currentY += lineHeight + lineSpacing
+                lineHeight = 0
+            }
+            subview.place(at: CGPoint(x: currentX, y: currentY), proposal: ProposedViewSize(size))
+            currentX += size.width + spacing
+            lineHeight = max(lineHeight, size.height)
+        }
+    }
+}
+
+// MARK: - Flow Item for Natural Multiline Word Wrapping
+struct FlowItem: Identifiable {
+    let id = UUID()
+    enum ItemType {
+        case word(AttributedString)
+        case inlineMath(String)
+        case hashtag(String)
+        case wikiLink(String)
+        case playLink(timeLabel: String, seconds: Double)
+    }
+    let type: ItemType
+}
+
+func splitMarkdownIntoWordViews(markdown: String) -> [AttributedString] {
+    let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+    guard let attr = try? AttributedString(markdown: markdown, options: options) else {
+        return [AttributedString(markdown)]
+    }
+    
+    var words: [AttributedString] = []
+    var current = AttributedString()
+    
+    for run in attr.runs {
+        let substr = attr[run.range]
+        let chars = String(substr.characters)
+        let parts = chars.components(separatedBy: " ")
+        for (idx, part) in parts.enumerated() {
+            if idx > 0 {
+                if !current.characters.isEmpty {
+                    words.append(current)
+                    current = AttributedString()
+                }
+            }
+            if !part.isEmpty {
+                var w = AttributedString(part)
+                w.inlinePresentationIntent = run.inlinePresentationIntent
+                current.append(w)
+            }
+        }
+    }
+    if !current.characters.isEmpty {
+        words.append(current)
+    }
+    return words.isEmpty ? [AttributedString(markdown)] : words
+}
+
 struct FormattedTextLine: View {
     let text: String
     @Binding var notes: [NoteItem]
@@ -258,77 +371,131 @@ struct FormattedTextLine: View {
         parseLineTokens(text)
     }
 
+    private var textColor: Color {
+        isDark ? Color(red: 226/255, green: 232/255, blue: 240/255) : Color(red: 15/255, green: 23/255, blue: 42/255)
+    }
+
+    private var hasInteractiveTokens: Bool {
+        tokens.contains { token in
+            switch token.type {
+            case .text: return false
+            default: return true
+            }
+        }
+    }
+
+    private var flowItems: [FlowItem] {
+        var items: [FlowItem] = []
+        for token in tokens {
+            switch token.type {
+            case .text(let plainStr):
+                let words = splitMarkdownIntoWordViews(markdown: plainStr)
+                for w in words {
+                    items.append(.init(type: .word(w)))
+                }
+            case .inlineMath(let formula):
+                items.append(.init(type: .inlineMath(formula)))
+            case .hashtag(let tag):
+                items.append(.init(type: .hashtag(tag)))
+            case .wikiLink(let target):
+                items.append(.init(type: .wikiLink(target)))
+            case .playLink(let label, let sec):
+                items.append(.init(type: .playLink(timeLabel: label, seconds: sec)))
+            }
+        }
+        return items
+    }
+
     var body: some View {
-        HStack(alignment: .center, spacing: 4) {
-            ForEach(tokens) { token in
-                switch token.type {
-                case .text(let plainStr):
-                    Text(plainStr)
-                case .inlineMath(let formula):
-                    InlineMathView(latex: formula, isDark: isDark)
-                case .hashtag(let tag):
-                    Button(action: {
-                        NotificationCenter.default.post(name: .filterNotesByTag, object: tag)
-                    }) {
-                        Text("#\(tag)")
-                            .font(.subheadline)
-                            .fontWeight(.bold)
-                            .foregroundColor(primaryAccent)
+        if !hasInteractiveTokens {
+            // Native SwiftUI Markdown with natural multiline paragraph wrapping & proper line height
+            Text(LocalizedStringKey(text))
+                .font(AppTypography.body)
+                .lineSpacing(5)
+                .foregroundColor(textColor)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+        } else {
+            // Adaptive flow layout for lines with inline math, wiki links, hashtags, or timestamps
+            FlowLayout(spacing: 4, lineSpacing: 5) {
+                ForEach(flowItems) { item in
+                    switch item.type {
+                    case .word(let wordAttr):
+                        Text(wordAttr)
+                            .font(AppTypography.body)
+                            .foregroundColor(textColor)
+                    case .inlineMath(let formula):
+                        InlineMathView(latex: formula, isDark: isDark)
+                    case .hashtag(let tag):
+                        Button(action: {
+                            NotificationCenter.default.post(name: .filterNotesByTag, object: tag)
+                        }) {
+                            Text("#\(tag)")
+                                .font(.caption)
+                                .fontWeight(.bold)
+                                .foregroundColor(primaryAccent)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 1.5)
+                                .background(primaryAccent.opacity(0.14))
+                                .cornerRadius(5)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 5)
+                                        .stroke(primaryAccent.opacity(0.35), lineWidth: 0.8)
+                                 )
+                        }
+                        .buttonStyle(.plain)
+                        .help("Filter notes by #\(tag)")
+                    case .wikiLink(let targetTitle):
+                        Button(action: {
+                            openOrCreateWikiLinkNote(targetTitle)
+                        }) {
+                            HStack(spacing: 3) {
+                                Image(systemName: "link")
+                                    .font(.system(size: 8))
+                                Text(targetTitle)
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                            }
                             .padding(.horizontal, 6)
-                            .padding(.vertical, 1.5)
-                            .background(primaryAccent.opacity(0.14))
+                            .padding(.vertical, 2)
+                            .background(secondaryAccent.opacity(0.18))
+                            .foregroundColor(secondaryAccent)
+                            .cornerRadius(5)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 5)
+                                    .stroke(secondaryAccent.opacity(0.35), lineWidth: 0.8)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    case .playLink(let label, let seconds):
+                        Button(action: {
+                            playerVM.seek(to: seconds)
+                            if !playerVM.isPlaying {
+                                playerVM.togglePlayPause()
+                            }
+                        }) {
+                            HStack(spacing: 3) {
+                                Image(systemName: "play.fill")
+                                    .font(.system(size: 8))
+                                Text(label)
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                            }
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(primaryAccent.opacity(0.18))
+                            .foregroundColor(primaryAccent)
                             .cornerRadius(5)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 5)
                                     .stroke(primaryAccent.opacity(0.35), lineWidth: 0.8)
                             )
-                    }
-                    .buttonStyle(.plain)
-                    .help("Filter notes by #\(tag)")
-                case .wikiLink(let targetTitle):
-                    Button(action: {
-                        openOrCreateWikiLinkNote(targetTitle)
-                    }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "link")
-                                .font(.system(size: 9))
-                            Text(targetTitle)
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
                         }
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(secondaryAccent.opacity(0.2))
-                        .foregroundColor(secondaryAccent)
-                        .cornerRadius(6)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6)
-                                .stroke(secondaryAccent.opacity(0.4), lineWidth: 1)
-                        )
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
-                case .playLink(let label, let seconds):
-                    Button(action: {
-                        playerVM.seek(to: seconds)
-                        if !playerVM.isPlaying {
-                            playerVM.togglePlayPause()
-                        }
-                    }) {
-                        HStack(spacing: 3) {
-                            Image(systemName: "play.fill")
-                                .font(.system(size: 8))
-                            Text(label)
-                                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        }
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(primaryAccent.opacity(0.2))
-                        .foregroundColor(primaryAccent)
-                        .cornerRadius(4)
-                    }
-                    .buttonStyle(.plain)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -842,30 +1009,44 @@ struct MarkdownRendererView: View {
         }
         // 2. Headings
         else if line.hasPrefix("# ") {
-            Text(line.replacingOccurrences(of: "# ", with: ""))
-                .font(.title)
-                .fontWeight(.bold)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(LocalizedStringKey(line.replacingOccurrences(of: "# ", with: "")))
+                    .font(AppTypography.h1)
+                    .foregroundColor(isDark ? .white : Color(red: 15/255, green: 23/255, blue: 42/255))
+                Rectangle()
+                    .fill(Color.subtleBorder(isDark))
+                    .frame(height: 1)
+            }
+            .padding(.top, 14)
+            .padding(.bottom, 4)
         } else if line.hasPrefix("## ") {
-            Text(line.replacingOccurrences(of: "## ", with: ""))
-                .font(.title2)
-                .fontWeight(.semibold)
+            Text(LocalizedStringKey(line.replacingOccurrences(of: "## ", with: "")))
+                .font(AppTypography.h2)
+                .foregroundColor(isDark ? .white : Color(red: 15/255, green: 23/255, blue: 42/255))
+                .padding(.top, 10)
+                .padding(.bottom, 3)
         } else if line.hasPrefix("### ") {
-            Text(line.replacingOccurrences(of: "### ", with: ""))
-                .font(.headline)
-                .fontWeight(.medium)
+            Text(LocalizedStringKey(line.replacingOccurrences(of: "### ", with: "")))
+                .font(AppTypography.h3)
+                .foregroundColor(isDark ? Color(red: 241/255, green: 245/255, blue: 249/255) : Color(red: 30/255, green: 41/255, blue: 59/255))
+                .padding(.top, 8)
+                .padding(.bottom, 2)
         } else if line.hasPrefix("#### ") {
-            Text(line.replacingOccurrences(of: "#### ", with: ""))
-                .font(.subheadline)
-                .fontWeight(.bold)
+            Text(LocalizedStringKey(line.replacingOccurrences(of: "#### ", with: "")))
+                .font(AppTypography.h4)
+                .foregroundColor(isDark ? Color(red: 203/255, green: 213/255, blue: 225/255) : Color(red: 51/255, green: 65/255, blue: 85/255))
+                .padding(.top, 6)
+                .padding(.bottom, 1)
         } else if line.hasPrefix("##### ") {
-            Text(line.replacingOccurrences(of: "##### ", with: ""))
-                .font(.caption)
-                .fontWeight(.bold)
+            Text(LocalizedStringKey(line.replacingOccurrences(of: "##### ", with: "")))
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(.secondary)
+                .padding(.top, 4)
         }
         // 3. Blockquotes (> ...)
         else if line.hasPrefix("> ") || line == ">" {
             let quoteContent = line.hasPrefix("> ") ? String(line.dropFirst(2)) : ""
-            HStack(alignment: .top, spacing: 8) {
+            HStack(alignment: .top, spacing: 10) {
                 Rectangle()
                     .fill(primaryAccent)
                     .frame(width: 3)
@@ -876,15 +1057,20 @@ struct MarkdownRendererView: View {
                     playerVM: playerVM,
                     currentFolder: currentNoteFolder,
                     primaryAccent: primaryAccent,
-                    secondaryAccent: secondaryAccent
+                    secondaryAccent: secondaryAccent,
+                    isDark: isDark
                 )
-                .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundColor(isDark ? Color(red: 203/255, green: 213/255, blue: 225/255) : Color(red: 71/255, green: 85/255, blue: 105/255))
             }
-            .padding(.vertical, 6)
-            .padding(.horizontal, 10)
-            .background(Color.cardBackground(true))
-            .cornerRadius(6)
+            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .background(Color.cardBackground(isDark).opacity(0.5))
+            .cornerRadius(AppRadius.sm)
+            .overlay(
+                RoundedRectangle(cornerRadius: AppRadius.sm)
+                    .stroke(Color.subtleBorder(isDark), lineWidth: 1)
+            )
+            .padding(.vertical, 3)
         }
         // 4. Interactive Checklists (^([ \t]*)([-*+]) \[( |x|X)\] (.*)$)
         else if let chkMatch = line.range(of: "^([ \\t]*)([-*+]) \\[( |x|X)\\] (.*)$", options: .regularExpression) {

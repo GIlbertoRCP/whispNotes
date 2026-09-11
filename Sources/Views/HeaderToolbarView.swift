@@ -15,9 +15,9 @@ struct ToolbarIconButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: 11, weight: .medium))
                 .foregroundColor(isActive ? activeColor : (isHovered ? .primary : .secondary))
-                .frame(width: 28, height: 28)
+                .frame(width: 24, height: 24)
                 .background(isActive ? activeColor.opacity(0.12) : (isHovered ? Color.primary.opacity(0.06) : Color.clear))
                 .cornerRadius(AppRadius.sm)
         }
@@ -230,8 +230,29 @@ struct HeaderToolbarView: View {
                         .padding(.vertical, 2)
                         .help("Vault automatic save state")
                         
-                        // Folder Selector Pill
-                        Button(action: { showFolderPopover.toggle() }) {
+                        // Folder Selector Pill with full move-to-folder support
+                        Menu {
+                            Section("Move to Folder") {
+                                ForEach(Array(Set(notes.map { $0.folder })).sorted(), id: \.self) { folderName in
+                                    Button(action: {
+                                        noteBinding.wrappedValue.folder = folderName
+                                        dataManager.saveNotes(notes)
+                                    }) {
+                                        if noteBinding.wrappedValue.folder == folderName {
+                                            Label(folderName, systemImage: "checkmark")
+                                        } else {
+                                            Label(folderName, systemImage: "folder")
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            Divider()
+                            
+                            Button(action: { showFolderPopover = true }) {
+                                Label("New Folder...", systemImage: "folder.badge.plus")
+                            }
+                        } label: {
                             HStack(spacing: 4) {
                                 Image(systemName: "folder")
                                     .font(.system(size: 9, weight: .medium))
@@ -248,21 +269,36 @@ struct HeaderToolbarView: View {
                             .background(Color.primary.opacity(0.04))
                             .cornerRadius(6)
                         }
-                        .buttonStyle(.plain)
+                        .menuStyle(.borderlessButton)
+                        .menuIndicator(.hidden)
                         .popover(isPresented: $showFolderPopover) {
                             VStack(alignment: .leading, spacing: 8) {
-                                Text("Move Note to Folder")
+                                Text("Create & Move to New Folder")
                                     .font(.caption)
                                     .fontWeight(.bold)
-                                TextField("New Folder name...", text: $newFolderName, onCommit: {
-                                    if !newFolderName.isEmpty {
-                                        noteBinding.wrappedValue.folder = newFolderName
+                                TextField("Folder name...", text: $newFolderName, onCommit: {
+                                    let trimmed = newFolderName.trimmingCharacters(in: .whitespaces)
+                                    if !trimmed.isEmpty {
+                                        noteBinding.wrappedValue.folder = trimmed
+                                        dataManager.saveNotes(notes)
                                         showFolderPopover = false
                                         newFolderName = ""
                                     }
                                 })
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 180)
+                                
+                                Button("Move Note") {
+                                    let trimmed = newFolderName.trimmingCharacters(in: .whitespaces)
+                                    if !trimmed.isEmpty {
+                                        noteBinding.wrappedValue.folder = trimmed
+                                        dataManager.saveNotes(notes)
+                                        showFolderPopover = false
+                                        newFolderName = ""
+                                    }
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .controlSize(.small)
                             }
                             .padding()
                         }
@@ -457,8 +493,8 @@ struct HeaderToolbarView: View {
                     }
                 }
             }
-            .padding(.horizontal, 14)
-            .frame(height: 48)
+            .padding(.horizontal, 10)
+            .frame(height: 36)
             .background(Color.panelBackground(isDark))
             .overlay(
                 Rectangle()

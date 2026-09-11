@@ -211,4 +211,5 @@ extension Notification.Name {
     public static let openKnowledgeGraph = Notification.Name("openKnowledgeGraph")
     public static let openTemplatePicker = Notification.Name("openTemplatePicker")
     public static let createDailyNote = Notification.Name("createDailyNote")
+    public static let openExportModal = Notification.Name("openExportModal")
 }

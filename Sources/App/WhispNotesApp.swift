@@ -34,15 +34,17 @@ public struct WhispNotesSwiftApp: App {
 
     public var body: some Scene {
         WindowGroup {
-            ContentView(
-                notes: $notes,
-                selectedNoteId: $selectedNoteId,
-                recorderVM: recorderVM,
-                playerVM: playerVM,
-                isCommandPaletteOpen: $isCommandPaletteOpen,
-                isSettingsOpen: $isSettingsOpen,
-                isGraphViewOpen: $isGraphViewOpen
-            )
+            ZoomContainerView {
+                ContentView(
+                    notes: $notes,
+                    selectedNoteId: $selectedNoteId,
+                    recorderVM: recorderVM,
+                    playerVM: playerVM,
+                    isCommandPaletteOpen: $isCommandPaletteOpen,
+                    isSettingsOpen: $isSettingsOpen,
+                    isGraphViewOpen: $isGraphViewOpen
+                )
+            }
             .frame(minWidth: 1020, minHeight: 680)
         }
         .windowStyle(.hiddenTitleBar)
@@ -180,6 +182,35 @@ public struct WhispNotesSwiftApp: App {
                 }
             }
 
+            CommandMenu("View") {
+                Button("Zoom In") {
+                    ZoomManager.shared.zoomIn()
+                }
+                .keyboardShortcut("=", modifiers: .command)
+
+                Button("Zoom In (Shift)") {
+                    ZoomManager.shared.zoomIn()
+                }
+                .keyboardShortcut("+", modifiers: .command)
+
+                Button("Zoom Out") {
+                    ZoomManager.shared.zoomOut()
+                }
+                .keyboardShortcut("-", modifiers: .command)
+
+                Button("Actual Size (Reset Zoom)") {
+                    ZoomManager.shared.resetZoom()
+                }
+                .keyboardShortcut("0", modifiers: .command)
+
+                Divider()
+
+                Button("Toggle Zen Focus Mode") {
+                    NotificationCenter.default.post(name: NSNotification.Name("ToggleZenFocusMode"), object: nil)
+                }
+                .keyboardShortcut("f", modifiers: [.command, .shift])
+            }
+
             CommandMenu("Edit Note") {
                 Button("Pin / Unpin Note") {
                     if let activeId = TabNavigationManager.shared.activeTabId,
@@ -194,9 +225,28 @@ public struct WhispNotesSwiftApp: App {
                     NotificationCenter.default.post(name: .pasteImageAsAttachment, object: nil)
                 }
                 .keyboardShortcut("v", modifiers: [.command, .shift])
+
+                Button("Paste Raw Plain Text") {
+                    NotificationCenter.default.post(name: NSNotification.Name("PasteRawTextRequested"), object: nil)
+                }
+                .keyboardShortcut("v", modifiers: [.command, .option, .shift])
+
+                Divider()
+
+                Button("Format & Beautify Note") {
+                    NotificationCenter.default.post(name: NSNotification.Name("SmartFormatNoteRequested"), object: nil)
+                }
+                .keyboardShortcut("f", modifiers: [.command, .option])
             }
 
             CommandMenu("Export Note") {
+                Button("Document Export Studio...") {
+                    NotificationCenter.default.post(name: .openExportModal, object: nil)
+                }
+                .keyboardShortcut("e", modifiers: [.command])
+
+                Divider()
+
                 Button("Export as PDF Document...") {
                     if let current = activeSelectedNote {
                         NoteExporter.shared.exportPDF(current)

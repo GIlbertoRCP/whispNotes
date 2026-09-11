@@ -26,6 +26,32 @@ public enum AppSpacing {
     public static let xl: CGFloat = 24
 }
 
+/// Standardized typography scale tokens for optimal legibility and visual hierarchy.
+public enum AppTypography {
+    /// Large display title (26pt bold)
+    public static let display = Font.system(size: 26, weight: .bold)
+    /// Document / Modal title (20pt bold)
+    public static let title = Font.system(size: 20, weight: .bold)
+    /// Markdown Heading 1 (22pt bold)
+    public static let h1 = Font.system(size: 22, weight: .bold)
+    /// Markdown Heading 2 (17pt semibold)
+    public static let h2 = Font.system(size: 17, weight: .semibold)
+    /// Markdown Heading 3 (15pt medium)
+    public static let h3 = Font.system(size: 15, weight: .medium)
+    /// Markdown Heading 4 (13pt semibold)
+    public static let h4 = Font.system(size: 13, weight: .semibold)
+    /// Body text (14pt regular, comfortable reading scale)
+    public static let body = Font.system(size: 14, weight: .regular)
+    /// Small body / Callout (13pt regular)
+    public static let callout = Font.system(size: 13, weight: .regular)
+    /// Caption / Secondary metadata (11pt medium)
+    public static let caption = Font.system(size: 11, weight: .medium)
+    /// Micro badge / Keyboard shortcut (9.5pt bold, monospaced)
+    public static let microBadge = Font.system(size: 9.5, weight: .bold, design: .monospaced)
+    /// Inline and block code font (13pt monospaced)
+    public static let code = Font.system(size: 13, weight: .regular, design: .monospaced)
+}
+
 /// Standardized animation curve tokens for consistent fluidity.
 public enum AppAnimation {
     /// Micro interactions: button presses, tab switches, badge hovers (0.16s easeOut)
