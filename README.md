@@ -11,8 +11,8 @@
 
 ## Quick Download & Direct Installation (No Terminal Required)
 
-1. Download **`WhispNotes-1.1.0.dmg`** from the latest GitHub Release.
-2. Double-click **`WhispNotes-1.1.0.dmg`** to open the installer.
+1. Download **`WhispNotes-1.6.0.dmg`** from the latest [GitHub Releases](https://github.com/GIlbertoRCP/whispNotes/releases).
+2. Double-click **`WhispNotes-1.6.0.dmg`** to open the installer.
 3. Drag **`WhispNotes.app`** into your **`Applications`** folder.
 4. Launch **WhispNotes** directly from Applications or Spotlight (`⌘Space`)!
 
@@ -22,34 +22,60 @@
 
 ## Interface Preview
 
-### Main 3-Pane Interface
+### Main 3-Pane Interface & Diarized Audio Transcription
 ![WhispNotes Main Interface](assets/main_interface.png)
 
 ### Spotlight Command Palette (⌘K / ⌘O)
 ![WhispNotes Command Palette](assets/command_palette.png)
 
+### Interactive Knowledge Graph Canvas (⌘G)
+![WhispNotes Knowledge Graph](assets/knowledge_graph.png)
+
 ---
 
 ## Key Features
 
-- **Three-Pane Split View**: Navigate notes via the file sidebar, write in the markdown editor with live preview, and view time-synced transcripts in the right panel.
-- **Interactive Knowledge Graph Canvas**: Visual node graph of note connections with draggable node physics, zoom/pan controls, blueprint grid background, and search filtering.
-- **On-Device Whisper Transcription**: Process audio recordings locally using Whisper without sending data to external servers.
-- **On-Device Gemma 3 AI Assistant**: Extract executive key takeaways, auto-detect action items, generate study flashcards, and prompt custom Q&A on your note context.
-- **Interactive Audio Waveform Seeker**: Click or drag along the multi-bar audio waveform to seek playback instantly, with live playhead indicator and transcript auto-scrolling during playback.
-- **Speaker Separation and Time Sync**: View transcripts organized by speaker segments, with active segment highlighting during audio playback.
-- **Transcript Blockquotes**: Insert timestamped transcript excerpts directly into notes with a single click (`> "quote" [01:23](play://83)`).
-- **Wiki-Links**: Connect notes using `[[Note Title]]` syntax, enabling fast navigation and automatic note creation.
-- **Command Palette**: Search notes, folders, and transcript content using the `⌘K` or `⌘O` shortcut.
-- **Dynamic Theme Engine**: Theme switcher supporting Default Dark, Cyberpunk Neon, Obsidian Dark, Solarized Dark, and Minimalist Light themes with accent colors.
-- **Trash Bin Retention**: Soft-delete system with 30-day retention, restore functionality, and single-click empty trash bin.
+- **Intelligent Paste Formatting & Structure Reconstruction**:
+  - Automatically parses rich web copies and HTML tables into GitHub-flavored Markdown tables.
+  - Converts KaTeX math elements into standard `$math$` syntax notation.
+  - Plain-text heuristic formatting: unglues concatenated headings, restores bullet hierarchies, and converts flattened text into clean pipe tables.
+  - Native shortcuts: `⌘V` (Smart Paste with toast notification), `⌥⇧⌘V` (Raw Plain Text Paste), and `⌥⌘F` (Format & Beautify Note) with full Undo (`⌘Z`) support.
+- **Obsidian-Style Global GUI Zoom**:
+  - Seamless proportional UI scaling from `0.70x` to `1.80x` (10% increments) with `⌘+` / `⌘=` (Zoom In), `⌘-` (Zoom Out), and `⌘0` (Reset to 100%).
+  - Floating glassmorphic HUD pill displaying active zoom percentage, with persistent state across app launches.
+- **Three-Pane Split View & Typography**:
+  - Navigate notes via the hierarchical folder & tag sidebar, write in the live-rendered Markdown editor with word-level multiline wrapping, and view time-synced transcripts in the right panel.
+  - Beautiful zebra-striped Markdown tables, inline math formulas (`$formula$`), wiki-links, and syntax highlighting.
+- **Interactive Knowledge Graph Canvas (`⌘G`)**:
+  - Force-directed visual node graph of note connections with draggable node physics, blueprint grid canvas, zoom/pan controls, and search filtering.
+- **On-Device Whisper Speech-to-Text**:
+  - High-precision local speech transcription with zero external API calls or background servers.
+  - Multi-speaker diarization with speaker segment pills and active transcript auto-scrolling during playback.
+  - One-click transcript blockquote insertion (`> "quote" [01:23](play://83)`).
+- **Interactive Audio Waveform Seeker**:
+  - Click or drag along the multi-bar audio waveform to seek playback instantly, with live playhead indicator, timestamp readouts, and playback speed steppers (`1x`, `1.2x`, `1.5x`, `2x`).
+- **Native PowerPoint (`.pptx`) & PDF Presentation Support**:
+  - Zero external dependencies: native OpenXML slide parsing and presenter notes extraction.
+  - Interactive 16:9 widescreen presentation canvas with slide navigation, slide counter, jump-to-slide popover, and one-click slide citations.
+- **On-Device Gemma 3 Local AI Assistant**:
+  - Extract executive key takeaways, auto-detect action items, generate study flashcards, and run custom Q&A on your active note context completely offline.
+- **Spotlight Command Palette (`⌘K` / `⌘O`)**:
+  - Instant fuzzy search across notes, folders, and transcript content with folder badges and keyboard navigation.
+- **Real-Time Release & Update Status**:
+  - Live version checks in Settings displaying update availability, release notes, and direct DMG download links.
+- **Multi-Format Note Export Suite**:
+  - Export notes with customizable typography and formatting to Markdown, PDF, and Plain Text.
+- **Dynamic Theme Engine**:
+  - Switch between curated themes: Default Dark, Cyberpunk Neon, Obsidian Dark, Solarized Dark, and Minimalist Light.
+- **Trash Bin Retention & Data Safety**:
+  - Soft-delete architecture with 30-day retention, instant note restoration, and safe purge controls.
 
 ---
 
 ## System Requirements
 
 - macOS 14.0 (Sonoma) or higher
-- Apple Silicon or Intel Mac
+- Apple Silicon (M1/M2/M3/M4) or Intel Mac
 
 ---
 
@@ -75,12 +101,12 @@ swift test
 To compile, code-sign, and package the application into a standalone macOS `.app` bundle and compressed `.dmg` disk image:
 
 ```bash
-./scripts/build_app.sh 1.0.0
+./scripts/build_app.sh 1.6.0
 ```
 
 This script generates:
 - `build/WhispNotes.app` (signed macOS application bundle with custom app icon)
-- `build/WhispNotes-1.0.0.dmg` (installer image with Applications drag-and-drop link)
+- `build/WhispNotes-1.6.0.dmg` (installer image with Applications drag-and-drop link)
 
 ---
 
@@ -88,11 +114,11 @@ This script generates:
 
 - `Package.swift`: SPM package manifest specifying macOS targets, dependencies, and test targets.
 - `Sources/App/`: Main application lifecycle, window management, and menu commands (`WhispNotesApp.swift`).
-- `Sources/Models/`: Data structures for Notes, Transcripts, Themes, Models, and Graph Canvas nodes.
-- `Sources/Services/`: Data persistence (`NotesDataManager`), Audio device discovery, Speech transcription, and Gemma 3 local AI engine.
+- `Sources/Models/`: Data structures for Notes, Transcripts, Themes, Models, Export configurations, and Graph Canvas nodes.
+- `Sources/Services/`: Data persistence (`NotesDataManager`), Audio discovery & recording, Whisper transcription, SmartPasteEngine, ZoomManager, and Gemma 3 local AI engine.
 - `Sources/ViewModels/`: Reactive audio recorder & player view models.
-- `Sources/Views/`: Modular SwiftUI components (Sidebar, Editor, Audio Player Bar, Graph Canvas, Command Palette, AI Study Assistant, Settings).
-- `Tests/swift-whispnotesTests/`: Automated unit test suite covering Note serialization, Wiki-Link parsing, and Markdown block rendering.
+- `Sources/Views/`: Modular SwiftUI components (Sidebar, Split Editor, Audio Player Bar, Graph Canvas, Command Palette, PPTX / PDF Viewer, AI Study Assistant, Settings).
+- `Tests/swift-whispnotesTests/`: Automated unit test suite covering Note serialization, Smart Paste heuristics, Exporter, and Wiki-Link parsing.
 - `scripts/build_app.sh`: Automated build script to package `.app` bundle and compressed `.dmg` installer.
 - `.github/workflows/`: CI/CD workflows for automated building, testing, and GitHub Release asset publishing.
 
@@ -103,6 +129,7 @@ This script generates:
 Application settings, models, and notes are stored locally as JSON in:
 
 `~/Library/Application Support/com.whispnotes.app/`
+*(Or under `~/Library/Containers/com.whispnotes.app/Data/Library/Application Support/com.whispnotes.app/` when running sandboxed)*
 
 ---
 
