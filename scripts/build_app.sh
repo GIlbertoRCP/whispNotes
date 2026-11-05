@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-VERSION="${1:-1.6.0}"
+VERSION="${1:-1.7.0}"
 
 echo "========================================"
 echo "  Building WhispNotes v${VERSION} Release  "

@@ -11,8 +11,8 @@
 
 ## Quick Download & Direct Installation (No Terminal Required)
 
-1. Download **`WhispNotes-1.6.0.dmg`** from the latest [GitHub Releases](https://github.com/GIlbertoRCP/whispNotes/releases).
-2. Double-click **`WhispNotes-1.6.0.dmg`** to open the installer.
+1. Download **`WhispNotes-1.7.0.dmg`** from the latest [GitHub Releases](https://github.com/GIlbertoRCP/whispNotes/releases).
+2. Double-click **`WhispNotes-1.7.0.dmg`** to open the installer.
 3. Drag **`WhispNotes.app`** into your **`Applications`** folder.
 4. Launch **WhispNotes** directly from Applications or Spotlight (`⌘Space`)!
 
@@ -106,12 +106,12 @@ swift test
 To compile, code-sign, and package the application into a standalone macOS `.app` bundle and compressed `.dmg` disk image:
 
 ```bash
-./scripts/build_app.sh 1.6.0
+./scripts/build_app.sh 1.7.0
 ```
 
 This script generates:
 - `build/WhispNotes.app` (signed macOS application bundle with custom app icon)
-- `build/WhispNotes-1.6.0.dmg` (installer image with Applications drag-and-drop link)
+- `build/WhispNotes-1.7.0.dmg` (installer image with Applications drag-and-drop link)
 
 ---
 
