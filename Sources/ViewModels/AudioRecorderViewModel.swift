@@ -7,6 +7,47 @@ class AudioRecorderViewModel: ObservableObject {
     @Published var isRecording = false
     @Published var audioLevel: Float = 0.0
     @Published var recordingTime: Double = 0.0
+    /// The note this recording belongs to, fixed when it starts, so switching notes mid-meeting can't misfile it.
+    @Published private(set) var recordingNoteId: UUID?
+    /// Notes whose recording is being transcribed right now.
+    @Published private(set) var transcribingNoteIds: Set<UUID> = []
+
+    /// Called when a recording has been saved and transcribed: note id, segments, audio file name in the vault.
+    /// Set once by the app so every entry point (toolbar, menu bar, global shortcut) files recordings the same way.
+    var onRecordingFinished: ((_ noteId: UUID, _ segments: [TranscriptSegment], _ audioFileName: String) -> Void)?
+
+    var isTranscribing: Bool { !transcribingNoteIds.isEmpty }
+
+    /// Starts recording into `noteId`. Does nothing if a recording is already running.
+    func startRecording(for noteId: UUID) {
+        guard !isRecording else { return }
+        recordingNoteId = noteId
+        startRecording()
+    }
+
+    /// Stops, then transcribes on device and hands the result to `onRecordingFinished`.
+    func finishRecording() {
+        guard isRecording else { return }
+        let noteId = recordingNoteId
+        let url = stopRecording()
+        recordingNoteId = nil
+        guard let noteId, let url else { return }
+        transcribingNoteIds.insert(noteId)
+        // The file is already in the vault's Attachments folder; store it by name rather than copying it.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            LocalSpeechTranscriber.transcribe(url: url) { segments in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    self.transcribingNoteIds.remove(noteId)
+                    self.onRecordingFinished?(noteId, segments, url.lastPathComponent)
+                }
+            }
+        }
+    }
+
+    func toggleRecording(for noteId: UUID) {
+        if isRecording { finishRecording() } else { startRecording(for: noteId) }
+    }
     
     private var audioRecorder: AVAudioRecorder?
     private var timer: Timer?
@@ -50,11 +91,13 @@ class AudioRecorderViewModel: ObservableObject {
             
             guard let recorder = audioRecorder, recorder.prepareToRecord() else {
                 print("AVAudioRecorder failed prepareToRecord()")
+                recordingNoteId = nil
                 return
             }
             
             guard recorder.record() else {
                 print("AVAudioRecorder failed record()")
+                recordingNoteId = nil
                 return
             }
             
@@ -73,6 +116,7 @@ class AudioRecorderViewModel: ObservableObject {
             }
         } catch {
             print("Failed to start native audio recording: \(error)")
+            recordingNoteId = nil
         }
     }
 

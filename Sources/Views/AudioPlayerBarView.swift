@@ -107,6 +107,16 @@ struct AudioPlayerBarView: View {
 
     @State private var newBookmarkTitle = ""
     @State private var showBookmarkPopover = false
+    /// Bar width; the speed buttons fold into a menu when it's narrow.
+    @State private var barWidth: CGFloat = 900
+
+    private static let speeds: [Double] = [1.0, 1.25, 1.5, 2.0]
+
+    /// "1×", "1.25×", "1.5×", "2×" (the old %.2g format showed 1.25 as "1.2x").
+    static func speedLabel(_ speed: Double) -> String {
+        let text = speed == speed.rounded() ? String(Int(speed)) : String(format: "%g", speed)
+        return text + "×"
+    }
 
     var resolvedAudioURL: URL? {
         NotesDataManager.shared.resolveAttachmentURL(audioPath)
@@ -144,14 +154,12 @@ struct AudioPlayerBarView: View {
             
             // Middle Interactive Waveform Track & Bookmark Markers
             VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text(note.title)
-                        .font(.caption)
-                        .fontWeight(.bold)
-                    
-                    if playerVM.isPlaying {
-                        WaveformVisualizerView(level: 0.8, primaryColor: primaryAccent)
-                    }
+                HStack(spacing: AppSpacing.sm) {
+                    Text(note.title.isEmpty ? "Untitled Note" : note.title)
+                        .font(.system(size: 11, weight: .semibold))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .layoutPriority(-1)
 
                     // Add Timeline Flag Bookmark Button
                     Button(action: { showBookmarkPopover.toggle() }) {
@@ -159,40 +167,50 @@ struct AudioPlayerBarView: View {
                             Image(systemName: "flag.fill")
                                 .font(.system(size: 9))
                                 .foregroundColor(primaryAccent)
-                            Text("+ Flag")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(primaryAccent)
+                            if barWidth >= 560 {
+                                Text("Flag")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(primaryAccent)
+                                    .fixedSize()
+                            }
                         }
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(primaryAccent.opacity(0.15))
-                        .cornerRadius(4)
+                        .cornerRadius(AppRadius.xs)
                     }
                     .buttonStyle(.plain)
+                    .help("Flag this moment (\(formatTime(playerVM.currentTime)))")
                     .popover(isPresented: $showBookmarkPopover) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Add Timeline Flag Marker")
-                                .font(.caption)
-                                .fontWeight(.bold)
-                            TextField("Bookmark label (e.g. Exam Topic)...", text: $newBookmarkTitle, onCommit: {
+                        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                            Text("Flag \(formatTime(playerVM.currentTime))")
+                                .font(.headline)
+                            TextField("Label, e.g. Exam topic", text: $newBookmarkTitle, onCommit: {
                                 addBookmark()
                             })
                             .textFieldStyle(.roundedBorder)
-                            .frame(width: 200)
-                            
-                            Button("Add Flag") { addBookmark() }
-                                .buttonStyle(.borderedProminent)
-                                .controlSize(.small)
+                            .frame(width: 220)
+
+                            HStack {
+                                Spacer()
+                                Button("Cancel") { showBookmarkPopover = false; newBookmarkTitle = "" }
+                                    .keyboardShortcut(.cancelAction)
+                                Button("Add Flag") { addBookmark() }
+                                    .keyboardShortcut(.defaultAction)
+                                    .buttonStyle(.borderedProminent)
+                            }
+                            .controlSize(.small)
                         }
-                        .padding()
+                        .padding(AppSpacing.lg)
                     }
                     
-                    Spacer()
-                    
+                    Spacer(minLength: AppSpacing.sm)
+
                     Text("\(formatTime(playerVM.currentTime)) / \(formatTime(playerVM.duration))")
-                        .font(.caption2)
+                        .font(.system(size: 11, weight: .medium))
                         .foregroundColor(.secondary)
                         .monospacedDigit()
+                        .fixedSize()
                 }
                 
                 // Interactive Waveform Track & Bookmark Markers Overlay
@@ -229,24 +247,19 @@ struct AudioPlayerBarView: View {
             }
             .frame(maxWidth: .infinity)
             
-            // Right Speed buttons
-            HStack(spacing: 4) {
-                ForEach([1.0, 1.25, 1.5, 2.0], id: \.self) { speed in
-                    Button(action: { playerVM.setSpeed(speed) }) {
-                        Text("\(speed, specifier: "%.2g")x")
-                            .font(.system(size: 10, weight: .bold))
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 4)
-                            .background(playerVM.playbackSpeed == speed ? primaryAccent.opacity(0.18) : Color.cardBackground(isDark))
-                            .foregroundColor(playerVM.playbackSpeed == speed ? primaryAccent : .secondary)
-                            .cornerRadius(6)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
+            // Right: playback speed
+            speedControl
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, barWidth >= 600 ? 20 : 12)
         .frame(height: 76)
+        .frame(minWidth: 0, maxWidth: .infinity)
+        .background(
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { barWidth = geo.size.width }
+                    .onChange(of: geo.size.width) { _, width in barWidth = width }
+            }
+        )
         .background(Color.panelBackground(isDark))
         .overlay(
             Rectangle()
@@ -263,6 +276,50 @@ struct AudioPlayerBarView: View {
             if let url = NotesDataManager.shared.resolveAttachmentURL(newPath) {
                 playerVM.loadAudio(url: url, transcript: note.transcript)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var speedControl: some View {
+        if barWidth >= 720 {
+            HStack(spacing: 4) {
+                ForEach(Self.speeds, id: \.self) { speed in
+                    Button(action: { playerVM.setSpeed(speed) }) {
+                        Text(Self.speedLabel(speed))
+                            .font(.system(size: 10, weight: .bold))
+                            .monospacedDigit()
+                            .fixedSize()
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 4)
+                            .background(playerVM.playbackSpeed == speed ? primaryAccent.opacity(0.18) : Color.cardBackground(isDark))
+                            .foregroundColor(playerVM.playbackSpeed == speed ? primaryAccent : .secondary)
+                            .cornerRadius(AppRadius.sm)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Playback speed \(Self.speedLabel(speed))")
+                }
+            }
+        } else {
+            Menu {
+                Picker("Speed", selection: Binding(get: { playerVM.playbackSpeed }, set: { playerVM.setSpeed($0) })) {
+                    ForEach(Self.speeds, id: \.self) { Text(Self.speedLabel($0)).tag($0) }
+                }
+                .pickerStyle(.inline)
+            } label: {
+                Text(Self.speedLabel(playerVM.playbackSpeed))
+                    .font(.system(size: 10, weight: .bold))
+                    .monospacedDigit()
+                    .fixedSize()
+                    .foregroundColor(primaryAccent)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 4)
+                    .background(primaryAccent.opacity(0.18))
+                    .cornerRadius(AppRadius.sm)
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("Playback speed")
         }
     }
 

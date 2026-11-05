@@ -47,13 +47,13 @@ public struct EmacsMinibufferView: View {
                                                     .padding(.vertical, 2)
                                                     .background(emacs.selectedCommandIndex == idx ? Color.white.opacity(0.2) : (isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06)))
                                                     .foregroundColor(emacs.selectedCommandIndex == idx ? .white : .secondary)
-                                                    .cornerRadius(4)
+                                                    .cornerRadius(AppRadius.xs)
                                             }
                                         }
                                         .padding(.horizontal, 12)
                                         .padding(.vertical, 6)
                                         .background(
-                                            RoundedRectangle(cornerRadius: 6)
+                                            RoundedRectangle(cornerRadius: AppRadius.sm)
                                                 .fill(emacs.selectedCommandIndex == idx ? primaryAccent : Color.clear)
                                         )
                                     }
@@ -76,9 +76,9 @@ public struct EmacsMinibufferView: View {
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(primaryAccent.opacity(0.15))
-                            .cornerRadius(4)
+                            .cornerRadius(AppRadius.xs)
                         
-                        TextField("Type Emacs command (e.g. save-buffer, calendar, org-table-align)...", text: $emacs.minibufferQuery)
+                        TextField("Type Emacs command (e.g. save-buffer, calendar, org-table-align)", text: $emacs.minibufferQuery)
                             .textFieldStyle(.plain)
                             .font(.system(size: 13, weight: .medium, design: .monospaced))
                             .focused($isFieldFocused)
@@ -101,9 +101,9 @@ public struct EmacsMinibufferView: View {
                     .padding(.vertical, 10)
                 }
                 .background(Color.cardBackgroundElevated(isDark))
-                .cornerRadius(12)
+                .cornerRadius(AppRadius.lg)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: AppRadius.lg)
                         .stroke(primaryAccent.opacity(0.5), lineWidth: 1.5)
                 )
                 .shadow(color: Color.black.opacity(0.35), radius: 12, x: 0, y: 6)
@@ -121,14 +121,14 @@ public struct EmacsMinibufferView: View {
                     
                     Text(emacs.activePrefix != nil ? "\(emacs.activePrefix!)-" : emacs.statusMessage)
                         .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                        .foregroundColor(isDark ? .white : Color(red: 15/255, green: 23/255, blue: 42/255))
+                        .foregroundColor(Color.appText(isDark))
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
                 .background(Color.cardBackgroundElevated(isDark))
-                .cornerRadius(8)
+                .cornerRadius(AppRadius.md)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 8)
+                    RoundedRectangle(cornerRadius: AppRadius.md)
                         .stroke(Color.subtleBorder(isDark), lineWidth: 1)
                 )
                 .shadow(color: Color.black.opacity(0.2), radius: 6, x: 0, y: 3)

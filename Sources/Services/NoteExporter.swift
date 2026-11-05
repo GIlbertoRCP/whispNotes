@@ -554,11 +554,11 @@ class NoteExporter {
             let wordCount = note.content.split(whereSeparator: \.isWhitespace).count
             metadataHTML = """
             <div class="metadata-header">
-                <h1 class="title">\(note.title)</h1>
+                <h1 class="title">\(Self.htmlEscape(note.title))</h1>
                 <div class="meta-badges">
-                    <span class="badge folder-badge">📁 \(note.folder)</span>
-                    <span class="badge date-badge">🕒 \(dateStr)</span>
-                    <span class="badge count-badge">📝 \(wordCount) words</span>
+                    <span class="badge folder-badge">\(Self.htmlEscape(note.folder))</span>
+                    <span class="badge date-badge">\(dateStr)</span>
+                    <span class="badge count-badge">\(wordCount) words</span>
                 </div>
             </div>
             """
@@ -569,7 +569,7 @@ class NoteExporter {
         if config.includeTranscript && !note.transcript.isEmpty {
             transcriptHTML += """
             <div class="transcript-section">
-                <h2 class="transcript-title">🎙 Diarized Audio Transcript</h2>
+                <h2 class="transcript-title">Transcript</h2>
                 <div class="transcript-list">
             """
             for seg in note.transcript {
@@ -577,10 +577,10 @@ class NoteExporter {
                 transcriptHTML += """
                     <div class="segment">
                         <div class="segment-header">
-                            <span class="speaker-tag">\(seg.speaker)</span>
+                            <span class="speaker-tag">\(Self.htmlEscape(seg.speaker))</span>
                             <span class="time-tag">\(timeStr)</span>
                         </div>
-                        <div class="segment-body">\(seg.text)</div>
+                        <div class="segment-body">\(Self.htmlEscape(seg.text))</div>
                     </div>
                 """
             }
@@ -593,7 +593,7 @@ class NoteExporter {
         <head>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>\(note.title)</title>
+            <title>\(Self.htmlEscape(note.title))</title>
             <style>
                 :root {
                     --bg-main: #f1f5f9;
@@ -723,6 +723,11 @@ class NoteExporter {
                     margin-bottom: 1em;
                 }
                 li { margin-bottom: 0.35em; }
+                ul.checklist { list-style: none; padding-left: 4px; }
+                li.task input { margin-right: 6px; vertical-align: -1px; }
+                li.task.done { color: var(--text-secondary); text-decoration: line-through; }
+                .wikilink { font-weight: 600; border-bottom: 1px dotted currentColor; }
+                .timestamp { font-family: ui-monospace, Menlo, monospace; font-size: 0.85em; padding: 0 4px; border-radius: 4px; background: rgba(100, 116, 139, 0.15); }
 
                 table {
                     width: 100%;
@@ -815,58 +820,156 @@ class NoteExporter {
     }
 
     /// Helper to convert markdown into basic semantic HTML
+    // MARK: - HTML helpers
+
+    /// Escapes text for HTML element content and attribute values.
+    static func htmlEscape(_ text: String) -> String {
+        var out = ""
+        out.reserveCapacity(text.count)
+        for ch in text {
+            switch ch {
+            case "&": out += "&amp;"
+            case "<": out += "&lt;"
+            case ">": out += "&gt;"
+            case "\"": out += "&quot;"
+            case "'": out += "&#39;"
+            default: out.append(ch)
+            }
+        }
+        return out
+    }
+
+    /// Inline markdown → HTML: code spans, bold, italic, links, [[wiki links]] and play:// timestamps.
+    /// Escapes first, then substitutes, so note text can never inject markup.
+    static func inlineHTML(_ text: String) -> String {
+        var codeSpans: [String] = []
+        // Pull code spans out first so their contents aren't formatted.
+        var working = text.replacingOccurrences(of: "`([^`]+)`", with: "\u{0}$1\u{0}", options: .regularExpression)
+        let parts = working.components(separatedBy: "\u{0}")
+        working = ""
+        for (i, part) in parts.enumerated() {
+            if i % 2 == 1 {
+                codeSpans.append("<code>\(htmlEscape(part))</code>")
+                working += "\u{1}\(codeSpans.count - 1)\u{1}"
+            } else {
+                working += part
+            }
+        }
+
+        var html = htmlEscape(working)
+        let rules: [(String, String)] = [
+            (#"\[\[([^\]|]+)\|([^\]]+)\]\]"#, "<span class=\"wikilink\">$2</span>"),
+            (#"\[\[([^\]]+)\]\]"#, "<span class=\"wikilink\">$1</span>"),
+            (#"\[([^\]]+)\]\(play://[^)]*\)"#, "<span class=\"timestamp\">$1</span>"),
+            (#"\[([^\]]+)\]\((https?://[^)\s]+)\)"#, "<a href=\"$2\">$1</a>"),
+            (#"\*\*([^*]+)\*\*"#, "<strong>$1</strong>"),
+            (#"__([^_]+)__"#, "<strong>$1</strong>"),
+            (#"(?<![*\w])\*([^*\n]+)\*(?![*\w])"#, "<em>$1</em>"),
+            (#"(?<![_\w])_([^_\n]+)_(?![_\w])"#, "<em>$1</em>"),
+            (#"~~([^~]+)~~"#, "<del>$1</del>"),
+        ]
+        for (pattern, template) in rules {
+            html = html.replacingOccurrences(of: pattern, with: template, options: .regularExpression)
+        }
+        for (i, span) in codeSpans.enumerated() {
+            html = html.replacingOccurrences(of: "\u{1}\(i)\u{1}", with: span)
+        }
+        return html
+    }
+
     private func formatMarkdownToHTML(_ text: String, config: ExportConfiguration) -> String {
         let blocks = parseMarkdownBlocks(text)
         var html = ""
+        /// The list currently open ("ul" or "ol"), so consecutive items share one list.
+        var openList: String? = nil
+
+        func closeList() {
+            if let tag = openList { html += "</\(tag)>\n"; openList = nil }
+        }
+        func openListIfNeeded(_ tag: String, className: String? = nil) {
+            if openList != tag {
+                closeList()
+                html += className.map { "<\(tag) class=\"\($0)\">\n" } ?? "<\(tag)>\n"
+                openList = tag
+            }
+        }
 
         for block in blocks {
             switch block {
             case .line(let rawLine):
                 let trimmed = rawLine.trimmingCharacters(in: .whitespaces)
-                if trimmed.isEmpty { continue }
+                if trimmed.isEmpty { closeList(); continue }
 
-                if trimmed.hasPrefix("# ") {
-                    html += "<h1>\(trimmed.dropFirst(2))</h1>\n"
-                } else if trimmed.hasPrefix("## ") {
-                    html += "<h2>\(trimmed.dropFirst(3))</h2>\n"
-                } else if trimmed.hasPrefix("### ") {
-                    html += "<h3>\(trimmed.dropFirst(4))</h3>\n"
-                } else if trimmed.hasPrefix("* ") || trimmed.hasPrefix("- ") {
-                    html += "<ul><li>\(trimmed.dropFirst(2))</li></ul>\n"
-                } else if trimmed.hasPrefix("> ") {
-                    html += "<blockquote>\(trimmed.dropFirst(2))</blockquote>\n"
+                if let heading = trimmed.range(of: #"^#{1,6} "#, options: .regularExpression) {
+                    closeList()
+                    let level = trimmed[heading].filter { $0 == "#" }.count
+                    html += "<h\(level)>\(Self.inlineHTML(String(trimmed[heading.upperBound...])))</h\(level)>\n"
+                } else if trimmed == "---" || trimmed == "***" || trimmed == "___" {
+                    closeList()
+                    html += "<hr>\n"
+                } else if let box = trimmed.range(of: #"^[-*+] \[( |x|X)\] "#, options: .regularExpression) {
+                    openListIfNeeded("ul", className: "checklist")
+                    let checked = trimmed[box].lowercased().contains("x")
+                    html += "<li class=\"task\(checked ? " done" : "")\"><input type=\"checkbox\" disabled\(checked ? " checked" : "")> \(Self.inlineHTML(String(trimmed[box.upperBound...])))</li>\n"
+                } else if let bullet = trimmed.range(of: #"^[-*+] "#, options: .regularExpression) {
+                    openListIfNeeded("ul")
+                    html += "<li>\(Self.inlineHTML(String(trimmed[bullet.upperBound...])))</li>\n"
+                } else if let number = trimmed.range(of: #"^\d+\. "#, options: .regularExpression) {
+                    openListIfNeeded("ol")
+                    html += "<li>\(Self.inlineHTML(String(trimmed[number.upperBound...])))</li>\n"
+                } else if trimmed.hasPrefix(">") {
+                    closeList()
+                    html += "<blockquote>\(Self.inlineHTML(trimmed.dropFirst().trimmingCharacters(in: .whitespaces)))</blockquote>\n"
                 } else {
-                    html += "<p>\(trimmed)</p>\n"
+                    closeList()
+                    html += "<p>\(Self.inlineHTML(trimmed))</p>\n"
                 }
 
             case .code(let code):
-                html += "<pre><code>\(code)</code></pre>\n"
+                closeList()
+                html += "<pre><code>\(Self.htmlEscape(code))</code></pre>\n"
 
             case .callout(let type, let title, let content):
-                let body = content.joined(separator: "<br>")
-                html += "<div class='callout'><div class='callout-title'>[\(type)] \(title)</div><div>\(body)</div></div>\n"
+                closeList()
+                let body = content.map { Self.inlineHTML($0) }.joined(separator: "<br>")
+                let heading = title.isEmpty ? type.capitalized : title
+                html += "<div class=\"callout callout-\(Self.htmlEscape(type.lowercased()))\"><div class=\"callout-title\">\(Self.inlineHTML(heading))</div><div>\(body)</div></div>\n"
 
             case .table(let rows):
-                html += "<table><tbody>\n"
-                for row in rows {
-                    let cols = row.split(separator: "|").map { String($0).trimmingCharacters(in: .whitespaces) }
-                    if !cols.isEmpty && !cols.allSatisfy({ $0.hasPrefix("-") }) {
-                        html += "<tr>" + cols.map { "<td>\($0)</td>" }.joined() + "</tr>\n"
-                    }
+                closeList()
+                let parsed: [[String]] = rows.compactMap { row in
+                    var cells = row.trimmingCharacters(in: .whitespaces)
+                    if cells.hasPrefix("|") { cells.removeFirst() }
+                    if cells.hasSuffix("|") { cells.removeLast() }
+                    let cols = cells.components(separatedBy: "|").map { $0.trimmingCharacters(in: .whitespaces) }
+                    return cols.isEmpty ? nil : cols
                 }
-                html += "</tbody></table>\n"
+                // The |---|:---:| row only sets alignment; it isn't data.
+                let isSeparator: ([String]) -> Bool = { cols in
+                    cols.allSatisfy { $0.range(of: #"^:?-{2,}:?$"#, options: .regularExpression) != nil }
+                }
+                let dataRows = parsed.filter { !isSeparator($0) }
+                guard let header = dataRows.first else { break }
+                html += "<table>\n<thead><tr>" + header.map { "<th>\(Self.inlineHTML($0))</th>" }.joined() + "</tr></thead>\n<tbody>\n"
+                for row in dataRows.dropFirst() {
+                    html += "<tr>" + row.map { "<td>\(Self.inlineHTML($0))</td>" }.joined() + "</tr>\n"
+                }
+                html += "</tbody>\n</table>\n"
 
             case .image(let alt, let path):
-                html += "<p><img src='\(path)' alt='\(alt)' style='max-width: 100%; border-radius: 8px;'></p>\n"
+                closeList()
+                html += "<p><img src=\"\(Self.htmlEscape(path))\" alt=\"\(Self.htmlEscape(alt))\" style=\"max-width: 100%; border-radius: 8px;\"></p>\n"
 
             case .mermaid(let chart):
-                html += "<pre class='mermaid'>\(chart)</pre>\n"
+                closeList()
+                html += "<pre class=\"mermaid\">\(Self.htmlEscape(chart))</pre>\n"
 
             case .mathBlock(let math):
-                html += "<div class='math-block'>$$ \(math) $$</div>\n"
+                closeList()
+                html += "<div class=\"math-block\">$$ \(Self.htmlEscape(math)) $$</div>\n"
             }
         }
-
+        closeList()
         return html
     }
 

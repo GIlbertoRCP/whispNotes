@@ -52,7 +52,7 @@ public struct MermaidRendererView: View {
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
-                    .cornerRadius(4)
+                    .cornerRadius(AppRadius.xs)
                 }
                 .buttonStyle(.plain)
             }

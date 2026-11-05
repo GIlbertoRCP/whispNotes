@@ -11,8 +11,8 @@
 
 ## Quick Download & Direct Installation (No Terminal Required)
 
-1. Download **`WhispNotes-1.6.0.dmg`** from the latest [GitHub Releases](https://github.com/GIlbertoRCP/whispNotes/releases).
-2. Double-click **`WhispNotes-1.6.0.dmg`** to open the installer.
+1. Download **`WhispNotes-1.7.0.dmg`** from the latest [GitHub Releases](https://github.com/GIlbertoRCP/whispNotes/releases).
+2. Double-click **`WhispNotes-1.7.0.dmg`** to open the installer.
 3. Drag **`WhispNotes.app`** into your **`Applications`** folder.
 4. Launch **WhispNotes** directly from Applications or Spotlight (`⌘Space`)!
 
@@ -25,7 +25,7 @@
 ### Main 3-Pane Interface & Diarized Audio Transcription
 ![WhispNotes Main Interface](assets/main_interface.png)
 
-### Spotlight Command Palette (⌘K / ⌘O)
+### Spotlight Command Palette (⌘K)
 ![WhispNotes Command Palette](assets/command_palette.png)
 
 ### Interactive Knowledge Graph Canvas (⌘G)
@@ -48,18 +48,23 @@
   - Beautiful zebra-striped Markdown tables, inline math formulas (`$formula$`), wiki-links, and syntax highlighting.
 - **Interactive Knowledge Graph Canvas (`⌘G`)**:
   - Force-directed visual node graph of note connections with draggable node physics, blueprint grid canvas, zoom/pan controls, and search filtering.
+- **Quick Record from Anywhere**:
+  - Start or stop a recording with the global shortcut `⌃⌥⌘R` or the menu bar icon, without leaving your call. The icon shows the elapsed time while recording.
+  - Recordings always land in the note they were started in, even if you switch notes mid-meeting.
+- **Editor Preferences**:
+  - Choose the default view (Edit, Split or Preview) and the reading width (Narrow, Standard, Wide or Full Width) in Settings › Editor.
 - **On-Device Whisper Speech-to-Text**:
   - High-precision local speech transcription with zero external API calls or background servers.
   - Multi-speaker diarization with speaker segment pills and active transcript auto-scrolling during playback.
   - One-click transcript blockquote insertion (`> "quote" [01:23](play://83)`).
 - **Interactive Audio Waveform Seeker**:
-  - Click or drag along the multi-bar audio waveform to seek playback instantly, with live playhead indicator, timestamp readouts, and playback speed steppers (`1x`, `1.2x`, `1.5x`, `2x`).
+  - Click or drag along the multi-bar audio waveform to seek playback instantly, with live playhead indicator, timestamp readouts, and playback speeds (`1×`, `1.25×`, `1.5×`, `2×`).
 - **Native PowerPoint (`.pptx`) & PDF Presentation Support**:
   - Zero external dependencies: native OpenXML slide parsing and presenter notes extraction.
   - Interactive 16:9 widescreen presentation canvas with slide navigation, slide counter, jump-to-slide popover, and one-click slide citations.
 - **On-Device Gemma 3 Local AI Assistant**:
   - Extract executive key takeaways, auto-detect action items, generate study flashcards, and run custom Q&A on your active note context completely offline.
-- **Spotlight Command Palette (`⌘K` / `⌘O`)**:
+- **Spotlight Command Palette (`⌘K`)**:
   - Instant fuzzy search across notes, folders, and transcript content with folder badges and keyboard navigation.
 - **Real-Time Release & Update Status**:
   - Live version checks in Settings displaying update availability, release notes, and direct DMG download links.
@@ -68,7 +73,7 @@
 - **Dynamic Theme Engine**:
   - Switch between curated themes: Default Dark, Cyberpunk Neon, Obsidian Dark, Solarized Dark, and Minimalist Light.
 - **Trash Bin Retention & Data Safety**:
-  - Soft-delete architecture with 30-day retention, instant note restoration, and safe purge controls.
+  - Notes move to the Trash first, restore to their original folder, and can be deleted permanently from there (undoable with ⌘Z).
 
 ---
 
@@ -101,12 +106,12 @@ swift test
 To compile, code-sign, and package the application into a standalone macOS `.app` bundle and compressed `.dmg` disk image:
 
 ```bash
-./scripts/build_app.sh 1.6.0
+./scripts/build_app.sh 1.7.0
 ```
 
 This script generates:
 - `build/WhispNotes.app` (signed macOS application bundle with custom app icon)
-- `build/WhispNotes-1.6.0.dmg` (installer image with Applications drag-and-drop link)
+- `build/WhispNotes-1.7.0.dmg` (installer image with Applications drag-and-drop link)
 
 ---
 

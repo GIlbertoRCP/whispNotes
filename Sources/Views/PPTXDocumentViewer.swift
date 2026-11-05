@@ -58,7 +58,7 @@ struct SlidePresentationCanvas: View {
                             .padding(.vertical, 3)
                             .background(primaryAccent.opacity(0.15))
                             .foregroundColor(primaryAccent)
-                            .cornerRadius(4)
+                            .cornerRadius(AppRadius.xs)
                         
                         Spacer()
                         
@@ -77,7 +77,7 @@ struct SlidePresentationCanvas: View {
                     if !slide.title.isEmpty {
                         Text(slide.title)
                             .font(.system(size: max(16, min(24, cardWidth * 0.038)), weight: .heavy))
-                            .foregroundColor(isDark ? .white : Color(red: 15/255, green: 23/255, blue: 42/255))
+                            .foregroundColor(Color.appText(isDark))
                             .lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -94,7 +94,7 @@ struct SlidePresentationCanvas: View {
                                     
                                     Text(bullet)
                                         .font(.system(size: max(11, min(14, cardWidth * 0.024)), weight: .medium))
-                                        .foregroundColor(isDark ? Color(red: 226/255, green: 232/255, blue: 240/255) : Color(red: 30/255, green: 41/255, blue: 59/255))
+                                        .foregroundColor(Color.appTextBody(isDark))
                                         .fixedSize(horizontal: false, vertical: true)
                                 }
                             }
@@ -124,7 +124,7 @@ struct SlidePresentationCanvas: View {
                                             .padding(.horizontal, 6)
                                             .padding(.vertical, 3)
                                             .background(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
-                                            .cornerRadius(4)
+                                            .cornerRadius(AppRadius.xs)
                                     }
                                 }
                             }
@@ -148,15 +148,15 @@ struct SlidePresentationCanvas: View {
                         .padding(6)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(secondaryAccent.opacity(0.08))
-                        .cornerRadius(6)
+                        .cornerRadius(AppRadius.sm)
                     }
                 }
                 .padding(20)
                 .frame(width: cardWidth, height: cardHeight)
                 .background(Color.cardBackground(isDark))
-                .cornerRadius(12)
+                .cornerRadius(AppRadius.lg)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: AppRadius.lg)
                         .stroke(Color.subtleBorder(isDark), lineWidth: 1)
                 )
                 .shadow(color: Color.black.opacity(isDark ? 0.4 : 0.1), radius: 10, x: 0, y: 5)
@@ -253,7 +253,7 @@ struct PPTXDocumentViewerView: View {
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
                             .background(Color.panelBackground(isDark))
-                            .cornerRadius(8)
+                            .cornerRadius(AppRadius.md)
                             .shadow(color: Color.black.opacity(0.25), radius: 6, x: 0, y: 3)
                             .padding(16)
                             .transition(.opacity.combined(with: .move(edge: .top)))
@@ -311,7 +311,7 @@ struct PPTXDocumentViewerView: View {
                     
                     Text("\(currentSlideIndex) / \(totalSlides) Slides")
                         .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                        .foregroundColor(isDark ? .white : Color(red: 15/255, green: 23/255, blue: 42/255))
+                        .foregroundColor(Color.appText(isDark))
                     
                     Image(systemName: "chevron.down")
                         .font(.system(size: 8, weight: .bold))
@@ -320,9 +320,9 @@ struct PPTXDocumentViewerView: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(Color.cardBackground(isDark))
-                .cornerRadius(5)
+                .cornerRadius(AppRadius.xs)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 5)
+                    RoundedRectangle(cornerRadius: AppRadius.xs)
                         .stroke(Color.subtleBorder(isDark), lineWidth: 1)
                 )
             }
@@ -387,9 +387,9 @@ struct PPTXDocumentViewerView: View {
                 .help("Next Slide")
             }
             .background(Color.cardBackground(isDark))
-            .cornerRadius(5)
+            .cornerRadius(AppRadius.xs)
             .overlay(
-                RoundedRectangle(cornerRadius: 5)
+                RoundedRectangle(cornerRadius: AppRadius.xs)
                     .stroke(Color.subtleBorder(isDark), lineWidth: 1)
             )
 
@@ -425,7 +425,7 @@ struct PPTXDocumentViewerView: View {
                     .foregroundColor(isSearching ? primaryAccent : .secondary)
                     .frame(width: 24, height: 24)
                     .background(isSearching ? primaryAccent.opacity(0.15) : Color.clear)
-                    .cornerRadius(5)
+                    .cornerRadius(AppRadius.xs)
             }
             .buttonStyle(.plain)
             .help("Search Slides (⌘F)")
@@ -448,9 +448,9 @@ struct PPTXDocumentViewerView: View {
                 .padding(.vertical, 4)
                 .background(showOutlineDrawer ? secondaryAccent.opacity(0.18) : Color.cardBackground(isDark))
                 .foregroundColor(showOutlineDrawer ? secondaryAccent : .primary)
-                .cornerRadius(5)
+                .cornerRadius(AppRadius.xs)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 5)
+                    RoundedRectangle(cornerRadius: AppRadius.xs)
                         .stroke(Color.subtleBorder(isDark), lineWidth: 1)
                 )
             }
@@ -471,9 +471,9 @@ struct PPTXDocumentViewerView: View {
                 .padding(.vertical, 4)
                 .background(primaryAccent.opacity(0.12))
                 .foregroundColor(primaryAccent)
-                .cornerRadius(5)
+                .cornerRadius(AppRadius.xs)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 5)
+                    RoundedRectangle(cornerRadius: AppRadius.xs)
                         .stroke(primaryAccent.opacity(0.35), lineWidth: 1)
                 )
             }
@@ -493,9 +493,9 @@ struct PPTXDocumentViewerView: View {
                 .padding(.horizontal, 6)
                 .padding(.vertical, 4)
                 .background(Color.cardBackground(isDark))
-                .cornerRadius(5)
+                .cornerRadius(AppRadius.xs)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 5)
+                    RoundedRectangle(cornerRadius: AppRadius.xs)
                         .stroke(Color.subtleBorder(isDark), lineWidth: 1)
                 )
             }
@@ -526,7 +526,7 @@ struct PPTXDocumentViewerView: View {
                 .font(.caption2)
                 .foregroundColor(.secondary)
             
-            TextField("Search in slides & speaker notes...", text: $searchQuery)
+            TextField("Search in slides & speaker notes", text: $searchQuery)
                 .textFieldStyle(.plain)
                 .font(.caption)
                 .onChange(of: searchQuery) { _, newQuery in
@@ -581,7 +581,7 @@ struct PPTXDocumentViewerView: View {
                 }
                 Spacer()
                 Text("\(presentation?.slides.count ?? 0) Slides")
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(.secondary)
             }
             .padding(.horizontal, 12)
@@ -601,12 +601,12 @@ struct PPTXDocumentViewerView: View {
                             VStack(alignment: .leading, spacing: 5) {
                                 HStack {
                                     Text("Slide \(slide.id)")
-                                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                        .font(.system(size: 10, weight: .bold, design: .monospaced))
                                         .padding(.horizontal, 5)
                                         .padding(.vertical, 2)
                                         .background(isSelected ? primaryAccent : Color.secondary.opacity(0.15))
                                         .foregroundColor(isSelected ? .white : .secondary)
-                                        .cornerRadius(4)
+                                        .cornerRadius(AppRadius.xs)
                                     
                                     Text(slide.title.isEmpty ? "Untitled Slide" : slide.title)
                                         .font(.system(size: 11, weight: .bold))
@@ -644,21 +644,21 @@ struct PPTXDocumentViewerView: View {
                                             .foregroundColor(secondaryAccent)
                                             .padding(.top, 2)
                                         Text(notes)
-                                            .font(.system(size: 9, design: .monospaced))
+                                            .font(.system(size: 10, design: .monospaced))
                                             .foregroundColor(secondaryAccent)
                                             .lineLimit(3)
                                     }
                                     .padding(4)
                                     .background(secondaryAccent.opacity(0.08))
-                                    .cornerRadius(4)
+                                    .cornerRadius(AppRadius.xs)
                                 }
                             }
                             .padding(8)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(isSelected ? primaryAccent.opacity(0.08) : (isMatching ? Color.yellow.opacity(0.12) : Color.cardBackground(isDark)))
-                            .cornerRadius(6)
+                            .cornerRadius(AppRadius.sm)
                             .overlay(
-                                RoundedRectangle(cornerRadius: 6)
+                                RoundedRectangle(cornerRadius: AppRadius.sm)
                                     .stroke(isSelected ? primaryAccent.opacity(0.4) : Color.subtleBorder(isDark), lineWidth: 1)
                             )
                             .contentShape(Rectangle())
@@ -675,7 +675,7 @@ struct PPTXDocumentViewerView: View {
                 VStack(spacing: 8) {
                     ProgressView()
                         .controlSize(.small)
-                    Text("Parsing slide outline...")
+                    Text("Parsing slide outline…")
                         .font(.caption2)
                         .foregroundColor(.secondary)
                 }

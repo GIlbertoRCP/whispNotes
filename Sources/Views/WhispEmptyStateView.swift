@@ -75,10 +75,10 @@ public struct WhispEmptyStateView: View {
                                 .padding(.horizontal, 5)
                                 .padding(.vertical, 2)
                                 .background(Color.white.opacity(0.2))
-                                .cornerRadius(3)
+                                .cornerRadius(AppRadius.xs)
                         }
                     }
-                    .foregroundColor(.white)
+                    .foregroundColor(Color.onAccent(isDarkMode))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 7)
                     .background(primaryAccent)

@@ -154,4 +154,44 @@ final class NoteExporterTests: XCTestCase {
         XCTAssertTrue(plainText.contains("TITLE : Architecture Spec"))
         XCTAssertTrue(plainText.contains("    Line 1"))
     }
+
+    func testHTMLExportEscapesMarkupAndConvertsInlineMarkdown() {
+        let note = NoteItem(
+            title: "Q&A <draft>",
+            folder: "General",
+            content: """
+            Compare **bold**, *italic* and `a < b` with [[Other Note]] at [01:23](play://83).
+
+            ```
+            if x < 3 && y > 2 { print("<div>") }
+            ```
+
+            - one
+            - two
+            1. first
+            2. second
+            - [ ] open task
+            - [x] done task
+
+            | Model | Accuracy |
+            | :--- | ---: |
+            | ResNet | 92% |
+            """,
+            timestamp: Date()
+        )
+        let html = NoteExporter.shared.generateHTMLString(note)
+        XCTAssertTrue(html.contains("<title>Q&amp;A &lt;draft&gt;</title>"))
+        XCTAssertTrue(html.contains("<strong>bold</strong>"))
+        XCTAssertTrue(html.contains("<em>italic</em>"))
+        XCTAssertTrue(html.contains("<code>a &lt; b</code>"))
+        XCTAssertTrue(html.contains("<span class=\"wikilink\">Other Note</span>"))
+        XCTAssertTrue(html.contains("<span class=\"timestamp\">01:23</span>"))
+        XCTAssertTrue(html.contains("if x &lt; 3 &amp;&amp; y &gt; 2"))
+        XCTAssertFalse(html.contains("<div>\")"), "code block content must be escaped")
+        XCTAssertEqual(html.components(separatedBy: "<ul>").count - 1, 1, "consecutive bullets share one list")
+        XCTAssertTrue(html.contains("<ol>"))
+        XCTAssertTrue(html.contains("<input type=\"checkbox\" disabled checked>"))
+        XCTAssertTrue(html.contains("<th>Model</th>"))
+        XCTAssertFalse(html.contains(":---"), "alignment row is not data")
+    }
 }

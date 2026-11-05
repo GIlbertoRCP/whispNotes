@@ -55,17 +55,17 @@ struct WikiLinkAutocompleteView: View {
                                 .foregroundColor(.secondary)
                             Text(note.title)
                                 .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(isDark ? .white : Color(red: 15/255, green: 23/255, blue: 42/255))
+                                .foregroundColor(Color.appText(isDark))
                                 .lineLimit(1)
                             Spacer()
                             Text(note.folder)
-                                .font(.system(size: 9))
+                                .font(.system(size: 10))
                                 .foregroundColor(.secondary)
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 5)
                         .background(Color.cardBackground(isDark).opacity(0.5))
-                        .cornerRadius(4)
+                        .cornerRadius(AppRadius.xs)
                     }
                     .buttonStyle(.plain)
                 }
@@ -74,10 +74,10 @@ struct WikiLinkAutocompleteView: View {
         .padding(6)
         .frame(width: 240)
         .background(Color.panelBackground(isDark))
-        .cornerRadius(8)
+        .cornerRadius(AppRadius.md)
         .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 4)
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: AppRadius.md)
                 .stroke(Color.subtleBorder(isDark), lineWidth: 1)
         )
     }

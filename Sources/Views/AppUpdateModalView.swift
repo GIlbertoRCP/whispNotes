@@ -73,7 +73,7 @@ public struct AppUpdateModalView: View {
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
                                     .background(Color.panelBackground(isDarkMode))
-                                    .cornerRadius(4)
+                                    .cornerRadius(AppRadius.xs)
                             }
                             
                             Image(systemName: "arrow.right")
@@ -91,7 +91,7 @@ public struct AppUpdateModalView: View {
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
                                     .background(primaryAccent.opacity(0.15))
-                                    .cornerRadius(4)
+                                    .cornerRadius(AppRadius.xs)
                             }
                             
                             Spacer()
@@ -103,7 +103,7 @@ public struct AppUpdateModalView: View {
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                         .background(Color.panelBackground(isDarkMode))
-                        .cornerRadius(8)
+                        .cornerRadius(AppRadius.md)
                         
                         // Release Notes Markdown Card
                         VStack(alignment: .leading, spacing: 6) {
@@ -124,9 +124,9 @@ public struct AppUpdateModalView: View {
                             }
                             .frame(height: 180)
                             .background(Color.sidebarBackground(isDarkMode))
-                            .cornerRadius(8)
+                            .cornerRadius(AppRadius.md)
                             .overlay(
-                                RoundedRectangle(cornerRadius: 8)
+                                RoundedRectangle(cornerRadius: AppRadius.md)
                                     .stroke(Color.subtleBorder(isDarkMode), lineWidth: 1)
                             )
                         }
@@ -163,7 +163,7 @@ public struct AppUpdateModalView: View {
                     if case let .downloading(progress, written, total) = updater.status {
                         VStack(spacing: 6) {
                             HStack {
-                                Text("Downloading Update...")
+                                Text("Downloading Update…")
                                     .font(.caption)
                                     .fontWeight(.bold)
                                 Spacer()
@@ -189,7 +189,7 @@ public struct AppUpdateModalView: View {
                         }
                         .padding(8)
                         .background(Color.red.opacity(0.1))
-                        .cornerRadius(6)
+                        .cornerRadius(AppRadius.sm)
                     }
                 }
                 .padding(20)
@@ -230,11 +230,11 @@ public struct AppUpdateModalView: View {
                                 }
                                 .font(.subheadline)
                                 .fontWeight(.bold)
-                                .foregroundColor(.white)
+                                .foregroundColor(Color.onAccent(isDarkMode))
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 8)
                                 .background(primaryAccent)
-                                .cornerRadius(8)
+                                .cornerRadius(AppRadius.md)
                             }
                             .buttonStyle(.plain)
                             
@@ -253,11 +253,11 @@ public struct AppUpdateModalView: View {
                                 }
                                 .font(.subheadline)
                                 .fontWeight(.bold)
-                                .foregroundColor(.white)
+                                .foregroundColor(Color.onAccent(isDarkMode))
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 8)
                                 .background(primaryAccent)
-                                .cornerRadius(8)
+                                .cornerRadius(AppRadius.md)
                             }
                             .buttonStyle(.plain)
                         }
@@ -270,8 +270,8 @@ public struct AppUpdateModalView: View {
                         .padding(.horizontal, 18)
                         .padding(.vertical, 8)
                         .background(primaryAccent)
-                        .foregroundColor(.white)
-                        .cornerRadius(8)
+                        .foregroundColor(Color.onAccent(isDarkMode))
+                        .cornerRadius(AppRadius.md)
                         .buttonStyle(.plain)
                     }
                 }
@@ -280,10 +280,10 @@ public struct AppUpdateModalView: View {
                 .background(Color.sidebarBackground(isDarkMode))
             }
         }
-        .frame(width: 520, height: 460)
-        .cornerRadius(12)
+        .adaptiveSheetFrame(width: 520, height: 460)
+        .cornerRadius(AppRadius.lg)
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: AppRadius.lg)
                 .stroke(Color.subtleBorder(isDarkMode), lineWidth: 1)
         )
         .shadow(color: Color.black.opacity(0.4), radius: 20, x: 0, y: 10)

@@ -74,7 +74,7 @@ struct CodeBlockView: View {
                     Image(systemName: "chevron.left.forwardslash.chevron.right")
                         .font(.system(size: 9, weight: .semibold))
                     Text("CODE")
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
                 }
                 .foregroundColor(.secondary.opacity(0.8))
                 
@@ -98,14 +98,14 @@ struct CodeBlockView: View {
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
-                    .cornerRadius(4)
+                    .cornerRadius(AppRadius.xs)
                 }
                 .buttonStyle(.plain)
             }
             
             Text(code)
                 .font(.system(.caption, design: .monospaced))
-                .foregroundColor(isDark ? Color(red: 226/255, green: 232/255, blue: 240/255) : Color(red: 15/255, green: 23/255, blue: 42/255))
+                .foregroundColor(Color.appTextBody(isDark))
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(12)
@@ -123,6 +123,7 @@ struct CodeBlockView: View {
 struct MarkdownTableView: View {
     let lines: [String]
     let isDark: Bool
+    @Environment(\.readingScale) private var readingScale
     
     var parsedRows: [[String]] {
         lines.compactMap { line in
@@ -132,70 +133,96 @@ struct MarkdownTableView: View {
         }
     }
     
+    /// Cells wrap between words; very long cells stop widening their column here.
+    private static let maxColumnWidth: CGFloat = 280
+
     var body: some View {
         let rows = parsedRows
         if let header = rows.first {
-            let dataRows = rows.dropFirst().filter { row in
+            let dataRows = Array(rows.dropFirst().filter { row in
                 !row.allSatisfy { $0.allSatisfy { $0 == "-" || $0 == ":" } }
-            }
-            
-            VStack(spacing: 0) {
-                // Header Row
-                HStack(spacing: 0) {
-                    ForEach(Array(header.enumerated()), id: \.offset) { colIdx, cell in
-                        Text(LocalizedStringKey(cell))
-                            .font(.system(size: 11.5, weight: .bold))
-                            .foregroundColor(isDark ? Color(red: 241/255, green: 245/255, blue: 249/255) : Color(red: 15/255, green: 23/255, blue: 42/255))
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 9)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        
-                        if colIdx < header.count - 1 {
-                            Rectangle()
-                                .fill(Color.subtleBorder(isDark))
-                                .frame(width: 1, height: 18)
-                        }
-                    }
-                }
-                .background(Color.sidebarBackground(isDark))
-                
-                Divider()
-                    .background(Color.subtleBorder(isDark))
-                
-                // Data Rows
-                ForEach(Array(dataRows.enumerated()), id: \.offset) { rowIdx, row in
-                    HStack(spacing: 0) {
-                        ForEach(Array(row.enumerated()), id: \.offset) { colIdx, cell in
-                            Text(LocalizedStringKey(cell))
-                                .font(AppTypography.callout)
-                                .foregroundColor(isDark ? Color(red: 226/255, green: 232/255, blue: 240/255) : Color(red: 15/255, green: 23/255, blue: 42/255))
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 8)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            
-                            if colIdx < row.count - 1 {
-                                Rectangle()
-                                    .fill(Color.subtleBorder(isDark).opacity(0.5))
-                                    .frame(width: 1, height: 16)
-                            }
-                        }
-                    }
-                    .background(rowIdx % 2 == 0 ? Color.clear : Color.cardBackground(isDark).opacity(0.5))
-                    
-                    if rowIdx < dataRows.count - 1 {
-                        Divider()
-                            .background(Color.subtleBorder(isDark).opacity(0.35))
-                    }
+            })
+            let columnCount = max(header.count, dataRows.map(\.count).max() ?? 0)
+
+            let minWidth = Self.minimumTableWidth(rows: [header] + dataRows, columnCount: columnCount, scale: readingScale)
+
+            // Wrap cells between words when the pane can hold every column's longest word;
+            // otherwise scroll sideways rather than breaking words in half.
+            ViewThatFits(in: .horizontal) {
+                // 15% slack: Grid doesn't hand every column exactly its longest word.
+                tableGrid(header: header, dataRows: dataRows, columnCount: columnCount)
+                    .frame(minWidth: 0, idealWidth: minWidth * 1.15, maxWidth: .infinity, alignment: .leading)
+                ScrollView(.horizontal, showsIndicators: true) {
+                    // Natural width: short cells on one line, long ones wrap at the column cap.
+                    tableGrid(header: header, dataRows: dataRows, columnCount: columnCount)
+                        .fixedSize(horizontal: true, vertical: false)
                 }
             }
-            .cornerRadius(AppRadius.md)
-            .overlay(
-                RoundedRectangle(cornerRadius: AppRadius.md)
-                    .stroke(Color.subtleBorder(isDark), lineWidth: 1)
-            )
-            .shadow(color: Color.black.opacity(isDark ? 0.2 : 0.04), radius: 6, x: 0, y: 2)
-            .padding(.vertical, 6)
+            .padding(.vertical, AppSpacing.xs)
         }
+    }
+
+    /// Sum of each column's longest unbreakable word plus cell padding.
+    private static func minimumTableWidth(rows: [[String]], columnCount: Int, scale: CGFloat) -> CGFloat {
+        let font = NSFont.systemFont(ofSize: 13 * scale, weight: .semibold)
+        var total: CGFloat = 0
+        for col in 0..<columnCount {
+            var longest: CGFloat = 24
+            for row in rows where col < row.count {
+                let plain = row[col].replacingOccurrences(of: "[*_`]", with: "", options: .regularExpression)
+                for word in plain.split(whereSeparator: { $0.isWhitespace }) {
+                    longest = max(longest, (String(word) as NSString).size(withAttributes: [.font: font]).width)
+                }
+            }
+            total += ceil(longest) + AppSpacing.md * 2 + 2
+        }
+        return total
+    }
+
+    private func tableGrid(header: [String], dataRows: [[String]], columnCount: Int) -> some View {
+        Grid(alignment: .topLeading, horizontalSpacing: 0, verticalSpacing: 0) {
+            GridRow {
+                ForEach(0..<columnCount, id: \.self) { col in
+                    cell(col < header.count ? header[col] : "", isHeader: true, fill: Color.sidebarBackground(isDark))
+                }
+            }
+
+            Rectangle().fill(Color.subtleBorder(isDark)).frame(height: 1)
+
+            ForEach(Array(dataRows.enumerated()), id: \.offset) { rowIdx, row in
+                GridRow {
+                    ForEach(0..<columnCount, id: \.self) { col in
+                        cell(
+                            col < row.count ? row[col] : "",
+                            isHeader: false,
+                            fill: rowIdx % 2 == 0 ? Color.clear : Color.cardBackground(isDark).opacity(0.5)
+                        )
+                    }
+                }
+
+                if rowIdx < dataRows.count - 1 {
+                    Rectangle().fill(Color.subtleBorder(isDark).opacity(0.5)).frame(height: 1)
+                }
+            }
+        }
+        // Lets each cell's fill stretch to its row's height without the grid growing unbounded.
+        .fixedSize(horizontal: false, vertical: true)
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppRadius.md)
+                .stroke(Color.subtleBorder(isDark), lineWidth: 1)
+        )
+    }
+
+    private func cell(_ text: String, isHeader: Bool, fill: Color) -> some View {
+        Text(LocalizedStringKey(text))
+            .font(isHeader ? ReadingTypography.callout(readingScale).weight(.semibold) : ReadingTypography.callout(readingScale))
+            .foregroundColor(isHeader ? Color.appText(isDark) : Color.appTextBody(isDark))
+            .frame(maxWidth: Self.maxColumnWidth * readingScale, alignment: .leading)
+            .padding(.horizontal, AppSpacing.md)
+            .padding(.vertical, AppSpacing.sm)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(fill)
     }
 }
 
@@ -365,14 +392,17 @@ struct FormattedTextLine: View {
     let currentFolder: String
     let primaryAccent: Color
     let secondaryAccent: Color
-    var isDark: Bool = true
+    let isDark: Bool
+    /// Replaces the body color, e.g. dimmed for blockquotes and checked items.
+    var colorOverride: Color? = nil
+    @Environment(\.readingScale) private var readingScale
 
     var tokens: [TextToken] {
         parseLineTokens(text)
     }
 
     private var textColor: Color {
-        isDark ? Color(red: 226/255, green: 232/255, blue: 240/255) : Color(red: 15/255, green: 23/255, blue: 42/255)
+        colorOverride ?? Color.appTextBody(isDark)
     }
 
     private var hasInteractiveTokens: Bool {
@@ -410,7 +440,7 @@ struct FormattedTextLine: View {
         if !hasInteractiveTokens {
             // Native SwiftUI Markdown with natural multiline paragraph wrapping & proper line height
             Text(LocalizedStringKey(text))
-                .font(AppTypography.body)
+                .font(ReadingTypography.body(readingScale))
                 .lineSpacing(5)
                 .foregroundColor(textColor)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -422,7 +452,7 @@ struct FormattedTextLine: View {
                     switch item.type {
                     case .word(let wordAttr):
                         Text(wordAttr)
-                            .font(AppTypography.body)
+                            .font(ReadingTypography.body(readingScale))
                             .foregroundColor(textColor)
                     case .inlineMath(let formula):
                         InlineMathView(latex: formula, isDark: isDark)
@@ -437,9 +467,9 @@ struct FormattedTextLine: View {
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 1.5)
                                 .background(primaryAccent.opacity(0.14))
-                                .cornerRadius(5)
+                                .cornerRadius(AppRadius.xs)
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 5)
+                                    RoundedRectangle(cornerRadius: AppRadius.xs)
                                         .stroke(primaryAccent.opacity(0.35), lineWidth: 0.8)
                                  )
                         }
@@ -460,9 +490,9 @@ struct FormattedTextLine: View {
                             .padding(.vertical, 2)
                             .background(secondaryAccent.opacity(0.18))
                             .foregroundColor(secondaryAccent)
-                            .cornerRadius(5)
+                            .cornerRadius(AppRadius.xs)
                             .overlay(
-                                RoundedRectangle(cornerRadius: 5)
+                                RoundedRectangle(cornerRadius: AppRadius.xs)
                                     .stroke(secondaryAccent.opacity(0.35), lineWidth: 0.8)
                             )
                         }
@@ -485,9 +515,9 @@ struct FormattedTextLine: View {
                             .padding(.vertical, 2)
                             .background(primaryAccent.opacity(0.18))
                             .foregroundColor(primaryAccent)
-                            .cornerRadius(5)
+                            .cornerRadius(AppRadius.xs)
                             .overlay(
-                                RoundedRectangle(cornerRadius: 5)
+                                RoundedRectangle(cornerRadius: AppRadius.xs)
                                     .stroke(primaryAccent.opacity(0.35), lineWidth: 0.8)
                             )
                         }
@@ -552,9 +582,9 @@ struct MarkdownImageView: View {
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(maxWidth: 680, maxHeight: 480, alignment: .leading)
-                        .cornerRadius(8)
+                        .cornerRadius(AppRadius.md)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 8)
+                            RoundedRectangle(cornerRadius: AppRadius.md)
                                 .stroke(Color.subtleBorder(isDark), lineWidth: 1)
                         )
                         .shadow(color: Color.black.opacity(0.12), radius: 6, x: 0, y: 3)
@@ -574,19 +604,19 @@ struct MarkdownImageView: View {
                     }
                     .padding(12)
                     .background(Color.cardBackground(isDark))
-                    .cornerRadius(8)
+                    .cornerRadius(AppRadius.md)
                 } else {
                     HStack(spacing: 8) {
                         ProgressView()
                             .controlSize(.small)
                             .scaleEffect(0.8)
-                        Text("Loading image...")
+                        Text("Loading image…")
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }
                     .padding(12)
                     .background(Color.cardBackground(isDark))
-                    .cornerRadius(8)
+                    .cornerRadius(AppRadius.md)
                 }
 
                 // Hover Actions: Open in Preview ↗, Copy Image 📋, Reveal in Finder 📁
@@ -599,7 +629,7 @@ struct MarkdownImageView: View {
                                     .foregroundColor(.white)
                                     .padding(5)
                                     .background(Color.black.opacity(0.65))
-                                    .cornerRadius(5)
+                                    .cornerRadius(AppRadius.xs)
                             }
                             .buttonStyle(.plain)
                             .help("Open in Preview.app")
@@ -610,7 +640,7 @@ struct MarkdownImageView: View {
                                     .foregroundColor(.white)
                                     .padding(5)
                                     .background(Color.black.opacity(0.65))
-                                    .cornerRadius(5)
+                                    .cornerRadius(AppRadius.xs)
                             }
                             .buttonStyle(.plain)
                             .help("Reveal in Finder")
@@ -631,7 +661,7 @@ struct MarkdownImageView: View {
                                 .foregroundColor(copied ? .emerald : .white)
                                 .padding(5)
                                 .background(Color.black.opacity(0.65))
-                                .cornerRadius(5)
+                                .cornerRadius(AppRadius.xs)
                         }
                         .buttonStyle(.plain)
                         .help("Copy Image to Clipboard")
@@ -767,9 +797,9 @@ struct CalloutBlockView: View {
                             playerVM: playerVM,
                             currentFolder: currentFolder,
                             primaryAccent: primaryAccent,
-                            secondaryAccent: secondaryAccent
+                            secondaryAccent: secondaryAccent,
+                            isDark: isDark
                         )
-                        .font(.caption)
                     }
                 }
                 .padding(.leading, 2)
@@ -777,9 +807,9 @@ struct CalloutBlockView: View {
         }
         .padding(10)
         .background(calloutColor.opacity(0.1))
-        .cornerRadius(8)
+        .cornerRadius(AppRadius.md)
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: AppRadius.md)
                 .stroke(calloutColor.opacity(0.35), lineWidth: 1)
         )
         .padding(.vertical, 4)
@@ -942,6 +972,11 @@ struct MarkdownRendererView: View {
     let isDark: Bool
     let primaryAccent: Color
     let secondaryAccent: Color
+    @AppStorage("editorFontSize") private var editorFontSize: Double = 14.0
+
+    private var readingScale: CGFloat {
+        CGFloat(editorFontSize) / ReadingTypography.baseSize
+    }
 
     var currentNoteFolder: String {
         if let id = selectedNoteId, let note = notes.first(where: { $0.id == id }) {
@@ -995,6 +1030,7 @@ struct MarkdownRendererView: View {
                 }
             }
         }
+        .environment(\.readingScale, readingScale)
     }
 
     @ViewBuilder
@@ -1010,9 +1046,9 @@ struct MarkdownRendererView: View {
         // 2. Headings
         else if line.hasPrefix("# ") {
             VStack(alignment: .leading, spacing: 6) {
-                Text(LocalizedStringKey(line.replacingOccurrences(of: "# ", with: "")))
-                    .font(AppTypography.h1)
-                    .foregroundColor(isDark ? .white : Color(red: 15/255, green: 23/255, blue: 42/255))
+                Text(LocalizedStringKey(String(line.dropFirst(2))))
+                    .font(ReadingTypography.h1(readingScale))
+                    .foregroundColor(Color.appText(isDark))
                 Rectangle()
                     .fill(Color.subtleBorder(isDark))
                     .frame(height: 1)
@@ -1020,25 +1056,25 @@ struct MarkdownRendererView: View {
             .padding(.top, 14)
             .padding(.bottom, 4)
         } else if line.hasPrefix("## ") {
-            Text(LocalizedStringKey(line.replacingOccurrences(of: "## ", with: "")))
-                .font(AppTypography.h2)
-                .foregroundColor(isDark ? .white : Color(red: 15/255, green: 23/255, blue: 42/255))
+            Text(LocalizedStringKey(String(line.dropFirst(3))))
+                .font(ReadingTypography.h2(readingScale))
+                .foregroundColor(Color.appText(isDark))
                 .padding(.top, 10)
                 .padding(.bottom, 3)
         } else if line.hasPrefix("### ") {
-            Text(LocalizedStringKey(line.replacingOccurrences(of: "### ", with: "")))
-                .font(AppTypography.h3)
-                .foregroundColor(isDark ? Color(red: 241/255, green: 245/255, blue: 249/255) : Color(red: 30/255, green: 41/255, blue: 59/255))
+            Text(LocalizedStringKey(String(line.dropFirst(4))))
+                .font(ReadingTypography.h3(readingScale))
+                .foregroundColor(Color.appTextBody(isDark))
                 .padding(.top, 8)
                 .padding(.bottom, 2)
         } else if line.hasPrefix("#### ") {
-            Text(LocalizedStringKey(line.replacingOccurrences(of: "#### ", with: "")))
-                .font(AppTypography.h4)
-                .foregroundColor(isDark ? Color(red: 203/255, green: 213/255, blue: 225/255) : Color(red: 51/255, green: 65/255, blue: 85/255))
+            Text(LocalizedStringKey(String(line.dropFirst(5))))
+                .font(ReadingTypography.h4(readingScale))
+                .foregroundColor(Color.appTextMuted(isDark))
                 .padding(.top, 6)
                 .padding(.bottom, 1)
         } else if line.hasPrefix("##### ") {
-            Text(LocalizedStringKey(line.replacingOccurrences(of: "##### ", with: "")))
+            Text(LocalizedStringKey(String(line.dropFirst(6))))
                 .font(.system(size: 11, weight: .bold))
                 .foregroundColor(.secondary)
                 .padding(.top, 4)
@@ -1058,9 +1094,9 @@ struct MarkdownRendererView: View {
                     currentFolder: currentNoteFolder,
                     primaryAccent: primaryAccent,
                     secondaryAccent: secondaryAccent,
-                    isDark: isDark
+                    isDark: isDark,
+                    colorOverride: Color.appTextMuted(isDark)
                 )
-                .foregroundColor(isDark ? Color(red: 203/255, green: 213/255, blue: 225/255) : Color(red: 71/255, green: 85/255, blue: 105/255))
             }
             .padding(.vertical, 8)
             .padding(.horizontal, 12)
@@ -1099,10 +1135,11 @@ struct MarkdownRendererView: View {
                     playerVM: playerVM,
                     currentFolder: currentNoteFolder,
                     primaryAccent: primaryAccent,
-                    secondaryAccent: secondaryAccent
+                    secondaryAccent: secondaryAccent,
+                    isDark: isDark,
+                    colorOverride: isChecked ? Color.appTextSecondary(isDark) : nil
                 )
-                .strikethrough(isChecked, color: .secondary.opacity(0.8))
-                .foregroundColor(isChecked ? .secondary : (isDark ? .white : Color(red: 15/255, green: 23/255, blue: 42/255)))
+                .strikethrough(isChecked, color: Color.appTextSecondary(isDark))
             }
         }
         // 5. Bullet Lists (^([ \t]*)([-*+]) (.*)$)
@@ -1127,7 +1164,8 @@ struct MarkdownRendererView: View {
                     playerVM: playerVM,
                     currentFolder: currentNoteFolder,
                     primaryAccent: primaryAccent,
-                    secondaryAccent: secondaryAccent
+                    secondaryAccent: secondaryAccent,
+                    isDark: isDark
                 )
             }
         }
@@ -1154,7 +1192,8 @@ struct MarkdownRendererView: View {
                     playerVM: playerVM,
                     currentFolder: currentNoteFolder,
                     primaryAccent: primaryAccent,
-                    secondaryAccent: secondaryAccent
+                    secondaryAccent: secondaryAccent,
+                    isDark: isDark
                 )
             }
         }
@@ -1167,7 +1206,8 @@ struct MarkdownRendererView: View {
                 playerVM: playerVM,
                 currentFolder: currentNoteFolder,
                 primaryAccent: primaryAccent,
-                secondaryAccent: secondaryAccent
+                secondaryAccent: secondaryAccent,
+                isDark: isDark
             )
         }
     }

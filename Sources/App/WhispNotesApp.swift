@@ -11,6 +11,8 @@ public struct WhispNotesSwiftApp: App {
     @State private var isCommandPaletteOpen = CommandLine.arguments.contains("--command-palette")
     @State private var isSettingsOpen = false
     @State private var isGraphViewOpen = false
+    @AppStorage(QuickRecordPreferenceKey.showInMenuBar) private var showQuickRecordInMenuBar = true
+    @AppStorage(QuickRecordPreferenceKey.globalShortcut) private var quickRecordShortcutEnabled = true
 
     var activeSelectedNote: NoteItem? {
         guard let id = selectedNoteId else { return notes.first }
@@ -33,7 +35,7 @@ public struct WhispNotesSwiftApp: App {
     }
 
     public var body: some Scene {
-        WindowGroup {
+        WindowGroup(id: "main") {
             ZoomContainerView {
                 ContentView(
                     notes: $notes,
@@ -45,7 +47,10 @@ public struct WhispNotesSwiftApp: App {
                     isGraphViewOpen: $isGraphViewOpen
                 )
             }
-            .frame(minWidth: 1020, minHeight: 680)
+            // Small enough to tile beside a meeting app on a laptop; the layout adapts below ~1000pt.
+            .frame(minWidth: 720, minHeight: 520)
+            .onAppear { configureRecording() }
+            .onChange(of: quickRecordShortcutEnabled) { _, _ in configureGlobalShortcut() }
         }
         .windowStyle(.hiddenTitleBar)
         .commands {
@@ -72,41 +77,42 @@ public struct WhispNotesSwiftApp: App {
                 }
                 .keyboardShortcut("d", modifiers: .command)
 
-                Button("Calendar & Daily Journal Hub...") {
+                Button("Calendar & Daily Journal Hub…") {
                     NotificationCenter.default.post(name: .openCalendarHub, object: nil)
                 }
                 .keyboardShortcut("c", modifiers: [.command, .option])
 
-                Button("Import Obsidian Vault (Folder)...") {
+                Button("Import Obsidian Vault (Folder)…") {
                     importObsidianVault()
                 }
                 .keyboardShortcut("m", modifiers: [.command, .shift])
 
-                Button("Import PDF or Presentation (.pptx) as Note...") {
+                Button("Import PDF or Presentation (.pptx) as Note…") {
                     importDocumentAsNewNote()
                 }
                 .keyboardShortcut("o", modifiers: [.command, .shift])
 
-                Button("Attach PDF or Presentation to Current Note...") {
+                Button("Attach PDF or Presentation to Current Note…") {
                     attachDocumentToActiveNote()
                 }
 
-                Button("Import Lecture Audio File...") {
+                // ⇧⌘I: plain ⌘I is Italic in the editor.
+                Button("Import Lecture Audio File…") {
                     importAudioFile()
                 }
-                .keyboardShortcut("i", modifiers: .command)
+                .keyboardShortcut("i", modifiers: [.command, .shift])
                 
-                Button("Find in Vault (Full-Text)...") {
+                Button("Find in Vault (Full-Text)…") {
                     NotificationCenter.default.post(name: .openVaultSearch, object: nil)
                 }
                 .keyboardShortcut("f", modifiers: [.command, .shift])
 
-                Button("Quick Search Palette...") {
+                Button("Quick Search Palette…") {
                     isCommandPaletteOpen = true
                 }
                 .keyboardShortcut("k", modifiers: .command)
                 
-                Button("Knowledge Graph Canvas...") {
+                Button("Knowledge Graph…") {
                     isGraphViewOpen = true
                 }
                 .keyboardShortcut("g", modifiers: .command)
@@ -120,12 +126,12 @@ public struct WhispNotesSwiftApp: App {
 
                 Divider()
 
-                Button("Check for Updates...") {
+                Button("Check for Updates…") {
                     GitHubReleaseUpdater.shared.checkForUpdates(silent: false)
                 }
                 .keyboardShortcut("u", modifiers: [.command, .shift])
 
-                Button("Preferences...") {
+                Button("Settings…") {
                     isSettingsOpen = true
                 }
                 .keyboardShortcut(",", modifiers: .command)
@@ -144,7 +150,7 @@ public struct WhispNotesSwiftApp: App {
             }
 
             CommandGroup(after: .appInfo) {
-                Button("Check for Updates...") {
+                Button("Check for Updates…") {
                     GitHubReleaseUpdater.shared.checkForUpdates(silent: false)
                 }
             }
@@ -205,10 +211,11 @@ public struct WhispNotesSwiftApp: App {
 
                 Divider()
 
-                Button("Toggle Zen Focus Mode") {
+                // ⇧⌘D: ⇧⌘F is Find in Vault.
+                Button("Toggle Focus Mode") {
                     NotificationCenter.default.post(name: NSNotification.Name("ToggleZenFocusMode"), object: nil)
                 }
-                .keyboardShortcut("f", modifiers: [.command, .shift])
+                .keyboardShortcut("d", modifiers: [.command, .shift])
             }
 
             CommandMenu("Edit Note") {
@@ -227,7 +234,8 @@ public struct WhispNotesSwiftApp: App {
                 .keyboardShortcut("v", modifiers: [.command, .shift])
 
                 Button("Paste Raw Plain Text") {
-                    NotificationCenter.default.post(name: NSNotification.Name("PasteRawTextRequested"), object: nil)
+                    // Standard responder-chain action, handled by the focused text view.
+                    NSApp.sendAction(#selector(NSTextView.pasteAsPlainText(_:)), to: nil, from: nil)
                 }
                 .keyboardShortcut("v", modifiers: [.command, .option, .shift])
 
@@ -240,34 +248,34 @@ public struct WhispNotesSwiftApp: App {
             }
 
             CommandMenu("Export Note") {
-                Button("Document Export Studio...") {
+                Button("Export Note…") {
                     NotificationCenter.default.post(name: .openExportModal, object: nil)
                 }
                 .keyboardShortcut("e", modifiers: [.command])
 
                 Divider()
 
-                Button("Export as PDF Document...") {
+                Button("Export as PDF Document…") {
                     if let current = activeSelectedNote {
                         NoteExporter.shared.exportPDF(current)
                     }
                 }
                 .keyboardShortcut("p", modifiers: [.command, .option])
 
-                Button("Export as Markdown (.md)...") {
+                Button("Export as Markdown (.md)…") {
                     if let current = activeSelectedNote {
                         NoteExporter.shared.exportMarkdown(current)
                     }
                 }
                 .keyboardShortcut("e", modifiers: [.command, .shift])
 
-                Button("Export as HTML Web Page...") {
+                Button("Export as HTML Web Page…") {
                     if let current = activeSelectedNote {
                         NoteExporter.shared.exportHTML(current)
                     }
                 }
 
-                Button("Export as Plain Text...") {
+                Button("Export as Plain Text…") {
                     if let current = activeSelectedNote {
                         NoteExporter.shared.exportPlainText(current)
                     }
@@ -275,42 +283,135 @@ public struct WhispNotesSwiftApp: App {
 
                 Divider()
 
-                Button("Export Full Vault to Folder...") {
+                Button("Export Full Vault to Folder…") {
                     exportFullVault()
                 }
             }
 
-            CommandMenu("Audio Controls") {
-                Button("Play / Pause") {
-                    playerVM.togglePlayPause()
+            CommandMenu("Playback") {
+                Button(recorderVM.isRecording ? "Stop Recording" : "Record Into This Note") {
+                    if recorderVM.isRecording {
+                        recorderVM.finishRecording()
+                    } else if let id = activeSelectedNote?.id {
+                        recorderVM.startRecording(for: id)
+                    }
                 }
-                .keyboardShortcut(.space, modifiers: [])
-                
-                Button("Rewind 5 Seconds") {
-                    playerVM.rewind5Seconds()
-                }
-                .keyboardShortcut(.leftArrow, modifiers: [.command])
-                
-                Button("Forward 5 Seconds") {
-                    playerVM.forward5Seconds()
-                }
-                .keyboardShortcut(.rightArrow, modifiers: [.command])
+                .disabled(!recorderVM.isRecording && !(activeSelectedNote.map { $0.isStandalone && !recorderVM.transcribingNoteIds.contains($0.id) } ?? false))
+                Button("Record Into New Note") { recordIntoNewNote() }
+                    .disabled(recorderVM.isRecording)
 
                 Divider()
 
-                Button("Playback Speed: 1.0x") { playerVM.setSpeed(1.0) }
-                Button("Playback Speed: 1.25x") { playerVM.setSpeed(1.25) }
-                Button("Playback Speed: 1.5x") { playerVM.setSpeed(1.5) }
-                Button("Playback Speed: 2.0x") { playerVM.setSpeed(2.0) }
+                // Disabled without audio so these never swallow keystrokes. ⌥⌘ arrows because
+                // ⌘← / ⌘→ move to the start / end of the line in the editor.
+                Button(playerVM.isPlaying ? "Pause" : "Play") {
+                    playerVM.togglePlayPause()
+                }
+                .keyboardShortcut(.space, modifiers: [])
+                .disabled(playerVM.duration <= 0)
+
+                Button("Back 5 Seconds") {
+                    playerVM.rewind5Seconds()
+                }
+                .keyboardShortcut(.leftArrow, modifiers: [.command, .option])
+                .disabled(playerVM.duration <= 0)
+
+                Button("Forward 5 Seconds") {
+                    playerVM.forward5Seconds()
+                }
+                .keyboardShortcut(.rightArrow, modifiers: [.command, .option])
+                .disabled(playerVM.duration <= 0)
+
+                Divider()
+
+                Picker("Speed", selection: Binding(get: { playerVM.playbackSpeed }, set: { playerVM.setSpeed($0) })) {
+                    ForEach([1.0, 1.25, 1.5, 2.0], id: \.self) { speed in
+                        Text(AudioPlayerBarView.speedLabel(speed)).tag(speed)
+                    }
+                }
+                .disabled(playerVM.duration <= 0)
             }
+        }
+
+        // Quick Record: start or stop a recording without bringing the window forward.
+        MenuBarExtra(isInserted: $showQuickRecordInMenuBar) {
+            QuickRecordMenu(
+                recorder: recorderVM,
+                currentNote: activeSelectedNote,
+                recordingNoteTitle: recorderVM.recordingNoteId.flatMap { id in notes.first { $0.id == id }?.title },
+                onRecordIntoCurrent: { if let id = activeSelectedNote?.id { recorderVM.startRecording(for: id) } },
+                onRecordIntoNew: recordIntoNewNote,
+                onStop: { recorderVM.finishRecording() }
+            )
+        } label: {
+            QuickRecordMenuBarLabel(recorder: recorderVM)
         }
     }
     
+    // MARK: - Recording
+
+    /// Wires the recorder's completion and the global shortcut. Every entry point files recordings here.
+    private func configureRecording() {
+        recorderVM.onRecordingFinished = { noteId, segments, audioFileName in
+            applyRecording(noteId: noteId, segments: segments, audioFileName: audioFileName)
+        }
+        GlobalHotKey.shared.onPress = { quickRecordToggle() }
+        configureGlobalShortcut()
+    }
+
+    private func configureGlobalShortcut() {
+        if quickRecordShortcutEnabled { GlobalHotKey.shared.register() } else { GlobalHotKey.shared.unregister() }
+    }
+
+    /// ⌃⌥⌘R. Stops a running recording; otherwise records into the open note when WhispNotes is in front
+    /// and that note has no recording yet, and into a new note from anywhere else.
+    private func quickRecordToggle() {
+        if recorderVM.isRecording {
+            recorderVM.finishRecording()
+        } else if NSApp.isActive, let note = activeSelectedNote, note.isStandalone, note.folder != "Trash",
+                  !recorderVM.transcribingNoteIds.contains(note.id) {
+            recorderVM.startRecording(for: note.id)
+        } else {
+            recordIntoNewNote()
+        }
+    }
+
+    private func recordIntoNewNote() {
+        let started = Date()
+        let note = NoteItem(
+            title: "Recording \(started.formatted(.dateTime.month(.abbreviated).day().hour().minute()))",
+            folder: "General",
+            content: "",
+            timestamp: started,
+            audioPath: nil,
+            transcript: [],
+            isStandalone: true,
+            bookmarks: []
+        )
+        notes.insert(note, at: 0)
+        NotesDataManager.shared.saveNotes(notes)
+        selectedNoteId = note.id
+        TabNavigationManager.shared.openNote(note.id, inNewTab: true)
+        recorderVM.startRecording(for: note.id)
+    }
+
+    /// Attaches a finished recording to the note it was started in, found by id (never by position or selection).
+    private func applyRecording(noteId: UUID, segments: [TranscriptSegment], audioFileName: String) {
+        guard let idx = notes.firstIndex(where: { $0.id == noteId }) else { return }
+        notes[idx].audioPath = audioFileName
+        notes[idx].transcript = segments
+        notes[idx].isStandalone = false
+        NotesDataManager.shared.saveNotes(notes)
+        if selectedNoteId == noteId, let url = NotesDataManager.shared.resolveAttachmentURL(audioFileName) {
+            playerVM.loadAudio(url: url, transcript: segments)
+        }
+    }
+
     private func createNewNote() {
         let newNote = NoteItem(
             title: "Untitled Note",
             folder: "General",
-            content: "# Untitled Note\n\nType your notes here...",
+            content: "",
             timestamp: Date(),
             audioPath: nil,
             transcript: [],
@@ -367,16 +468,11 @@ public struct WhispNotesSwiftApp: App {
         panel.allowsMultipleSelection = false
         panel.begin { response in
             if response == .OK, let url = panel.url {
-                if let id = selectedNoteId, let idx = notes.firstIndex(where: { $0.id == id }) {
-                    if let (relPath, safeURL) = NotesDataManager.shared.importAttachment(from: url, for: notes[idx].id) {
-                        notes[idx].audioPath = relPath
-                        notes[idx].isStandalone = false
-                        NotesDataManager.shared.saveNotes(notes)
-                        LocalSpeechTranscriber.transcribe(url: safeURL) { segments in
-                            notes[idx].transcript = segments
-                            NotesDataManager.shared.saveNotes(notes)
-                            playerVM.loadAudio(url: safeURL, transcript: segments)
-                        }
+                if let id = selectedNoteId, notes.contains(where: { $0.id == id }),
+                   let (relPath, safeURL) = NotesDataManager.shared.importAttachment(from: url, for: id) {
+                    LocalSpeechTranscriber.transcribe(url: safeURL) { segments in
+                        // Looked up by id after transcription: the notes array may have changed meanwhile.
+                        applyRecording(noteId: id, segments: segments, audioFileName: relPath)
                     }
                 }
             }

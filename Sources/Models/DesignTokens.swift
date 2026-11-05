@@ -3,13 +3,18 @@ import SwiftUI
 // MARK: - Core Design Scale Tokens
 
 /// Standardized corner radius tokens across the entire application.
+/// Every rounded shape picks one of these; nesting goes one step down per level.
 public enum AppRadius {
-    /// 6pt - Small elements, badges, pills, buttons, tags
+    /// 4pt - Badges, keycaps, inline chips, tags
+    public static let xs: CGFloat = 4
+    /// 6pt - Rows, small buttons, text fields
     public static let sm: CGFloat = 6
-    /// 10pt - Medium containers, cards, popovers, editor sections
-    public static let md: CGFloat = 10
-    /// 16pt - Large modals, sheets, floating palettes, canvas cards
-    public static let lg: CGFloat = 16
+    /// 8pt - Buttons, popovers, code blocks, callouts
+    public static let md: CGFloat = 8
+    /// 12pt - Cards, panels, editor sections
+    public static let lg: CGFloat = 12
+    /// 16pt - Modals, sheets, floating palettes
+    public static let xl: CGFloat = 16
 }
 
 /// Standardized 4pt base grid spacing tokens.
@@ -47,9 +52,35 @@ public enum AppTypography {
     /// Caption / Secondary metadata (11pt medium)
     public static let caption = Font.system(size: 11, weight: .medium)
     /// Micro badge / Keyboard shortcut (9.5pt bold, monospaced)
-    public static let microBadge = Font.system(size: 9.5, weight: .bold, design: .monospaced)
+    public static let microBadge = Font.system(size: 10, weight: .bold, design: .monospaced)
     /// Inline and block code font (13pt monospaced)
     public static let code = Font.system(size: 13, weight: .regular, design: .monospaced)
+}
+
+/// Note-reading fonts for the Markdown preview. They follow the editor's Font Size setting
+/// (Settings › Editor) so Split view shows typed and rendered text at the same size.
+public enum ReadingTypography {
+    /// The size AppTypography.body is designed at; the user's setting scales relative to it.
+    public static let baseSize: CGFloat = 14
+
+    public static func body(_ scale: CGFloat) -> Font { .system(size: 14 * scale) }
+    public static func callout(_ scale: CGFloat) -> Font { .system(size: 13 * scale) }
+    public static func h1(_ scale: CGFloat) -> Font { .system(size: 22 * scale, weight: .bold) }
+    public static func h2(_ scale: CGFloat) -> Font { .system(size: 17 * scale, weight: .semibold) }
+    public static func h3(_ scale: CGFloat) -> Font { .system(size: 15 * scale, weight: .semibold) }
+    public static func h4(_ scale: CGFloat) -> Font { .system(size: 13 * scale, weight: .semibold) }
+}
+
+private struct ReadingScaleKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 1
+}
+
+extension EnvironmentValues {
+    /// editorFontSize / ReadingTypography.baseSize, set by MarkdownRendererView.
+    public var readingScale: CGFloat {
+        get { self[ReadingScaleKey.self] }
+        set { self[ReadingScaleKey.self] = newValue }
+    }
 }
 
 /// Standardized animation curve tokens for consistent fluidity.
@@ -152,4 +183,72 @@ private struct MacHoverCardModifier: ViewModifier {
                 }
             }
     }
+}
+
+
+// MARK: - Window-aware sheet sizing
+
+private struct WindowContentSizeKey: EnvironmentKey {
+    static let defaultValue: CGSize = .zero
+}
+
+extension EnvironmentValues {
+    /// The window's real content size (before GUI zoom), set by ZoomContainerView. Sheets read it to stay inside the window.
+    public var windowContentSize: CGSize {
+        get { self[WindowContentSizeKey.self] }
+        set { self[WindowContentSizeKey.self] = newValue }
+    }
+}
+
+/// Gives a sheet its designed size, shrinking it to fit a smaller window instead of overflowing it.
+private struct AdaptiveSheetFrame: ViewModifier {
+    let width: CGFloat
+    let height: CGFloat
+    @Environment(\.windowContentSize) private var window
+
+    func body(content: Content) -> some View {
+        let fitWidth = window.width > 0 ? min(width, max(480, window.width - 48)) : width
+        let fitHeight = window.height > 0 ? min(height, max(360, window.height - 56)) : height
+        content.frame(width: fitWidth, height: fitHeight)
+    }
+}
+
+extension View {
+    public func adaptiveSheetFrame(width: CGFloat, height: CGFloat) -> some View {
+        modifier(AdaptiveSheetFrame(width: width, height: height))
+    }
+}
+
+
+// MARK: - Editor preferences
+
+/// How wide note text may grow (Settings › Editor › Reading Width).
+public enum ReadingWidth: String, CaseIterable, Identifiable {
+    case narrow, standard, wide, full
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .narrow: return "Narrow"
+        case .standard: return "Standard"
+        case .wide: return "Wide"
+        case .full: return "Full Width"
+        }
+    }
+
+    /// Maximum text column width in points (about 65, 80 and 100 characters at 14pt).
+    public var maxWidth: CGFloat {
+        switch self {
+        case .narrow: return 620
+        case .standard: return 760
+        case .wide: return 960
+        case .full: return .infinity
+        }
+    }
+}
+
+public enum EditorPreferenceKey {
+    public static let readingWidth = "editorReadingWidth"
+    public static let defaultViewMode = "defaultViewMode"
 }

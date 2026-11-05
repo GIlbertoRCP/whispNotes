@@ -5,6 +5,35 @@ All notable changes to **WhispNotes** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semanticsver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2026-11-05
+
+### Added
+- **Quick Record from anywhere**: a menu bar icon (shows elapsed time while recording) and the global shortcut `⌃⌥⌘R` start or stop a recording without leaving your call. Both can be turned off in Settings › Audio & Recording.
+- **Default View** setting (Edit, Split or Preview) and **Reading Width** setting (Narrow, Standard, Wide or Full Width) in Settings › Editor.
+- **Bold / italic** with `⌘B` / `⌘I` in the editor (press again to unwrap; undoable).
+- Knowledge graph: pinch to zoom, Fit, hover to highlight neighbours, search, and Hide unlinked.
+- `WHISPNOTES_DATA_DIR` environment variable to run against a scratch vault.
+
+### Changed
+- **Responsive layout**: the minimum window size is now 720×520. The sidebar, transcript panel, toolbars, player bar and sheets adapt to the window instead of clipping; the transcript floats over the editor when it no longer fits.
+- **Knowledge graph rewritten** for speed: links are parsed once, the layout stops when it settles, and labels never overlap.
+- Split view stacks the editor above the preview in narrow panes.
+- Shortcuts: Focus Mode is now `⇧⌘D` (`⇧⌘F` is Find in Vault), Import Lecture Audio is `⇧⌘I`, and 5-second seek is `⌥⌘←` / `⌥⌘→`.
+- Focus Mode button removed from the toolbar (still available from the View menu).
+- Design tokens applied across the app: one text colour ramp, a five-step corner radius scale and a 10pt minimum text size.
+- New notes start empty with a placeholder instead of filler text.
+
+### Fixed
+- Recordings attach to the note they were started in, even if you switch notes while recording, and are no longer saved twice.
+- `⌘←` / `⌘→` move to the start or end of the line in the editor again.
+- Preview text is readable in light themes; text on accent-coloured buttons is readable in every theme.
+- HTML export escapes content and renders inline formatting, lists, checklists and tables.
+- Quick search no longer lists trashed notes.
+- Transcript highlight and auto-scroll follow the playing segment while searching.
+- Toolbar Move to Trash remembers the original folder for Restore and can be undone.
+- Paste Raw Plain Text menu item, the Emacs `ai-assistant` command and the graph toggle now work.
+- The 1.25× playback speed is labelled correctly.
+
 ## [1.6.0] - 2026-09-10
 
 ### Added

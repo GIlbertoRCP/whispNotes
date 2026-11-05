@@ -37,8 +37,8 @@ struct NoteTemplateModalView: View {
                     .foregroundColor(primaryAccent)
                 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("NOTE TEMPLATES")
-                        .font(.system(size: 13, weight: .black, design: .monospaced))
+                    Text("Note Templates")
+                        .font(.headline)
                         .foregroundColor(isDark ? .white : .black)
                     Text("Select a pre-structured template to accelerate your notes")
                         .font(.caption)
@@ -112,8 +112,8 @@ struct NoteTemplateModalView: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 12) {
                             Text(selectedTemplate.resolveContent(title: customTitle.isEmpty ? selectedTemplate.title : customTitle, folder: selectedTemplate.defaultFolder))
-                                .font(.system(size: 11.5, design: .monospaced))
-                                .foregroundColor(isDark ? Color(red: 226/255, green: 232/255, blue: 240/255) : Color(red: 15/255, green: 23/255, blue: 42/255))
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundColor(Color.appTextBody(isDark))
                                 .textSelection(.enabled)
                                 .padding(16)
                         }
@@ -125,7 +125,7 @@ struct NoteTemplateModalView: View {
                     
                     // Bottom Controls
                     HStack(spacing: 12) {
-                        TextField("Note Title (optional)...", text: $customTitle)
+                        TextField("Note Title (optional)", text: $customTitle)
                             .textFieldStyle(.roundedBorder)
                             .frame(maxWidth: 240)
                         
@@ -143,7 +143,7 @@ struct NoteTemplateModalView: View {
                                 Text("Create from Template")
                             }
                             .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(.white)
+                            .foregroundColor(Color.onAccent(isDark))
                             .padding(.horizontal, 14)
                             .padding(.vertical, 7)
                             .background(primaryAccent)
@@ -156,10 +156,10 @@ struct NoteTemplateModalView: View {
                 }
             }
         }
-        .frame(width: 720, height: 480)
-        .cornerRadius(AppRadius.lg)
+        .adaptiveSheetFrame(width: 720, height: 480)
+        .cornerRadius(AppRadius.xl)
         .overlay(
-            RoundedRectangle(cornerRadius: AppRadius.lg)
+            RoundedRectangle(cornerRadius: AppRadius.xl)
                 .stroke(Color.subtleBorder(isDark), lineWidth: 1)
         )
         .preferredColorScheme(isDark ? .dark : .light)

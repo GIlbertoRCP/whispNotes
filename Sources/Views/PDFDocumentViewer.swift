@@ -238,7 +238,7 @@ struct PDFDocumentViewerView: View {
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                         .background(Color.panelBackground(isDark))
-                        .cornerRadius(8)
+                        .cornerRadius(AppRadius.md)
                         .shadow(color: Color.black.opacity(0.2), radius: 6, x: 0, y: 3)
                         .padding(16)
                         .transition(.opacity.combined(with: .move(edge: .top)))
@@ -282,7 +282,7 @@ struct PDFDocumentViewerView: View {
                         .foregroundColor(.secondary)
                     Text("\(currentPage) / \(pageCount)")
                         .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                        .foregroundColor(isDark ? .white : Color(red: 15/255, green: 23/255, blue: 42/255))
+                        .foregroundColor(Color.appText(isDark))
                     Image(systemName: "chevron.down")
                         .font(.system(size: 8, weight: .bold))
                         .foregroundColor(.secondary)
@@ -290,9 +290,9 @@ struct PDFDocumentViewerView: View {
                 .padding(.horizontal, 7)
                 .padding(.vertical, 4)
                 .background(Color.cardBackground(isDark))
-                .cornerRadius(5)
+                .cornerRadius(AppRadius.xs)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 5)
+                    RoundedRectangle(cornerRadius: AppRadius.xs)
                         .stroke(Color.subtleBorder(isDark), lineWidth: 1)
                 )
             }
@@ -357,9 +357,9 @@ struct PDFDocumentViewerView: View {
             }
             .padding(.horizontal, 2)
             .background(Color.cardBackground(isDark))
-            .cornerRadius(5)
+            .cornerRadius(AppRadius.xs)
             .overlay(
-                RoundedRectangle(cornerRadius: 5)
+                RoundedRectangle(cornerRadius: AppRadius.xs)
                     .stroke(Color.subtleBorder(isDark), lineWidth: 1)
             )
 
@@ -374,9 +374,9 @@ struct PDFDocumentViewerView: View {
                 .padding(.horizontal, 6)
                 .padding(.vertical, 4)
                 .background(Color.cardBackground(isDark))
-                .cornerRadius(5)
+                .cornerRadius(AppRadius.xs)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 5)
+                    RoundedRectangle(cornerRadius: AppRadius.xs)
                         .stroke(Color.subtleBorder(isDark), lineWidth: 1)
                 )
             }
@@ -396,7 +396,7 @@ struct PDFDocumentViewerView: View {
                     .foregroundColor(isSearching ? primaryAccent : .secondary)
                     .frame(width: 26, height: 26)
                     .background(isSearching ? primaryAccent.opacity(0.12) : Color.cardBackground(isDark))
-                    .cornerRadius(5)
+                    .cornerRadius(AppRadius.xs)
             }
             .buttonStyle(.plain)
             .help("Search in Document (⌘F)")
@@ -407,7 +407,7 @@ struct PDFDocumentViewerView: View {
                     .font(.system(size: 11))
                     .frame(width: 26, height: 26)
                     .background(Color.cardBackground(isDark))
-                    .cornerRadius(5)
+                    .cornerRadius(AppRadius.xs)
             }
             .buttonStyle(.plain)
             .help("Rotate Clockwise 90°")
@@ -424,7 +424,7 @@ struct PDFDocumentViewerView: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(primaryAccent.opacity(0.12))
-                .cornerRadius(5)
+                .cornerRadius(AppRadius.xs)
             }
             .buttonStyle(.plain)
             .help("Insert selected PDF text as blockquote citation into Note")
@@ -436,7 +436,7 @@ struct PDFDocumentViewerView: View {
                     .foregroundColor(.secondary)
                     .frame(width: 26, height: 26)
                     .background(Color.cardBackground(isDark))
-                    .cornerRadius(5)
+                    .cornerRadius(AppRadius.xs)
             }
             .buttonStyle(.plain)
             .help("Open in Apple Preview.app")
@@ -449,7 +449,7 @@ struct PDFDocumentViewerView: View {
                         .foregroundColor(.red)
                         .frame(width: 24, height: 24)
                         .background(Color.red.opacity(0.1))
-                        .cornerRadius(5)
+                        .cornerRadius(AppRadius.xs)
                 }
                 .buttonStyle(.plain)
                 .help("Detach PDF from Note")
@@ -468,7 +468,7 @@ struct PDFDocumentViewerView: View {
                 .font(.system(size: 11))
                 .foregroundColor(primaryAccent)
             
-            TextField("Search in document...", text: $searchQuery)
+            TextField("Search in document", text: $searchQuery)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12))
                 .onChange(of: searchQuery) { _, newQ in

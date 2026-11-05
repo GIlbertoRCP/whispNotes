@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 // MARK: - Theme Definition Architecture
 public struct ThemeDefinition: Identifiable, Hashable {
@@ -354,8 +355,45 @@ extension Color {
         ThemeColors.strongBorder(isDark, themeName ?? activeTheme())
     }
 
+    /// Label color for anything filled with the theme's primary accent.
+    /// Picks dark slate on light accents (Classic Minimal, Nord, Rose Pine in Dark Mode) and white on dark ones,
+    /// from the accent's actual luminance so new themes stay readable without a hard-coded list.
+    public static func onAccent(_ isDark: Bool, themeName: String? = nil) -> Color {
+        let primary = ThemeColors.primary(themeName ?? activeTheme(), isDark: isDark)
+        guard let rgb = NSColor(primary).usingColorSpace(.sRGB) else { return .white }
+        func linear(_ c: CGFloat) -> CGFloat { c <= 0.03928 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4) }
+        let luminance = 0.2126 * linear(rgb.redComponent) + 0.7152 * linear(rgb.greenComponent) + 0.0722 * linear(rgb.blueComponent)
+        // Whichever of white or slate-900 (luminance ≈ 0.0144) contrasts more with the accent wins.
+        let contrastWithWhite = 1.05 / (luminance + 0.05)
+        let contrastWithDark = (luminance + 0.05) / (0.0144 + 0.05)
+        return contrastWithDark > contrastWithWhite ? Color(red: 15/255, green: 23/255, blue: 42/255) : .white
+    }
+
+    /// Secondary label color on the primary accent (dates, counts inside a selected row).
+    public static func onAccentSecondary(_ isDark: Bool, themeName: String? = nil) -> Color {
+        onAccent(isDark, themeName: themeName).opacity(0.75)
+    }
+
+    // MARK: Text ramp — one place for every label color, strongest to weakest.
+
+    /// Titles and headings.
     public static func appText(_ isDark: Bool) -> Color {
         isDark ? Color.white : Color(red: 15/255, green: 23/255, blue: 42/255)
+    }
+
+    /// Running note text and table cells (slate-200 / slate-900).
+    public static func appTextBody(_ isDark: Bool) -> Color {
+        isDark ? Color(red: 226/255, green: 232/255, blue: 240/255) : Color(red: 15/255, green: 23/255, blue: 42/255)
+    }
+
+    /// Quotes, excerpts and sub-headings (slate-300 / slate-600).
+    public static func appTextMuted(_ isDark: Bool) -> Color {
+        isDark ? Color(red: 203/255, green: 213/255, blue: 225/255) : Color(red: 71/255, green: 85/255, blue: 105/255)
+    }
+
+    /// Metadata: dates, counts, hints (slate-400 / slate-500, ≥4.5:1 on every theme surface).
+    public static func appTextSecondary(_ isDark: Bool) -> Color {
+        isDark ? Color(red: 148/255, green: 163/255, blue: 184/255) : Color(red: 100/255, green: 116/255, blue: 139/255)
     }
 }
 
