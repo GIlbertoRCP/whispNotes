@@ -15,13 +15,43 @@ struct TranscriptPanelView: View {
     @State private var searchQuery: String = ""
 
     var filteredTranscript: [TranscriptSegment] {
-        let clean = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let clean = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         if clean.isEmpty {
             return note.transcript
         }
         return note.transcript.filter {
-            $0.text.lowercased().contains(clean) || $0.speaker.lowercased().contains(clean)
+            $0.text.localizedCaseInsensitiveContains(clean) || $0.speaker.localizedCaseInsensitiveContains(clean)
         }
+    }
+
+    /// The playing segment's id. activeSegmentIndex points into the full transcript, not the filtered list.
+    private var activeSegmentId: UUID? {
+        let index = playerVM.activeSegmentIndex
+        return note.transcript.indices.contains(index) ? note.transcript[index].id : nil
+    }
+
+    /// Speakers in order of first appearance, so colors survive a rename.
+    private var speakerOrder: [String] {
+        var seen: [String] = []
+        for seg in note.transcript where !seen.contains(seg.speaker) { seen.append(seg.speaker) }
+        return seen
+    }
+
+    private func speakerColor(_ speaker: String) -> Color {
+        let palette: [Color] = [
+            secondaryAccent,
+            isDark ? Color(red: 52/255, green: 211/255, blue: 153/255) : Color(red: 5/255, green: 150/255, blue: 105/255),
+            isDark ? Color(red: 96/255, green: 165/255, blue: 250/255) : Color(red: 37/255, green: 99/255, blue: 235/255),
+            isDark ? Color(red: 251/255, green: 191/255, blue: 36/255) : Color(red: 180/255, green: 83/255, blue: 9/255)
+        ]
+        let index = speakerOrder.firstIndex(of: speaker) ?? 0
+        return palette[index % palette.count]
+    }
+
+    private var segmentCountLabel: String {
+        let count = filteredTranscript.count
+        if searchQuery.isEmpty { return count == 1 ? "1 segment" : "\(count) segments" }
+        return "\(count) of \(note.transcript.count)"
     }
 
     var body: some View {
@@ -29,15 +59,15 @@ struct TranscriptPanelView: View {
             // Header
             VStack(spacing: 8) {
                 HStack {
-                    Text("Diarized Transcript")
-                        .font(.subheadline)
-                        .fontWeight(.bold)
-                    
+                    Text("Transcript")
+                        .font(.headline)
+
                     Spacer()
-                    
-                    Text("\(filteredTranscript.count) segs")
+
+                    Text(segmentCountLabel)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .monospacedDigit()
+                        .foregroundColor(Color.appTextSecondary(isDark))
                 }
                 
                 // Real-time Transcript Search Input
@@ -45,7 +75,7 @@ struct TranscriptPanelView: View {
                     Image(systemName: "magnifyingglass")
                         .font(.caption)
                         .foregroundColor(.secondary)
-                    TextField("Search transcript keywords...", text: $searchQuery)
+                    TextField("Search transcript", text: $searchQuery)
                         .textFieldStyle(.plain)
                         .font(.caption)
                     if !searchQuery.isEmpty {
@@ -60,135 +90,168 @@ struct TranscriptPanelView: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 5)
                 .background(Color.cardBackground(isDark))
-                .cornerRadius(6)
+                .cornerRadius(AppRadius.sm)
             }
-            .padding(14)
+            .padding(AppSpacing.md)
             .background(Color.panelBackground(isDark))
 
             Divider()
                 .background(Color.subtleBorder(isDark))
 
             // Scroll list of segments
-            ScrollViewReader { scrollProxy in
-                ScrollView {
-                    VStack(spacing: 12) {
-                        ForEach(Array(filteredTranscript.enumerated()), id: \.element.id) { idx, seg in
-                            let isActive = idx == playerVM.activeSegmentIndex
-                            let isMe = seg.speaker == "Speaker 1"
-                            
-                            HStack(spacing: 0) {
-                                if isActive {
-                                    Rectangle()
-                                        .fill(primaryAccent)
-                                        .frame(width: 3)
-                                }
-                                
-                                VStack(alignment: .leading, spacing: 8) {
-                                    HStack {
-                                        // Speaker tag with Popover Renamer
-                                        Button(action: {
-                                            renamingSpeaker = seg.speaker
-                                            newSpeakerName = seg.speaker
-                                        }) {
-                                            HStack(spacing: 4) {
-                                                Image(systemName: "person.circle.fill")
-                                                    .font(.system(size: 11))
-                                                Text(seg.speaker)
-                                                    .font(.system(size: 11, weight: .bold))
-                                                Image(systemName: "pencil")
-                                                    .font(.system(size: 8))
-                                            }
-                                            .foregroundColor(isMe ? secondaryAccent : (isDark ? Color(red: 52/255, green: 211/255, blue: 153/255) : Color(red: 5/255, green: 150/255, blue: 105/255)))
-                                        }
-                                        .buttonStyle(.plain)
-                                        .popover(isPresented: Binding(
-                                            get: { renamingSpeaker == seg.speaker },
-                                            set: { if !$0 { renamingSpeaker = nil } }
-                                        )) {
-                                            VStack(alignment: .leading, spacing: 8) {
-                                                Text("Rename Speaker Globally")
-                                                    .font(.caption)
-                                                    .fontWeight(.bold)
-                                                TextField("Speaker Name...", text: $newSpeakerName, onCommit: {
-                                                    renameSpeakerGlobally(oldName: seg.speaker, newName: newSpeakerName)
-                                                    renamingSpeaker = nil
-                                                })
-                                                .textFieldStyle(.roundedBorder)
-                                                .frame(width: 160)
-                                                
-                                                HStack {
-                                                    Spacer()
-                                                    Button("Save") {
-                                                        renameSpeakerGlobally(oldName: seg.speaker, newName: newSpeakerName)
-                                                        renamingSpeaker = nil
-                                                    }
-                                                    .buttonStyle(.borderedProminent)
-                                                    .controlSize(.small)
-                                                }
-                                            }
-                                            .padding()
-                                        }
-                                        
-                                        Spacer()
-                                        
-                                        // Seek Moment Play button
-                                        Button(action: { playerVM.seek(to: seg.startTime) }) {
-                                            HStack(spacing: 4) {
-                                                Image(systemName: "play.fill")
-                                                    .font(.system(size: 8))
-                                                Text(formatTime(seg.startTime))
-                                                    .font(.system(size: 10, design: .monospaced))
-                                            }
-                                            .padding(.horizontal, 7)
-                                            .padding(.vertical, 3)
-                                            .background(primaryAccent.opacity(0.12))
-                                            .foregroundColor(primaryAccent)
-                                            .cornerRadius(5)
-                                        }
-                                        .buttonStyle(.plain)
-                                        
-                                        // Copy Quote to Editor Button
-                                        Button(action: { insertQuoteAtCursor(text: seg.text, start: seg.startTime) }) {
-                                            Image(systemName: "quote.bubble")
-                                                .font(.system(size: 10))
-                                                .foregroundColor(.secondary)
-                                                .padding(4)
-                                        }
-                                        .buttonStyle(.plain)
-                                        .help("Copy quote to editor")
-                                    }
-                                    
-                                    Text(seg.text)
-                                        .font(.subheadline)
-                                        .lineSpacing(4)
-                                        .foregroundColor(isActive ? (isDark ? .white : Color(red: 15/255, green: 23/255, blue: 42/255)) : (isDark ? Color(red: 203/255, green: 213/255, blue: 225/255) : Color(red: 51/255, green: 65/255, blue: 85/255)))
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                }
-                                .padding(12)
-                            }
-                            .background(isActive ? primaryAccent.opacity(0.08) : Color.cardBackground(isDark))
-                            .cornerRadius(8)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .stroke(isActive ? primaryAccent.opacity(0.3) : Color.subtleBorder(isDark), lineWidth: 1)
-                            )
-                            .id(idx)
-                        }
-                    }
-                    .padding(16)
-                }
-                .onChange(of: playerVM.activeSegmentIndex) { _, newIndex in
-                    if newIndex != -1 {
-                        withAnimation {
-                            scrollProxy.scrollTo(newIndex, anchor: .center)
-                        }
-                    }
-                }
+            if note.transcript.isEmpty {
+                WhispEmptyStateView(
+                    icon: "waveform.slash",
+                    title: "No Transcript",
+                    description: "The recording is saved, but no speech was transcribed. You can still play it back."
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if filteredTranscript.isEmpty {
+                WhispEmptyStateView(
+                    icon: "magnifyingglass",
+                    title: "No Matches",
+                    description: "No segment mentions “\(searchQuery)”."
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                segmentList
             }
         }
         .background(Color.sidebarBackground(isDark))
     }
     
+    private var segmentList: some View {
+        ScrollViewReader { scrollProxy in
+            ScrollView {
+                LazyVStack(spacing: AppSpacing.sm) {
+                    ForEach(filteredTranscript) { seg in
+                        segmentRow(seg, isActive: seg.id == activeSegmentId)
+                            .id(seg.id)
+                    }
+                }
+                .padding(AppSpacing.md)
+            }
+            .onChange(of: playerVM.activeSegmentIndex) { _, _ in
+                guard let id = activeSegmentId, filteredTranscript.contains(where: { $0.id == id }) else { return }
+                withAnimation(AppAnimation.panel) {
+                    scrollProxy.scrollTo(id, anchor: .center)
+                }
+            }
+        }
+    }
+
+    func segmentRow(_ seg: TranscriptSegment, isActive: Bool) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            HStack(spacing: AppSpacing.sm) {
+                // Speaker tag with popover renamer
+                Button(action: {
+                    renamingSpeaker = seg.speaker
+                    newSpeakerName = seg.speaker
+                }) {
+                    HStack(spacing: AppSpacing.xs) {
+                        Circle()
+                            .fill(speakerColor(seg.speaker))
+                            .frame(width: 6, height: 6)
+                        Text(seg.speaker)
+                            .font(.system(size: 11, weight: .semibold))
+                            .lineLimit(1)
+                    }
+                    .foregroundColor(speakerColor(seg.speaker))
+                }
+                .buttonStyle(.plain)
+                .help("Rename speaker")
+                .popover(isPresented: Binding(
+                    get: { renamingSpeaker == seg.speaker },
+                    set: { if !$0 { renamingSpeaker = nil } }
+                )) {
+                    VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                        Text("Rename Speaker")
+                            .font(.headline)
+                        Text("Updates every segment by “\(seg.speaker)” in this note.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        TextField("Speaker name", text: $newSpeakerName, onCommit: {
+                            renameSpeakerGlobally(oldName: seg.speaker, newName: newSpeakerName)
+                            renamingSpeaker = nil
+                        })
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 200)
+
+                        HStack {
+                            Spacer()
+                            Button("Cancel") { renamingSpeaker = nil }
+                                .keyboardShortcut(.cancelAction)
+                            Button("Rename") {
+                                renameSpeakerGlobally(oldName: seg.speaker, newName: newSpeakerName)
+                                renamingSpeaker = nil
+                            }
+                            .keyboardShortcut(.defaultAction)
+                            .buttonStyle(.borderedProminent)
+                        }
+                        .controlSize(.small)
+                    }
+                    .padding(AppSpacing.lg)
+                }
+
+                Spacer(minLength: 0)
+
+                // Play from this moment (matches timestamp chips in the preview)
+                Button(action: {
+                    playerVM.seek(to: seg.startTime)
+                    if !playerVM.isPlaying { playerVM.togglePlayPause() }
+                }) {
+                    HStack(spacing: AppSpacing.xs) {
+                        Image(systemName: isActive && playerVM.isPlaying ? "speaker.wave.2.fill" : "play.fill")
+                            .font(.system(size: 9))
+                        Text(formatTime(seg.startTime))
+                            .font(.system(size: 11, weight: .medium))
+                            .monospacedDigit()
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(primaryAccent.opacity(isActive ? 0.2 : 0.1))
+                    .foregroundColor(primaryAccent)
+                    .cornerRadius(AppRadius.xs)
+                }
+                .buttonStyle(.plain)
+                .help("Play from \(formatTime(seg.startTime))")
+
+                // Insert quote into the note
+                Button(action: { insertQuoteAtCursor(text: seg.text, start: seg.startTime) }) {
+                    Image(systemName: "text.quote")
+                        .font(.system(size: 11))
+                        .foregroundColor(Color.appTextSecondary(isDark))
+                        .frame(width: 20, height: 20)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Add as a quote at the end of the note")
+            }
+
+            Text(seg.text)
+                .font(.system(size: 13))
+                .lineSpacing(3)
+                .foregroundColor(isActive ? Color.appText(isDark) : Color.appTextBody(isDark))
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(AppSpacing.md)
+        .background(isActive ? primaryAccent.opacity(0.08) : Color.cardBackground(isDark))
+        .overlay(alignment: .leading) {
+            // Drawn as an overlay so the text doesn't shift when a segment becomes active.
+            if isActive {
+                Rectangle()
+                    .fill(primaryAccent)
+                    .frame(width: 3)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppRadius.md)
+                .stroke(isActive ? primaryAccent.opacity(0.3) : Color.subtleBorder(isDark), lineWidth: 1)
+        )
+    }
+
     private func renameSpeakerGlobally(oldName: String, newName: String) {
         let cleanNew = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanNew.isEmpty && cleanNew != oldName else { return }

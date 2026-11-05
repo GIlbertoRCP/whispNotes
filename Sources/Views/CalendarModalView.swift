@@ -54,7 +54,7 @@ struct CalendarModalView: View {
                                 .font(.system(size: 11, weight: .bold))
                                 .padding(7)
                                 .background(Color.cardBackground(isDarkMode))
-                                .cornerRadius(6)
+                                .cornerRadius(AppRadius.sm)
                         }
                         .buttonStyle(.plain)
                         .help("Previous Month")
@@ -70,14 +70,14 @@ struct CalendarModalView: View {
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
                         .background(isDarkMode ? Color.white.opacity(0.12) : Color.black.opacity(0.06))
-                        .cornerRadius(6)
+                        .cornerRadius(AppRadius.sm)
                         
                         Button(action: { changeMonth(by: 1) }) {
                             Image(systemName: "chevron.right")
                                 .font(.system(size: 11, weight: .bold))
                                 .padding(7)
                                 .background(Color.cardBackground(isDarkMode))
-                                .cornerRadius(6)
+                                .cornerRadius(AppRadius.sm)
                         }
                         .buttonStyle(.plain)
                         .help("Next Month")
@@ -135,11 +135,11 @@ struct CalendarModalView: View {
                                 .frame(height: 44)
                                 .frame(maxWidth: .infinity)
                                 .background(
-                                    RoundedRectangle(cornerRadius: 8)
+                                    RoundedRectangle(cornerRadius: AppRadius.md)
                                         .fill(isCurrentSelected ? primaryAccent : (isToday ? primaryAccent.opacity(0.12) : Color.cardBackground(isDarkMode)))
                                 )
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
+                                    RoundedRectangle(cornerRadius: AppRadius.md)
                                         .stroke(isToday && !isCurrentSelected ? primaryAccent : Color.subtleBorder(isDarkMode), lineWidth: isToday ? 1.5 : 0.5)
                                 )
                             }
@@ -158,7 +158,7 @@ struct CalendarModalView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("JOURNAL FOR THIS DAY")
-                            .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
                             .foregroundColor(.secondary)
                         Text(dateFormatter.string(from: selectedDate))
                             .font(.system(size: 12, weight: .semibold))
@@ -174,21 +174,21 @@ struct CalendarModalView: View {
                             Image(systemName: "square.and.pencil")
                             Text("Open Daily Note")
                         }
-                        .font(.system(size: 11.5, weight: .bold))
+                        .font(.system(size: 12, weight: .bold))
                         .padding(.horizontal, 14)
                         .padding(.vertical, 7)
                         .background(primaryAccent)
-                        .foregroundColor(isDarkMode && (colorTheme == "Classic Minimal" || colorTheme == "Nord Arctic" || colorTheme == "Rose Pine") ? Color(red: 15/255, green: 23/255, blue: 42/255) : .white)
-                        .cornerRadius(6)
+                        .foregroundColor(Color.onAccent(isDarkMode, themeName: colorTheme))
+                        .cornerRadius(AppRadius.sm)
                     }
                     .buttonStyle(.plain)
                 }
                 .padding(12)
                 .background(Color.cardBackground(isDarkMode))
-                .cornerRadius(10)
+                .cornerRadius(AppRadius.lg)
             }
             .padding(20)
-            .frame(width: 480)
+            .frame(minWidth: 300, maxWidth: .infinity)
             .background(Color.panelBackground(isDarkMode))
             
             Divider()
@@ -241,7 +241,7 @@ struct CalendarModalView: View {
                                 .padding(.vertical, 6)
                                 .background(primaryAccent.opacity(0.15))
                                 .foregroundColor(primaryAccent)
-                                .cornerRadius(6)
+                                .cornerRadius(AppRadius.sm)
                         }
                         .buttonStyle(.plain)
                         Spacer()
@@ -264,12 +264,12 @@ struct CalendarModalView: View {
                                         
                                         VStack(alignment: .leading, spacing: 3) {
                                             Text(item.title.isEmpty ? "Untitled Note" : item.title)
-                                                .font(.system(size: 12.5, weight: .bold))
+                                                .font(.system(size: 13, weight: .bold))
                                                 .foregroundColor(isDarkMode ? .white : Color(red: 15/255, green: 23/255, blue: 42/255))
                                                 .lineLimit(1)
                                             
                                             Text(item.folder)
-                                                .font(.system(size: 9.5, weight: .semibold))
+                                                .font(.system(size: 10, weight: .semibold))
                                                 .foregroundColor(secondaryAccent)
                                             
                                             Text(item.content.replacingOccurrences(of: "\n", with: " "))
@@ -281,14 +281,14 @@ struct CalendarModalView: View {
                                         Spacer()
                                         
                                         Text(timeFormatter.string(from: item.timestamp))
-                                            .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                                            .font(.system(size: 10, weight: .medium, design: .monospaced))
                                             .foregroundColor(.secondary)
                                     }
                                     .padding(10)
                                     .background(Color.cardBackground(isDarkMode))
-                                    .cornerRadius(8)
+                                    .cornerRadius(AppRadius.md)
                                     .overlay(
-                                        RoundedRectangle(cornerRadius: 8)
+                                        RoundedRectangle(cornerRadius: AppRadius.md)
                                             .stroke(Color.subtleBorder(isDarkMode), lineWidth: 0.5)
                                     )
                                 }
@@ -299,13 +299,13 @@ struct CalendarModalView: View {
                 }
             }
             .padding(20)
-            .frame(width: 320)
+            .frame(minWidth: 220, idealWidth: 320, maxWidth: 320)
             .background(Color.sidebarBackground(isDarkMode))
         }
-        .frame(width: 800, height: 530)
-        .cornerRadius(16)
+        .adaptiveSheetFrame(width: 800, height: 530)
+        .cornerRadius(AppRadius.xl)
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: AppRadius.xl)
                 .stroke(Color.subtleBorder(isDarkMode), lineWidth: 1)
         )
     }

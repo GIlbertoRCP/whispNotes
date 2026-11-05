@@ -47,7 +47,7 @@ public struct ZoomContainerView<Content: View>: View {
                             .padding(.vertical, 8)
                             .background(.ultraThinMaterial)
                             .background(Color.black.opacity(0.35))
-                            .cornerRadius(20)
+                            .cornerRadius(AppRadius.xl)
                             .overlay(
                                 Capsule()
                                     .stroke(Color.white.opacity(0.2), lineWidth: 1)
@@ -62,6 +62,7 @@ public struct ZoomContainerView<Content: View>: View {
                 }
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
+            .environment(\.windowContentSize, proxy.size)
         }
     }
 }

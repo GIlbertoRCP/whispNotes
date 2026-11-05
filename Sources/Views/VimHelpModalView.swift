@@ -105,7 +105,7 @@ public struct VimHelpModalView: View {
                 }
                 .font(.subheadline)
                 .fontWeight(.bold)
-                .foregroundColor(.white)
+                .foregroundColor(Color.onAccent(isDark))
                 .padding(.horizontal, 16)
                 .padding(.vertical, 6)
                 .background(primaryAccent)
@@ -114,11 +114,11 @@ public struct VimHelpModalView: View {
             }
             .padding(12)
         }
-        .frame(width: 580, height: 500)
+        .adaptiveSheetFrame(width: 580, height: 500)
         .background(Color.panelBackground(isDark))
-        .cornerRadius(AppRadius.md)
+        .cornerRadius(AppRadius.lg)
         .overlay(
-            RoundedRectangle(cornerRadius: AppRadius.md)
+            RoundedRectangle(cornerRadius: AppRadius.lg)
                 .stroke(Color.subtleBorder(isDark), lineWidth: 1)
         )
     }
@@ -140,7 +140,7 @@ public struct VimHelpModalView: View {
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(Color.primary.opacity(0.08))
-                            .cornerRadius(4)
+                            .cornerRadius(AppRadius.xs)
                             .frame(minWidth: 100, alignment: .leading)
                         
                         Text(desc)

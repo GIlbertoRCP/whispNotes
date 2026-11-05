@@ -15,6 +15,8 @@ struct EditorPanelView: View {
     @AppStorage("editorFontSize") private var editorFontSize: Double = 14.0
     @AppStorage("editorFontDesign") private var editorFontDesign: String = "Sans-Serif"
     @AppStorage("editorSplitRatio") private var splitRatio: Double = 0.5
+    @AppStorage(EditorPreferenceKey.readingWidth) private var readingWidthRaw: String = ReadingWidth.standard.rawValue
+    private var readingWidth: CGFloat { (ReadingWidth(rawValue: readingWidthRaw) ?? .standard).maxWidth }
     @AppStorage("enableVimMode") private var enableVimMode = false
     @AppStorage("enableEmacsMode") private var enableEmacsMode = false
     @AppStorage("enableOrgTableAlign") private var enableOrgTableAlign = true
@@ -29,7 +31,11 @@ struct EditorPanelView: View {
     
     @State private var localContent: String = ""
     @State private var saveTimer: Timer? = nil
-    @State private var showBacklinks = true
+    /// The user's choice, remembered across launches.
+    @AppStorage("showBacklinksDrawer") private var showBacklinks = true
+    /// True while the panel is too short for the expanded drawer; it reopens on its own when there's room.
+    @State private var backlinksAutoCollapsed = false
+    private static let backlinksMinPanelHeight: CGFloat = 560
     @State private var showTOCDrawer = false
 
     private var selectedFontDesign: Font.Design {
@@ -42,6 +48,12 @@ struct EditorPanelView: View {
 
     @State private var docStats: DocumentStats = .zero
     @State private var showStatsPopover = false
+    /// Width the formatting bar gets; less-used buttons fold into a menu when it's narrow.
+    @State private var formatBarWidth: CGFloat = 900
+    /// Split ratio when a divider drag began, so the drag follows the pointer instead of compounding.
+    @State private var splitDragStartRatio: Double? = nil
+    /// Below this the split stacks editor over preview rather than squeezing two columns.
+    private static let sideBySideSplitMinWidth: CGFloat = 560
     @State private var cachedHeadingOutline: [String] = []
     @State private var cachedIncomingBacklinks: [NoteItem] = []
     @State private var cachedUnlinkedMentions: [NoteItem] = []
@@ -85,28 +97,10 @@ struct EditorPanelView: View {
             if !isFocusMode {
                 HStack(spacing: 6) {
                     if editMode == .edit || editMode == .split {
-                        HStack(spacing: 2) {
-                            MarkdownToolbarButton(icon: "bold", help: "Bold", shortcut: "⌘B") { insertMarkdown("**", "**") }
-                            MarkdownToolbarButton(icon: "italic", help: "Italic", shortcut: "⌘I") { insertMarkdown("*", "*") }
-                            MarkdownToolbarButton(icon: "number", help: "Heading (#)") { insertMarkdown("\n# ", "") }
-
-                            Rectangle()
-                                .fill(Color.subtleBorder(isDark))
-                                .frame(width: 1, height: 14)
-                                .padding(.horizontal, 4)
-
-                            MarkdownToolbarButton(icon: "list.bullet", help: "Bullet List (* Item)") { insertMarkdown("\n* ", "") }
-                            MarkdownToolbarButton(icon: "checklist", help: "Checklist Task (- [ ] Task)") { insertMarkdown("\n- [ ] ", "") }
-                            MarkdownToolbarButton(icon: "chevron.left.forwardslash.chevron.right", help: "Code Snippet (`code`)") { insertMarkdown("`", "`") }
-                            MarkdownToolbarButton(icon: "link", help: "Wiki Link ([[Note Title]])") { insertMarkdown("[[", "]]") }
-                            MarkdownToolbarButton(icon: "tablecells", help: "Insert Table Template") { insertMarkdown("\n| Header 1 | Header 2 |\n| --- | --- |\n| Item 1 | Item 2 |\n", "") }
-                            MarkdownToolbarButton(icon: "quote.opening", help: "Blockquote (> Quote)") { insertMarkdown("\n> ", "") }
-                            MarkdownToolbarButton(icon: "photo.badge.plus", help: "Paste Screenshot / Image", shortcut: "⌘⇧V") { pasteImageFromClipboard() }
-                            MarkdownToolbarButton(icon: "wand.and.stars", help: "Format & Beautify Structure", shortcut: "⌥⌘F") { smartFormatCurrentNote() }
-                        }
+                        formattingButtons
                     }
 
-                    Spacer()
+                    Spacer(minLength: 4)
 
                     // Document Outline Indicator
                     if !headingOutline.isEmpty {
@@ -114,78 +108,54 @@ struct EditorPanelView: View {
                             HStack(spacing: 4) {
                                 Image(systemName: "list.bullet.indent")
                                     .font(.system(size: 10, weight: .medium))
-                                    .foregroundColor(secondaryAccent)
-                                Text("Outline (\(headingOutline.count))")
+                                Text(formatBarWidth >= 520 ? "Outline (\(headingOutline.count))" : "\(headingOutline.count)")
                                     .font(.system(size: 10, weight: .semibold))
-                                    .foregroundColor(secondaryAccent)
+                                    .monospacedDigit()
+                                    .fixedSize()
                             }
+                            .foregroundColor(secondaryAccent)
                             .padding(.horizontal, 7)
                             .padding(.vertical, 3)
                             .background(secondaryAccent.opacity(0.12))
                             .cornerRadius(AppRadius.sm)
                         }
                         .buttonStyle(.plain)
-                        .obsidianTooltip("Table of Contents Outline")
+                        .obsidianTooltip("Outline")
                         .popover(isPresented: $showTOCDrawer) {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Table of Contents")
-                                    .font(.caption)
-                                    .fontWeight(.bold)
-                                ForEach(headingOutline, id: \.self) { heading in
-                                    Text(heading)
-                                        .font(.caption2)
-                                        .fontWeight(.medium)
+                            VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                                Text("Outline")
+                                    .font(.headline)
+                                ForEach(Array(headingOutline.enumerated()), id: \.offset) { _, heading in
+                                    let level = heading.prefix(while: { $0 == "#" }).count
+                                    Text(heading.drop(while: { $0 == "#" }).trimmingCharacters(in: .whitespaces))
+                                        .font(.system(size: 12, weight: level <= 1 ? .semibold : .regular))
+                                        .padding(.leading, CGFloat(max(0, level - 1)) * 12)
                                 }
                             }
-                            .padding(12)
+                            .padding(AppSpacing.md)
+                            .frame(minWidth: 200, alignment: .leading)
                         }
                     }
 
-                    if let pdfURL = resolvedPDFURL, editMode == .edit {
-                        HStack(spacing: 4) {
-                            Image(systemName: "doc.richtext.fill")
-                                .font(.system(size: 10))
-                                .foregroundColor(primaryAccent)
-                            Text(pdfURL.lastPathComponent)
-                                .font(.system(size: 10, weight: .medium))
-                                .lineLimit(1)
-                            Button("View PDF") { editMode = .pdf }
-                                .font(.system(size: 9, weight: .bold))
-                                .buttonStyle(.plain)
-                                .foregroundColor(primaryAccent)
-                        }
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(primaryAccent.opacity(0.12))
-                        .cornerRadius(4)
-                    } else if let pptxURL = resolvedPPTXURL, editMode == .edit {
-                        HStack(spacing: 4) {
-                            Image(systemName: "sparkles.tv")
-                                .font(.system(size: 10))
-                                .foregroundColor(primaryAccent)
-                            Text(pptxURL.lastPathComponent)
-                                .font(.system(size: 10, weight: .medium))
-                                .lineLimit(1)
-                            Button("View Slides") { editMode = .pptx }
-                                .font(.system(size: 9, weight: .bold))
-                                .buttonStyle(.plain)
-                                .foregroundColor(primaryAccent)
-                        }
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(primaryAccent.opacity(0.12))
-                        .cornerRadius(4)
+                    if let pdfURL = resolvedPDFURL, editMode == .edit, formatBarWidth >= 640 {
+                        attachmentChip(icon: "doc.richtext.fill", name: pdfURL.lastPathComponent, action: "View PDF") { editMode = .pdf }
+                    } else if let pptxURL = resolvedPPTXURL, editMode == .edit, formatBarWidth >= 640 {
+                        attachmentChip(icon: "sparkles.tv", name: pptxURL.lastPathComponent, action: "View Slides") { editMode = .pptx }
                     }
 
-                    // Interactive Document Live Word & Character Stats Inspector
+                    // Live word & character count (details in the popover)
                     Button(action: { showStatsPopover.toggle() }) {
                         HStack(spacing: 4) {
                             Image(systemName: "character.cursor.ibeam")
-                                .font(.system(size: 9, weight: .medium))
+                                .font(.system(size: 10, weight: .medium))
                                 .foregroundColor(.secondary.opacity(0.8))
-                            Text("\(docStats.words) words • \(docStats.characters) chars")
-                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            Text(formatBarWidth >= 600
+                                 ? "\(docStats.words.formatted()) words · \(docStats.characters.formatted()) chars"
+                                 : "\(docStats.words.formatted()) words")
+                                .font(.system(size: 10, weight: .medium))
+                                .monospacedDigit()
                                 .foregroundColor(.secondary)
+                                .fixedSize()
                         }
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
@@ -193,11 +163,20 @@ struct EditorPanelView: View {
                         .cornerRadius(AppRadius.sm)
                     }
                     .buttonStyle(.plain)
-                    .help("Click for detailed document statistics and reading time")
+                    .help("Word count, characters and reading time")
                     .popover(isPresented: $showStatsPopover) {
                         DocumentStatsPopoverView(stats: docStats, isDark: isDark, primaryAccent: primaryAccent)
                     }
                 }
+                .frame(height: 26)
+                .frame(minWidth: 0, maxWidth: .infinity)
+                .background(
+                    GeometryReader { geo in
+                        Color.clear
+                            .onAppear { formatBarWidth = geo.size.width }
+                            .onChange(of: geo.size.width) { _, width in formatBarWidth = width }
+                    }
+                )
                 .padding(.horizontal, 12)
                 .padding(.vertical, 5)
                 .background(Color.sidebarBackground(isDark))
@@ -272,7 +251,19 @@ struct EditorPanelView: View {
                                 handleAutoSave(formatted)
                             }
                         )
-                        .frame(maxWidth: 760)
+                        .frame(maxWidth: readingWidth)
+                        .overlay(alignment: .topLeading) {
+                            if localContent.isEmpty {
+                                // Matches the text view's container inset (22 × 18) plus line-fragment padding (5).
+                                Text("Start writing, or press \(GlobalHotKey.displayString) to record")
+                                    .font(.system(size: CGFloat(editorFontSize), design: selectedFontDesign))
+                                    .foregroundColor(Color.appTextSecondary(isDark).opacity(0.7))
+                                    .padding(.leading, 27)
+                                    .padding(.top, 18)
+                                    .allowsHitTesting(false)
+                                    .accessibilityHidden(true)
+                            }
+                        }
                         Spacer(minLength: 8)
                     }
                     .padding(.horizontal, isFocusMode ? 24 : 12)
@@ -292,43 +283,25 @@ struct EditorPanelView: View {
                 VStack(spacing: 0) {
                     GeometryReader { splitGeo in
                         let totalWidth = splitGeo.size.width
-                        let minPanelWidth: CGFloat = 200
-                        let effectiveLeftWidth = max(minPanelWidth, min(totalWidth - minPanelWidth, totalWidth * CGFloat(splitRatio)))
-                        let effectiveRightWidth = max(minPanelWidth, totalWidth - effectiveLeftWidth - 6)
+                        let minPanelWidth: CGFloat = 240
+                        let effectiveLeftWidth = max(minPanelWidth, min(totalWidth - minPanelWidth - 6, totalWidth * CGFloat(splitRatio)))
+                        let effectiveRightWidth = max(0, totalWidth - effectiveLeftWidth - 6)
 
+                        if totalWidth < Self.sideBySideSplitMinWidth {
+                            // Narrow pane: editor on top, live preview underneath.
+                            VStack(spacing: 0) {
+                                splitEditor
+                                    .frame(height: splitGeo.size.height * 0.55)
+                                Rectangle()
+                                    .fill(Color.subtleBorder(isDark))
+                                    .frame(height: 1)
+                                splitPreview
+                            }
+                        } else {
                         HStack(spacing: 0) {
                             // Left: Native Markdown Text Editor
-                            MacMarkdownEditorView(
-                                text: $localContent,
-                                noteId: note.id,
-                                fontSize: CGFloat(editorFontSize),
-                                fontDesign: selectedFontDesign,
-                                isDark: isDark,
-                                enableVimMode: enableVimMode,
-                                enableEmacsMode: enableEmacsMode,
-                                enableOrgTableAlign: enableOrgTableAlign,
-                                enableOrgTaskCycle: enableOrgTaskCycle,
-                                enableTypewriterScroll: enableTypewriterScroll,
-                                onVimAction: handleVimAction,
-                                onEmacsAction: handleEmacsAction,
-                                onImagePasted: {
-                                    withAnimation {
-                                        showImagePastedToast = true
-                                    }
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                                        withAnimation {
-                                            showImagePastedToast = false
-                                        }
-                                    }
-                                },
-                                onTextChanged: { formatted in
-                                    handleAutoSave(formatted)
-                                }
-                            )
-                            .padding(.horizontal, 8)
-                            .padding(.top, 4)
-                            .background(Color.panelBackground(isDark))
-                            .frame(width: effectiveLeftWidth)
+                            splitEditor
+                                .frame(width: effectiveLeftWidth)
                             
                             // Interactive Draggable Split Divider
                             ZStack {
@@ -336,11 +309,11 @@ struct EditorPanelView: View {
                                     .fill(Color.subtleBorder(isDark))
                                     .frame(width: 1)
                                 
-                                RoundedRectangle(cornerRadius: 3)
+                                RoundedRectangle(cornerRadius: AppRadius.xs)
                                     .fill(Color.cardBackground(isDark))
                                     .frame(width: 6, height: 32)
                                     .overlay(
-                                        RoundedRectangle(cornerRadius: 3)
+                                        RoundedRectangle(cornerRadius: AppRadius.xs)
                                             .stroke(Color.subtleBorder(isDark), lineWidth: 1)
                                     )
                             }
@@ -349,9 +322,12 @@ struct EditorPanelView: View {
                             .gesture(
                                 DragGesture(minimumDistance: 1)
                                     .onChanged { value in
-                                        let newRatio = Double((effectiveLeftWidth + value.translation.width) / totalWidth)
+                                        let start = splitDragStartRatio ?? splitRatio
+                                        if splitDragStartRatio == nil { splitDragStartRatio = start }
+                                        let newRatio = start + Double(value.translation.width / max(totalWidth, 1))
                                         splitRatio = max(0.2, min(0.8, newRatio))
                                     }
+                                    .onEnded { _ in splitDragStartRatio = nil }
                             )
                             .onHover { inside in
                                 if inside {
@@ -362,23 +338,9 @@ struct EditorPanelView: View {
                             }
                             
                             // Right: Real-Time Markdown & Diagram Live Preview
-                            ScrollView {
-                                VStack(alignment: .leading) {
-                                    MarkdownRendererView(
-                                        markdown: localContent.replacingOccurrences(of: "\\n", with: "\n"),
-                                        notes: $notes,
-                                        selectedNoteId: $selectedNoteId,
-                                        playerVM: playerVM,
-                                        isDark: isDark,
-                                        primaryAccent: primaryAccent,
-                                        secondaryAccent: secondaryAccent
-                                    )
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                }
-                                .padding(16)
-                            }
-                            .background(Color.panelBackground(isDark))
-                            .frame(width: effectiveRightWidth)
+                            splitPreview
+                                .frame(width: effectiveRightWidth)
+                        }
                         }
                     }
                     
@@ -405,7 +367,7 @@ struct EditorPanelView: View {
                                 primaryAccent: primaryAccent,
                                 secondaryAccent: secondaryAccent
                             )
-                            .frame(maxWidth: isFocusMode ? 750 : 720, alignment: .leading)
+                            .frame(maxWidth: readingWidth, alignment: .leading)
                         }
                         .padding(isFocusMode ? 36 : 32)
                     }
@@ -417,27 +379,45 @@ struct EditorPanelView: View {
             // Collapsible Obsidian-Style Backlinks Drawer (Hidden in Zen Focus Mode)
             if !isFocusMode && (!incomingBacklinks.isEmpty || !unlinkedMentions.isEmpty || !outgoingWikiLinks.isEmpty) {
                 VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        Image(systemName: "network")
-                            .foregroundColor(secondaryAccent)
-                        Text("Knowledge Connections & Backlinks")
-                            .font(.caption)
-                            .fontWeight(.bold)
-                        Spacer()
-                        Button(action: { showBacklinks.toggle() }) {
-                            Image(systemName: showBacklinks ? "chevron.down" : "chevron.up")
+                    Button(action: {
+                        withAnimation(AppAnimation.panel) {
+                            if backlinksAutoCollapsed {
+                                // Collapsed only for space: open it without changing the saved preference.
+                                backlinksAutoCollapsed = false
+                                showBacklinks = true
+                            } else {
+                                showBacklinks.toggle()
+                            }
+                        }
+                    }) {
+                        HStack(spacing: AppSpacing.sm) {
+                            Image(systemName: "network")
+                                .foregroundColor(secondaryAccent)
+                            Text("Connections")
+                                .font(.caption)
+                                .fontWeight(.bold)
+                            if !backlinksExpanded {
+                                Text(connectionsSummary)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .lineLimit(1)
+                            }
+                            Spacer()
+                            Image(systemName: backlinksExpanded ? "chevron.down" : "chevron.up")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
                         }
-                        .buttonStyle(.plain)
+                        .contentShape(Rectangle())
                     }
-                    
-                    if showBacklinks {
+                    .buttonStyle(.plain)
+                    .help(backlinksExpanded ? "Hide connections" : "Show connections")
+
+                    if backlinksExpanded {
                         HStack(alignment: .top, spacing: 20) {
                             if !incomingBacklinks.isEmpty {
                                 VStack(alignment: .leading, spacing: 6) {
                                     Text("LINKED REFERENCES (\(incomingBacklinks.count))")
-                                        .font(.system(size: 9, weight: .bold))
+                                        .font(.system(size: 10, weight: .bold))
                                         .foregroundColor(.secondary)
                                     
                                     ForEach(incomingBacklinks) { backlinkNote in
@@ -453,7 +433,7 @@ struct EditorPanelView: View {
                                             .padding(.vertical, 4)
                                             .background(secondaryAccent.opacity(0.15))
                                             .foregroundColor(secondaryAccent)
-                                            .cornerRadius(6)
+                                            .cornerRadius(AppRadius.sm)
                                         }
                                         .buttonStyle(.plain)
                                     }
@@ -463,7 +443,7 @@ struct EditorPanelView: View {
                             if !unlinkedMentions.isEmpty {
                                 VStack(alignment: .leading, spacing: 6) {
                                     Text("UNLINKED MENTIONS (\(unlinkedMentions.count))")
-                                        .font(.system(size: 9, weight: .bold))
+                                        .font(.system(size: 10, weight: .bold))
                                         .foregroundColor(.secondary)
                                     
                                     ForEach(unlinkedMentions) { unlinkedNote in
@@ -478,12 +458,12 @@ struct EditorPanelView: View {
                                             
                                             Button(action: { linkUnlinkedMention(in: unlinkedNote) }) {
                                                 Text("+ Link")
-                                                    .font(.system(size: 9, weight: .bold))
+                                                    .font(.system(size: 10, weight: .bold))
                                                     .padding(.horizontal, 5)
                                                     .padding(.vertical, 2)
                                                     .background(primaryAccent.opacity(0.18))
                                                     .foregroundColor(primaryAccent)
-                                                    .cornerRadius(4)
+                                                    .cornerRadius(AppRadius.xs)
                                             }
                                             .buttonStyle(.plain)
                                             .help("Convert text mention in '\(unlinkedNote.title)' into [[link]]")
@@ -495,7 +475,7 @@ struct EditorPanelView: View {
                             if !outgoingWikiLinks.isEmpty {
                                 VStack(alignment: .leading, spacing: 6) {
                                     Text("OUTGOING LINKS (\(outgoingWikiLinks.count))")
-                                        .font(.system(size: 9, weight: .bold))
+                                        .font(.system(size: 10, weight: .bold))
                                         .foregroundColor(.secondary)
                                     
                                     ForEach(outgoingWikiLinks, id: \.self) { linkTitle in
@@ -511,7 +491,7 @@ struct EditorPanelView: View {
                                             .padding(.vertical, 4)
                                             .background(primaryAccent.opacity(0.15))
                                             .foregroundColor(primaryAccent)
-                                            .cornerRadius(6)
+                                            .cornerRadius(AppRadius.sm)
                                         }
                                         .buttonStyle(.plain)
                                     }
@@ -522,7 +502,7 @@ struct EditorPanelView: View {
                 }
                 .padding(12)
                 .background(Color.sidebarBackground(isDark))
-                .cornerRadius(8)
+                .cornerRadius(AppRadius.md)
                 .padding(.horizontal, 16)
                 .padding(.bottom, 12)
             }
@@ -555,9 +535,9 @@ struct EditorPanelView: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(Color.panelBackground(isDark))
-                    .cornerRadius(8)
+                    .cornerRadius(AppRadius.md)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 8)
+                        RoundedRectangle(cornerRadius: AppRadius.md)
                             .stroke(primaryAccent.opacity(0.3), lineWidth: 1)
                     )
                     .shadow(color: Color.black.opacity(0.25), radius: 6, x: 0, y: 3)
@@ -574,9 +554,9 @@ struct EditorPanelView: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(Color.panelBackground(isDark))
-                    .cornerRadius(8)
+                    .cornerRadius(AppRadius.md)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 8)
+                        RoundedRectangle(cornerRadius: AppRadius.md)
                             .stroke(primaryAccent.opacity(0.35), lineWidth: 1)
                     )
                     .shadow(color: Color.black.opacity(0.25), radius: 6, x: 0, y: 3)
@@ -585,6 +565,13 @@ struct EditorPanelView: View {
             }
             .padding(16)
         }
+        .background(
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { adaptBacklinks(toPanelHeight: geo.size.height) }
+                    .onChange(of: geo.size.height) { _, height in adaptBacklinks(toPanelHeight: height) }
+            }
+        )
         .onAppear {
             localContent = note.content.replacingOccurrences(of: "\\n", with: "\n")
             docStats = calculateDocumentStats(localContent)
@@ -770,6 +757,156 @@ struct EditorPanelView: View {
                 }
             }
         }
+    }
+
+    private var backlinksExpanded: Bool { showBacklinks && !backlinksAutoCollapsed }
+
+    private var connectionsSummary: String {
+        var parts: [String] = []
+        if !incomingBacklinks.isEmpty { parts.append("\(incomingBacklinks.count) linked here") }
+        if !outgoingWikiLinks.isEmpty { parts.append("\(outgoingWikiLinks.count) outgoing") }
+        if !unlinkedMentions.isEmpty { parts.append("\(unlinkedMentions.count) unlinked") }
+        return parts.joined(separator: " · ")
+    }
+
+    private func adaptBacklinks(toPanelHeight height: CGFloat) {
+        let tooShort = height < Self.backlinksMinPanelHeight
+        if tooShort != backlinksAutoCollapsed {
+            withAnimation(AppAnimation.panel) { backlinksAutoCollapsed = tooShort }
+        }
+    }
+
+    private var splitEditor: some View {
+        MacMarkdownEditorView(
+            text: $localContent,
+            noteId: note.id,
+            fontSize: CGFloat(editorFontSize),
+            fontDesign: selectedFontDesign,
+            isDark: isDark,
+            enableVimMode: enableVimMode,
+            enableEmacsMode: enableEmacsMode,
+            enableOrgTableAlign: enableOrgTableAlign,
+            enableOrgTaskCycle: enableOrgTaskCycle,
+            enableTypewriterScroll: enableTypewriterScroll,
+            onVimAction: handleVimAction,
+            onEmacsAction: handleEmacsAction,
+            onImagePasted: {
+                withAnimation { showImagePastedToast = true }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                    withAnimation { showImagePastedToast = false }
+                }
+            },
+            onTextChanged: { formatted in
+                handleAutoSave(formatted)
+            }
+        )
+        .padding(.horizontal, 8)
+        .padding(.top, 4)
+        .background(Color.panelBackground(isDark))
+    }
+
+    private var splitPreview: some View {
+        ScrollView {
+            VStack(alignment: .leading) {
+                MarkdownRendererView(
+                    markdown: localContent.replacingOccurrences(of: "\\n", with: "\n"),
+                    notes: $notes,
+                    selectedNoteId: $selectedNoteId,
+                    playerVM: playerVM,
+                    isDark: isDark,
+                    primaryAccent: primaryAccent,
+                    secondaryAccent: secondaryAccent
+                )
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(AppSpacing.lg)
+        }
+        .background(Color.panelBackground(isDark))
+    }
+
+    private struct FormatAction: Identifiable {
+        let id: String
+        let icon: String
+        let help: String
+        var shortcut: String? = nil
+        let run: () -> Void
+    }
+
+    /// In priority order: the first ones stay visible longest as the bar narrows.
+    private var formatActions: [FormatAction] {
+        [
+            FormatAction(id: "bold", icon: "bold", help: "Bold", shortcut: "⌘B") { insertMarkdown("**", "**") },
+            FormatAction(id: "italic", icon: "italic", help: "Italic", shortcut: "⌘I") { insertMarkdown("*", "*") },
+            FormatAction(id: "check", icon: "checklist", help: "Checklist item") { insertMarkdown("\n- [ ] ", "") },
+            FormatAction(id: "bullet", icon: "list.bullet", help: "Bulleted list") { insertMarkdown("\n* ", "") },
+            FormatAction(id: "link", icon: "link", help: "Link to note ([[Title]])") { insertMarkdown("[[", "]]") },
+            FormatAction(id: "heading", icon: "number", help: "Heading") { insertMarkdown("\n# ", "") },
+            FormatAction(id: "quote", icon: "quote.opening", help: "Quote") { insertMarkdown("\n> ", "") },
+            FormatAction(id: "code", icon: "chevron.left.forwardslash.chevron.right", help: "Inline code") { insertMarkdown("`", "`") },
+            FormatAction(id: "table", icon: "tablecells", help: "Insert table") { insertMarkdown("\n| Header 1 | Header 2 |\n| --- | --- |\n| Item 1 | Item 2 |\n", "") },
+            FormatAction(id: "image", icon: "photo.badge.plus", help: "Paste image from clipboard", shortcut: "⇧⌘V") { pasteImageFromClipboard() },
+            FormatAction(id: "format", icon: "wand.and.stars", help: "Clean up formatting", shortcut: "⌥⌘F") { smartFormatCurrentNote() },
+        ]
+    }
+
+    /// How many formatting buttons fit inline; the rest go in the More menu.
+    private var visibleFormatCount: Int {
+        switch formatBarWidth {
+        case 720...: return formatActions.count
+        case 600..<720: return 7
+        case 480..<600: return 5
+        default: return 3
+        }
+    }
+
+    private var formattingButtons: some View {
+        let actions = formatActions
+        let visible = min(visibleFormatCount, actions.count)
+        return HStack(spacing: 2) {
+            ForEach(actions.prefix(visible)) { action in
+                MarkdownToolbarButton(icon: action.icon, help: action.help, shortcut: action.shortcut, action: action.run)
+            }
+            if visible < actions.count {
+                Menu {
+                    ForEach(actions.dropFirst(visible)) { action in
+                        Button(action: action.run) {
+                            Label(action.help, systemImage: action.icon)
+                        }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.secondary)
+                        .frame(width: 26, height: 24)
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help("More formatting")
+            }
+        }
+    }
+
+    private func attachmentChip(icon: String, name: String, action: String, perform: @escaping () -> Void) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.system(size: 10))
+                .foregroundColor(primaryAccent)
+            Text(name)
+                .font(.system(size: 10, weight: .medium))
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .frame(maxWidth: 160)
+            Button(action, action: perform)
+                .font(.system(size: 10, weight: .bold))
+                .buttonStyle(.plain)
+                .foregroundColor(primaryAccent)
+                .fixedSize()
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(primaryAccent.opacity(0.12))
+        .cornerRadius(AppRadius.xs)
     }
 
     private func pasteImageFromClipboard() {
@@ -1116,7 +1253,44 @@ struct MacMarkdownEditorView: NSViewRepresentable {
                 self.paste(self)
                 return true
             }
+            // ⌘B / ⌘I: wrap the selection in markdown bold / italic (press again to unwrap)
+            if flags == .command, window?.firstResponder === self {
+                switch event.charactersIgnoringModifiers?.lowercased() {
+                case "b": toggleMarkdownWrap("**"); return true
+                case "i": toggleMarkdownWrap("*"); return true
+                default: break
+                }
+            }
             return super.performKeyEquivalent(with: event)
+        }
+
+        /// Wraps the selection in `marker` (e.g. ** for bold) or removes it if already wrapped. Undoable.
+        func toggleMarkdownWrap(_ marker: String) {
+            let text = string as NSString
+            let range = selectedRange()
+            let m = (marker as NSString).length
+            let before = NSRange(location: range.location - m, length: m)
+            let after = NSRange(location: NSMaxRange(range), length: m)
+            let isWrapped = before.location >= 0 && NSMaxRange(after) <= text.length
+                && text.substring(with: before) == marker && text.substring(with: after) == marker
+                // "**bold**" seen through the italic marker is bold, not italic.
+                && !(marker == "*" && before.location > 0 && text.substring(with: NSRange(location: before.location - 1, length: 1)) == "*")
+
+            if isWrapped {
+                let full = NSRange(location: before.location, length: range.length + 2 * m)
+                let inner = text.substring(with: range)
+                guard shouldChangeText(in: full, replacementString: inner) else { return }
+                replaceCharacters(in: full, with: inner)
+                didChangeText()
+                setSelectedRange(NSRange(location: before.location, length: range.length))
+            } else {
+                let inner = text.substring(with: range)
+                let wrapped = marker + inner + marker
+                guard shouldChangeText(in: range, replacementString: wrapped) else { return }
+                replaceCharacters(in: range, with: wrapped)
+                didChangeText()
+                setSelectedRange(NSRange(location: range.location + m, length: range.length))
+            }
         }
 
         override func keyDown(with event: NSEvent) {
@@ -1555,7 +1729,7 @@ struct VimBottomStatusBar: View {
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
                 .background(vimController.mode.accentColor)
-                .cornerRadius(4)
+                .cornerRadius(AppRadius.xs)
             
             // Command Line Input or Status Message
             if vimController.mode == .command {

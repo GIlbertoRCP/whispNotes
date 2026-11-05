@@ -11,17 +11,28 @@ struct CommandPaletteView: View {
     @State private var query = CommandLine.arguments.contains("--command-palette") ? "Machine Learning" : ""
     @State private var selectionIndex = 0
     
+    /// Trashed notes stay out of the switcher, matching Vault Search; newest first.
     var filteredResults: [NoteItem] {
-        let cleanQuery = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let cleanQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let live = notes
+            .filter { $0.folder != "Trash" }
+            .sorted { $0.timestamp > $1.timestamp }
         if cleanQuery.isEmpty {
-            return Array(notes.prefix(8))
+            return Array(live.prefix(8))
         }
-        return notes.filter { note in
-            note.title.lowercased().contains(cleanQuery) ||
-            note.folder.lowercased().contains(cleanQuery) ||
-            note.content.lowercased().contains(cleanQuery) ||
-            note.transcript.contains(where: { $0.text.lowercased().contains(cleanQuery) || $0.speaker.lowercased().contains(cleanQuery) })
+        return live.filter { note in
+            note.title.localizedCaseInsensitiveContains(cleanQuery) ||
+            note.folder.localizedCaseInsensitiveContains(cleanQuery) ||
+            note.content.localizedCaseInsensitiveContains(cleanQuery) ||
+            note.transcript.contains(where: { $0.text.localizedCaseInsensitiveContains(cleanQuery) || $0.speaker.localizedCaseInsensitiveContains(cleanQuery) })
         }
+    }
+
+    private func iconName(for note: NoteItem) -> String {
+        if note.pptxPath != nil { return "sparkles.tv" }
+        if note.pdfPath != nil { return "doc.richtext" }
+        if note.audioPath != nil { return "waveform" }
+        return "doc.text"
     }
 
     var body: some View {
@@ -31,7 +42,7 @@ struct CommandPaletteView: View {
                 Image(systemName: "magnifyingglass")
                     .foregroundColor(primaryAccent)
                     .font(.title3)
-                TextField("Search notes, folders, or transcript keywords...", text: $query)
+                TextField("Search notes, folders and transcripts", text: $query)
                     .textFieldStyle(.plain)
                     .font(.title3)
                     .onChange(of: query) { _, _ in
@@ -40,11 +51,11 @@ struct CommandPaletteView: View {
                 Spacer()
                 Button(action: { isOpen = false }) {
                     Text("Esc")
-                        .font(.system(size: 9, design: .monospaced))
+                        .font(.system(size: 10, design: .monospaced))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
                         .background(Color.cardBackground(isDark))
-                        .cornerRadius(4)
+                        .cornerRadius(AppRadius.xs)
                 }
                 .buttonStyle(.plain)
             }
@@ -61,44 +72,46 @@ struct CommandPaletteView: View {
                         WhispEmptyStateView(
                             icon: "magnifyingglass",
                             title: "No Matching Notes",
-                            description: query.isEmpty ? "Start typing to search notes..." : "No notes matched \"\(query)\"."
+                            description: query.isEmpty ? "Start typing to search your notes." : "No notes match “\(query)”."
                         )
                         .frame(height: 180)
                     } else {
                         ForEach(Array(filteredResults.enumerated()), id: \.element.id) { idx, note in
                             HStack {
-                                Image(systemName: note.isStandalone ? "doc.text" : "waveform")
+                                Image(systemName: iconName(for: note))
                                     .foregroundColor(idx == selectionIndex ? primaryAccent : .secondary)
+                                    .frame(width: 16)
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(note.title)
-                                        .font(.subheadline)
-                                        .fontWeight(.bold)
-                                    Text("Folder: \(note.folder) • \(note.timestamp, style: .date)")
-                                        .font(.system(size: 9))
-                                        .foregroundColor(.secondary)
+                                    Text(note.title.isEmpty ? "Untitled Note" : note.title)
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundColor(Color.appText(isDark))
+                                        .lineLimit(1)
+                                    Text("\(note.folder) · \(note.timestamp.formatted(.dateTime.month(.abbreviated).day().year()))")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(Color.appTextSecondary(isDark))
                                     if let snippet = snippetMatch(for: note, query: query) {
                                         Text(snippet)
-                                            .font(.system(size: 9))
-                                            .italic()
-                                            .foregroundColor(primaryAccent.opacity(0.8))
+                                            .font(.system(size: 11))
+                                            .foregroundColor(Color.appTextMuted(isDark))
                                             .lineLimit(1)
+                                            .truncationMode(.tail)
                                     }
                                 }
                                 Spacer()
                                 if idx == selectionIndex {
-                                    Text("Jump ↵")
-                                        .font(.system(size: 9, design: .monospaced))
+                                    Text("Open ↵")
+                                        .font(.system(size: 10, design: .monospaced))
                                         .foregroundColor(primaryAccent)
                                         .padding(.horizontal, 6)
                                         .padding(.vertical, 2)
                                         .background(primaryAccent.opacity(0.15))
-                                        .cornerRadius(4)
+                                        .cornerRadius(AppRadius.xs)
                                 }
                             }
                             .padding(.vertical, 6)
                             .padding(.horizontal, 8)
                             .background(idx == selectionIndex ? primaryAccent.opacity(0.12) : Color.clear)
-                            .cornerRadius(6)
+                            .cornerRadius(AppRadius.sm)
                             .contentShape(Rectangle())
                             .id(idx)
                             .onTapGesture {
@@ -120,11 +133,11 @@ struct CommandPaletteView: View {
             HStack(spacing: 12) {
                 HStack(spacing: 4) {
                     Text("↑↓")
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
                         .padding(.horizontal, 4)
                         .padding(.vertical, 2)
                         .background(Color.cardBackground(isDark))
-                        .cornerRadius(3)
+                        .cornerRadius(AppRadius.xs)
                     Text("Navigate")
                         .font(.caption2)
                         .foregroundColor(.secondary)
@@ -132,11 +145,11 @@ struct CommandPaletteView: View {
 
                 HStack(spacing: 4) {
                     Text("↵")
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
                         .padding(.horizontal, 4)
                         .padding(.vertical, 2)
                         .background(Color.cardBackground(isDark))
-                        .cornerRadius(3)
+                        .cornerRadius(AppRadius.xs)
                     Text("Select")
                         .font(.caption2)
                         .foregroundColor(.secondary)
@@ -144,11 +157,11 @@ struct CommandPaletteView: View {
 
                 HStack(spacing: 4) {
                     Text("esc")
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
                         .padding(.horizontal, 4)
                         .padding(.vertical, 2)
                         .background(Color.cardBackground(isDark))
-                        .cornerRadius(3)
+                        .cornerRadius(AppRadius.xs)
                     Text("Dismiss")
                         .font(.caption2)
                         .foregroundColor(.secondary)
@@ -161,16 +174,16 @@ struct CommandPaletteView: View {
         }
         .frame(width: 540)
         .background(
-            RoundedRectangle(cornerRadius: AppRadius.lg)
+            RoundedRectangle(cornerRadius: AppRadius.xl)
                 .fill(.regularMaterial)
                 .overlay(
-                    RoundedRectangle(cornerRadius: AppRadius.lg)
+                    RoundedRectangle(cornerRadius: AppRadius.xl)
                         .fill(Color.panelBackground(isDark).opacity(0.85))
                 )
         )
-        .cornerRadius(AppRadius.lg)
+        .cornerRadius(AppRadius.xl)
         .overlay(
-            RoundedRectangle(cornerRadius: AppRadius.lg)
+            RoundedRectangle(cornerRadius: AppRadius.xl)
                 .stroke(Color.subtleBorder(isDark), lineWidth: 1)
         )
         .shadow(color: Color.black.opacity(0.4), radius: 24, x: 0, y: 12)
@@ -199,22 +212,44 @@ struct CommandPaletteView: View {
         }
     }
 
+    /// The matching line, with markdown syntax stripped and trimmed to whole words around the match.
     private func snippetMatch(for note: NoteItem, query: String) -> String? {
-        let clean = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !clean.isEmpty else { return nil }
-        
-        if let range = note.content.lowercased().range(of: clean) {
-            let start = note.content.index(range.lowerBound, offsetBy: -15, limitedBy: note.content.startIndex) ?? note.content.startIndex
-            let end = note.content.index(range.upperBound, offsetBy: 35, limitedBy: note.content.endIndex) ?? note.content.endIndex
-            let excerpt = String(note.content[start..<end]).replacingOccurrences(of: "\n", with: " ")
-            return "... \(excerpt) ..."
+        let clean = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty, !note.title.localizedCaseInsensitiveContains(clean) else { return nil }
+
+        if let line = note.content
+            .components(separatedBy: .newlines)
+            .first(where: { $0.localizedCaseInsensitiveContains(clean) }) {
+            return Self.excerpt(around: clean, in: Self.plainText(line))
         }
-        
-        if let seg = note.transcript.first(where: { $0.text.lowercased().contains(clean) }) {
-            return "\(seg.speaker): \"\(seg.text)\""
+
+        if let seg = note.transcript.first(where: { $0.text.localizedCaseInsensitiveContains(clean) }) {
+            return "\(formatTime(seg.startTime))  \(seg.speaker): \(Self.excerpt(around: clean, in: seg.text))"
         }
-        
+
         return nil
+    }
+
+    private static func plainText(_ markdown: String) -> String {
+        var text = markdown
+        text = text.replacingOccurrences(of: #"\[\[([^\]]+)\]\]"#, with: "$1", options: .regularExpression)
+        text = text.replacingOccurrences(of: #"\[([^\]]+)\]\([^)]*\)"#, with: "$1", options: .regularExpression)
+        text = text.replacingOccurrences(of: #"^\s*(#{1,6}|>|[-*+]( \[[ xX]\])?|\d+\.)\s+"#, with: "", options: .regularExpression)
+        text = text.replacingOccurrences(of: #"[*_`|]"#, with: "", options: .regularExpression)
+        return text.trimmingCharacters(in: .whitespaces)
+    }
+
+    private static func excerpt(around query: String, in text: String, radius: Int = 40) -> String {
+        guard let range = text.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) else {
+            return String(text.prefix(radius * 2))
+        }
+        var start = text.index(range.lowerBound, offsetBy: -radius, limitedBy: text.startIndex) ?? text.startIndex
+        var end = text.index(range.upperBound, offsetBy: radius, limitedBy: text.endIndex) ?? text.endIndex
+        // Snap outward to word boundaries so words aren't cut in half.
+        while start > text.startIndex, !text[text.index(before: start)].isWhitespace { start = text.index(before: start) }
+        while end < text.endIndex, !text[end].isWhitespace { end = text.index(after: end) }
+        let body = text[start..<end].trimmingCharacters(in: .whitespaces)
+        return (start > text.startIndex ? "…" : "") + body + (end < text.endIndex ? "…" : "")
     }
 }
 

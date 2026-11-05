@@ -68,7 +68,7 @@ public class EmacsController: ObservableObject {
         EmacsCommand(name: "org-table-align", title: "Org-Mode: Auto-Align Markdown Table", shortcutHint: "TAB", action: .orgTableAlign),
         EmacsCommand(name: "org-todo-cycle", title: "Org-Mode: Cycle Task State [ ] / [-] / [x]", shortcutHint: "C-c C-c", action: .orgCycleTask),
         EmacsCommand(name: "graph-view", title: "Open Knowledge Graph Canvas", shortcutHint: "⌘G", action: .openGraph),
-        EmacsCommand(name: "zen-focus-mode", title: "Toggle Zen Focus Mode", shortcutHint: "⌘⇧F", action: .toggleFocus),
+        EmacsCommand(name: "zen-focus-mode", title: "Toggle Focus Mode", shortcutHint: "⇧⌘D", action: .toggleFocus),
         EmacsCommand(name: "table-of-contents", title: "Open Document Outline (TOC)", shortcutHint: "⌘⇧O", action: .openTOC),
         EmacsCommand(name: "ai-assistant", title: "Ask Gemma Local AI Study Assistant", shortcutHint: "✨", action: .openAI),
         EmacsCommand(name: "export-pdf-document", title: "Export Document as PDF", shortcutHint: "PDF", action: .exportPDF),

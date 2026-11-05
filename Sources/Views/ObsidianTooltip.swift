@@ -50,15 +50,15 @@ struct ObsidianTooltipBubble: View {
                         .padding(.horizontal, 4)
                         .padding(.vertical, 1)
                         .background(Color.white.opacity(0.12))
-                        .cornerRadius(3)
+                        .cornerRadius(AppRadius.xs)
                 }
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4.5)
             .background(Color(red: 24/255, green: 24/255, blue: 27/255)) // Zinc 900
-            .cornerRadius(6)
+            .cornerRadius(AppRadius.sm)
             .overlay(
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: AppRadius.sm)
                     .stroke(Color.white.opacity(0.15), lineWidth: 0.8)
             )
             .shadow(color: Color.black.opacity(0.35), radius: 6, x: 0, y: 3)

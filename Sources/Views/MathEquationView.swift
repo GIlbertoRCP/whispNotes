@@ -60,7 +60,7 @@ public struct InlineMathView: View {
         .padding(.horizontal, 3)
         .padding(.vertical, 1)
         .background(Color.primary.opacity(0.04))
-        .cornerRadius(4)
+        .cornerRadius(AppRadius.xs)
     }
 }
 

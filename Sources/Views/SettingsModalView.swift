@@ -4,10 +4,10 @@ import UniformTypeIdentifiers
 // MARK: - Settings Modal View
 enum SettingsTab: String, CaseIterable, Identifiable {
     case preferences = "Preferences"
-    case typography = "Typography"
+    case typography = "Editor"
     case aiProvider = "AI Provider"
     case cloudSync = "Cloud Sync & Vault"
-    case audioDevices = "Audio Devices"
+    case audioDevices = "Audio & Recording"
     case labs = "Experimental Labs"
     case updates = "Updates & About"
     
@@ -16,7 +16,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     var iconName: String {
         switch self {
         case .preferences: return "gearshape"
-        case .typography: return "textformat"
+        case .typography: return "character.cursor.ibeam"
         case .aiProvider: return "sparkles"
         case .cloudSync: return "folder.badge.gearshape"
         case .audioDevices: return "mic"
@@ -29,6 +29,8 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 struct SettingsModalView: View {
     @Binding var isOpen: Bool
     @Binding var notes: [NoteItem]
+    /// The tab shown when Settings opens.
+    var initialTab: SettingsTab = .preferences
     
     @AppStorage("isDarkMode") private var isDarkMode = true
     @AppStorage("colorTheme") private var colorTheme = "Classic Minimal"
@@ -50,6 +52,10 @@ struct SettingsModalView: View {
     @State private var showVimHelpSheet = false
     @State private var showEmacsHelpSheet = false
     @State private var selectedTab: SettingsTab = .preferences
+    @AppStorage(EditorPreferenceKey.defaultViewMode) private var defaultViewMode: String = EditModeType.split.rawValue
+    @AppStorage(EditorPreferenceKey.readingWidth) private var readingWidth: String = ReadingWidth.standard.rawValue
+    @AppStorage(QuickRecordPreferenceKey.showInMenuBar) private var quickRecordInMenuBar = true
+    @AppStorage(QuickRecordPreferenceKey.globalShortcut) private var quickRecordShortcut = true
     @StateObject private var deviceManager = AudioDeviceManager.shared
     @StateObject private var downloader = WhisperModelDownloader.shared
     @StateObject private var gemmaDownloader = GemmaModelDownloader.shared
@@ -60,11 +66,7 @@ struct SettingsModalView: View {
     }
     
     private var onPrimaryAccentTextColor: Color {
-        if isDarkMode && (colorTheme == "Classic Minimal" || colorTheme == "Nord Arctic" || colorTheme == "Rose Pine") {
-            return Color(red: 15/255, green: 23/255, blue: 42/255) // Deep Slate / Black for high contrast on light buttons
-        } else {
-            return Color.white
-        }
+        Color.onAccent(isDarkMode, themeName: colorTheme)
     }
     
     private var subtitleTextColor: Color {
@@ -89,9 +91,8 @@ struct SettingsModalView: View {
                     Image(systemName: "slider.horizontal.3")
                         .font(.title2)
                         .foregroundColor(primaryAccent)
-                    Text("SETTINGS")
-                        .font(.title3)
-                        .fontWeight(.heavy)
+                    Text("Settings")
+                        .font(.headline)
                 }
                 .padding(.bottom, 8)
                 
@@ -112,7 +113,7 @@ struct SettingsModalView: View {
                             .padding(.vertical, 10)
                             .background(selectedTab == tab ? (isDarkMode ? Color.white.opacity(0.14) : primaryAccent.opacity(0.12)) : Color.clear)
                             .foregroundColor(selectedTab == tab ? (isDarkMode ? .white : primaryAccent) : (isDarkMode ? Color(red: 160/255, green: 174/255, blue: 192/255) : Color(red: 100/255, green: 116/255, blue: 139/255)))
-                            .cornerRadius(8)
+                            .cornerRadius(AppRadius.md)
                         }
                         .buttonStyle(.plain)
                     }
@@ -121,7 +122,7 @@ struct SettingsModalView: View {
                 Spacer()
             }
             .padding(20)
-            .frame(width: 220)
+            .frame(width: 200)
             .background(Color.sidebarBackground(isDarkMode))
             
             Divider()
@@ -182,13 +183,7 @@ struct SettingsModalView: View {
                 HStack {
                     Spacer()
                     
-                    Button("Close") {
-                        isOpen = false
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundColor(subtitleTextColor)
-                    .padding(.horizontal, 12)
-                    
+                    // Settings apply as you change them, so one button is enough.
                     Button(action: { isOpen = false }) {
                         Text("Done")
                             .font(.subheadline)
@@ -197,18 +192,19 @@ struct SettingsModalView: View {
                             .padding(.horizontal, 18)
                             .padding(.vertical, 8)
                             .background(primaryAccent)
-                            .cornerRadius(8)
+                            .cornerRadius(AppRadius.md)
                     }
                     .buttonStyle(.plain)
+                    .keyboardShortcut(.defaultAction)
                 }
                 .padding(14)
             }
             .background(Color.panelBackground(isDarkMode))
         }
-        .frame(width: 740, height: 520)
-        .cornerRadius(16)
+        .adaptiveSheetFrame(width: 740, height: 520)
+        .cornerRadius(AppRadius.xl)
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: AppRadius.xl)
                 .stroke(Color.subtleBorder(isDarkMode), lineWidth: 1)
         )
         .preferredColorScheme(isDarkMode ? .dark : .light)
@@ -227,6 +223,7 @@ struct SettingsModalView: View {
             )
         }
         .onAppear {
+            selectedTab = initialTab
             deviceManager.refreshDevices()
             downloader.checkDownloadedModels()
         }
@@ -235,10 +232,10 @@ struct SettingsModalView: View {
     private var headerTitle: String {
         switch selectedTab {
         case .preferences: return "Preferences & Theme Presets"
-        case .typography: return "Editor Typography & Sizing"
+        case .typography: return "Editor"
         case .aiProvider: return "AI Speech & Transcriber Engine"
         case .cloudSync: return "Vault Storage & Backup"
-        case .audioDevices: return "Audio Capture & Hardware"
+        case .audioDevices: return "Audio & Recording"
         case .labs: return "Experimental Features & Labs"
         case .updates: return "Software Updates & About"
         }
@@ -247,10 +244,10 @@ struct SettingsModalView: View {
     private var headerSubtitle: String {
         switch selectedTab {
         case .preferences: return "Manage dark mode, theme palettes, and default speaker tags."
-        case .typography: return "Customize font family design and editor font sizes."
+        case .typography: return "How notes open, how wide text runs, and the editor font."
         case .aiProvider: return "Download offline Whisper GGUF models for local execution."
         case .cloudSync: return "Manage vault storage backup and JSON export."
-        case .audioDevices: return "Select active input microphone and speaker hardware."
+        case .audioDevices: return "Microphone, speakers and Quick Record."
         case .labs: return "Test power-user GNU Emacs modal keybindings, Org-Mode tools, and typewriter scrolling."
         case .updates: return "Check for new versions, changelogs, and manage release updates."
         }
@@ -281,7 +278,7 @@ struct SettingsModalView: View {
             }
             .padding(16)
             .background(Color.cardBackground(isDarkMode))
-            .cornerRadius(12)
+            .cornerRadius(AppRadius.lg)
             
             // Card 2: Color Theme Presets with Live Swatches
             VStack(alignment: .leading, spacing: 12) {
@@ -314,7 +311,7 @@ struct SettingsModalView: View {
             }
             .padding(16)
             .background(Color.cardBackground(isDarkMode))
-            .cornerRadius(12)
+            .cornerRadius(AppRadius.lg)
 
             // Card 3: Speaker Naming Template
             VStack(alignment: .leading, spacing: 10) {
@@ -331,7 +328,7 @@ struct SettingsModalView: View {
             }
             .padding(16)
             .background(Color.cardBackground(isDarkMode))
-            .cornerRadius(12)
+            .cornerRadius(AppRadius.lg)
 
             // Card 4: Vim Keybindings & Modal Editing
             VStack(alignment: .leading, spacing: 12) {
@@ -379,7 +376,7 @@ struct SettingsModalView: View {
                             .padding(.vertical, 5)
                             .background(isDarkMode ? Color.white.opacity(0.14) : primaryAccent.opacity(0.12))
                             .foregroundColor(isDarkMode ? .white : primaryAccent)
-                            .cornerRadius(6)
+                            .cornerRadius(AppRadius.sm)
                         }
                         .buttonStyle(.plain)
                     }
@@ -387,12 +384,77 @@ struct SettingsModalView: View {
             }
             .padding(16)
             .background(Color.cardBackground(isDarkMode))
-            .cornerRadius(12)
+            .cornerRadius(AppRadius.lg)
+        }
+    }
+
+    /// Label on the left, switch pinned to the right edge, so stacked switches line up.
+    private func settingsSwitchRow(title: String, detail: String, isOn: Binding<Bool>) -> some View {
+        HStack(alignment: .center, spacing: AppSpacing.lg) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                Text(detail)
+                    .font(.caption)
+                    .foregroundColor(subtitleTextColor)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+            Toggle(title, isOn: isOn)
+                .toggleStyle(.switch)
+                .labelsHidden()
         }
     }
 
     private var typographyTabContent: some View {
         VStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("DEFAULT VIEW")
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundColor(sectionHeaderTextColor)
+
+                Picker("", selection: $defaultViewMode) {
+                    Text("Edit").tag(EditModeType.edit.rawValue)
+                    Text("Split").tag(EditModeType.split.rawValue)
+                    Text("Preview").tag(EditModeType.preview.rawValue)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+
+                Text("Notes open this way. Notes with an attached PDF or slides open in the viewer, and empty notes always open in Edit.")
+                    .font(.caption)
+                    .foregroundColor(subtitleTextColor)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.cardBackground(isDarkMode))
+            .cornerRadius(AppRadius.lg)
+
+            VStack(alignment: .leading, spacing: 12) {
+                Text("READING WIDTH")
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundColor(sectionHeaderTextColor)
+
+                Picker("", selection: $readingWidth) {
+                    ForEach(ReadingWidth.allCases) { width in
+                        Text(width.title).tag(width.rawValue)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+
+                ReadingWidthPreview(width: ReadingWidth(rawValue: readingWidth) ?? .standard, isDark: isDarkMode, accent: primaryAccent)
+
+                Text("The widest a line of text gets in Edit and Preview. Narrower lines are easier to read; Full Width uses the whole pane.")
+                    .font(.caption)
+                    .foregroundColor(subtitleTextColor)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.cardBackground(isDarkMode))
+            .cornerRadius(AppRadius.lg)
+
             VStack(alignment: .leading, spacing: 12) {
                 Text("FONT SIZE (\(Int(editorFontSize)) pt)")
                     .font(.system(size: 11, weight: .bold, design: .monospaced))
@@ -403,7 +465,7 @@ struct SettingsModalView: View {
             }
             .padding(16)
             .background(Color.cardBackground(isDarkMode))
-            .cornerRadius(12)
+            .cornerRadius(AppRadius.lg)
             
             VStack(alignment: .leading, spacing: 12) {
                 Text("FONT FAMILY DESIGN")
@@ -419,7 +481,7 @@ struct SettingsModalView: View {
             }
             .padding(16)
             .background(Color.cardBackground(isDarkMode))
-            .cornerRadius(12)
+            .cornerRadius(AppRadius.lg)
         }
     }
     
@@ -449,20 +511,20 @@ struct SettingsModalView: View {
                                 
                                 if isActive {
                                     Text("Active Model")
-                                        .font(.system(size: 9, weight: .bold))
+                                        .font(.system(size: 10, weight: .bold))
                                         .padding(.horizontal, 6)
                                         .padding(.vertical, 2)
                                         .background(Color.emerald.opacity(0.2))
                                         .foregroundColor(.emerald)
-                                        .cornerRadius(4)
+                                        .cornerRadius(AppRadius.xs)
                                 } else if isDownloaded {
                                     Text("Downloaded")
-                                        .font(.system(size: 9, weight: .bold))
+                                        .font(.system(size: 10, weight: .bold))
                                         .padding(.horizontal, 6)
                                         .padding(.vertical, 2)
                                         .background(ThemeColors.secondary(colorTheme).opacity(0.2))
                                         .foregroundColor(ThemeColors.secondary(colorTheme))
-                                        .cornerRadius(4)
+                                        .cornerRadius(AppRadius.xs)
                                 }
                             }
                             
@@ -492,7 +554,7 @@ struct SettingsModalView: View {
                                 .padding(.vertical, 5)
                                 .background(isDarkMode ? Color.white.opacity(0.16) : Color.black.opacity(0.08))
                                 .foregroundColor(isDarkMode ? .white : Color(red: 15/255, green: 23/255, blue: 42/255))
-                                .cornerRadius(6)
+                                .cornerRadius(AppRadius.sm)
                             }
                         } else {
                             Button(action: { downloader.startDownload(model: model) }) {
@@ -506,7 +568,7 @@ struct SettingsModalView: View {
                                 .padding(.vertical, 5)
                                 .background(primaryAccent)
                                 .foregroundColor(onPrimaryAccentTextColor)
-                                .cornerRadius(6)
+                                .cornerRadius(AppRadius.sm)
                             }
                             .buttonStyle(.plain)
                         }
@@ -517,16 +579,16 @@ struct SettingsModalView: View {
                             ProgressView(value: downloader.downloadProgress)
                                 .accentColor(primaryAccent)
                             Text("Downloading from HuggingFace... \(Int(downloader.downloadProgress * 100))%")
-                                .font(.system(size: 9, design: .monospaced))
+                                .font(.system(size: 10, design: .monospaced))
                                 .foregroundColor(subtitleTextColor)
                         }
                     }
                 }
                 .padding(14)
                 .background(Color.cardBackground(isDarkMode))
-                .cornerRadius(10)
+                .cornerRadius(AppRadius.lg)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: AppRadius.lg)
                         .stroke(isActive ? Color.emerald.opacity(0.4) : Color.subtleBorder(isDarkMode), lineWidth: 1)
                 )
             }
@@ -547,12 +609,12 @@ struct SettingsModalView: View {
                             
                             if gemmaDownloader.isDownloaded {
                                 Text("Downloaded")
-                                    .font(.system(size: 9, weight: .bold))
+                                    .font(.system(size: 10, weight: .bold))
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
                                     .background(Color.emerald.opacity(0.2))
                                     .foregroundColor(.emerald)
-                                    .cornerRadius(4)
+                                    .cornerRadius(AppRadius.xs)
                             }
                         }
                         
@@ -589,7 +651,7 @@ struct SettingsModalView: View {
                             .padding(.vertical, 5)
                             .background(primaryAccent)
                             .foregroundColor(onPrimaryAccentTextColor)
-                            .cornerRadius(6)
+                            .cornerRadius(AppRadius.sm)
                         }
                         .buttonStyle(.plain)
                     }
@@ -600,16 +662,16 @@ struct SettingsModalView: View {
                         ProgressView(value: gemmaDownloader.downloadProgress)
                             .accentColor(primaryAccent)
                         Text(gemmaDownloader.statusMessage)
-                            .font(.system(size: 9, design: .monospaced))
+                            .font(.system(size: 10, design: .monospaced))
                             .foregroundColor(subtitleTextColor)
                     }
                 }
             }
             .padding(14)
             .background(Color.cardBackground(isDarkMode))
-            .cornerRadius(10)
+            .cornerRadius(AppRadius.lg)
             .overlay(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: AppRadius.lg)
                     .stroke(gemmaDownloader.isDownloaded ? Color.emerald.opacity(0.4) : Color.subtleBorder(isDarkMode), lineWidth: 1)
             )
         }
@@ -627,7 +689,7 @@ struct SettingsModalView: View {
             }
             .padding(16)
             .background(Color.cardBackground(isDarkMode))
-            .cornerRadius(12)
+            .cornerRadius(AppRadius.lg)
             
             HStack(spacing: 12) {
                 Button(action: exportBackup) {
@@ -641,7 +703,7 @@ struct SettingsModalView: View {
                     .padding(.vertical, 8)
                     .background(primaryAccent)
                     .foregroundColor(onPrimaryAccentTextColor)
-                    .cornerRadius(8)
+                    .cornerRadius(AppRadius.md)
                 }
                 .buttonStyle(.plain)
                 
@@ -656,9 +718,9 @@ struct SettingsModalView: View {
                     .padding(.vertical, 8)
                     .background(isDarkMode ? Color.white.opacity(0.12) : Color.black.opacity(0.06))
                     .foregroundColor(isDarkMode ? .white : Color(red: 15/255, green: 23/255, blue: 42/255))
-                    .cornerRadius(8)
+                    .cornerRadius(AppRadius.md)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 8)
+                        RoundedRectangle(cornerRadius: AppRadius.md)
                             .stroke(Color.subtleBorder(isDarkMode), lineWidth: 1)
                     )
                 }
@@ -669,6 +731,39 @@ struct SettingsModalView: View {
     
     private var audioDevicesTabContent: some View {
         VStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 12) {
+                    Image(systemName: "record.circle")
+                        .foregroundColor(SemanticColor.record)
+                        .font(.title2)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Quick Record")
+                            .font(.headline)
+                        Text("Start a recording without switching away from your call.")
+                            .font(.caption)
+                            .foregroundColor(subtitleTextColor)
+                    }
+                }
+
+                Divider().background(Color.subtleBorder(isDarkMode))
+
+                settingsSwitchRow(
+                    title: "Show in menu bar",
+                    detail: "A waveform icon in the menu bar; it shows the elapsed time while recording.",
+                    isOn: $quickRecordInMenuBar
+                )
+
+                settingsSwitchRow(
+                    title: "Global shortcut \(GlobalHotKey.displayString)",
+                    detail: "Works from any app. Records into the open note when WhispNotes is in front and that note has no recording yet; otherwise into a new note. Press again to stop and transcribe.",
+                    isOn: $quickRecordShortcut
+                )
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.cardBackground(isDarkMode))
+            .cornerRadius(AppRadius.lg)
+
             // Microphone selection card
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 12) {
@@ -692,7 +787,7 @@ struct SettingsModalView: View {
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.cardBackground(isDarkMode))
-            .cornerRadius(12)
+            .cornerRadius(AppRadius.lg)
             
             // Speaker selection card
             VStack(alignment: .leading, spacing: 12) {
@@ -717,7 +812,7 @@ struct SettingsModalView: View {
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.cardBackground(isDarkMode))
-            .cornerRadius(12)
+            .cornerRadius(AppRadius.lg)
         }
     }
 
@@ -800,7 +895,7 @@ struct SettingsModalView: View {
                             .padding(.vertical, 5)
                             .background(isDarkMode ? Color.white.opacity(0.14) : primaryAccent.opacity(0.12))
                             .foregroundColor(isDarkMode ? .white : primaryAccent)
-                            .cornerRadius(6)
+                            .cornerRadius(AppRadius.sm)
                         }
                         .buttonStyle(.plain)
                     }
@@ -808,7 +903,7 @@ struct SettingsModalView: View {
             }
             .padding(16)
             .background(Color.cardBackground(isDarkMode))
-            .cornerRadius(12)
+            .cornerRadius(AppRadius.lg)
 
             // Card 2: Org-Mode Productivity Tools
             VStack(alignment: .leading, spacing: 12) {
@@ -851,7 +946,7 @@ struct SettingsModalView: View {
             }
             .padding(16)
             .background(Color.cardBackground(isDarkMode))
-            .cornerRadius(12)
+            .cornerRadius(AppRadius.lg)
 
             // Card 3: Typewriter Center Scrolling
             VStack(alignment: .leading, spacing: 12) {
@@ -871,7 +966,7 @@ struct SettingsModalView: View {
             }
             .padding(16)
             .background(Color.cardBackground(isDarkMode))
-            .cornerRadius(12)
+            .cornerRadius(AppRadius.lg)
 
             // Card 4: Local AI Auto-Tagging
             VStack(alignment: .leading, spacing: 12) {
@@ -891,7 +986,7 @@ struct SettingsModalView: View {
             }
             .padding(16)
             .background(Color.cardBackground(isDarkMode))
-            .cornerRadius(12)
+            .cornerRadius(AppRadius.lg)
         }
     }
 
@@ -901,7 +996,7 @@ struct SettingsModalView: View {
             // App Identity Card
             HStack(spacing: 14) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: AppRadius.lg)
                         .fill(primaryAccent.opacity(0.15))
                         .frame(width: 48, height: 48)
                     
@@ -914,7 +1009,7 @@ struct SettingsModalView: View {
                     HStack(spacing: 8) {
                         Text("WhispNotes")
                             .font(.title3)
-                            .fontWeight(.heavy)
+                            .fontWeight(.bold)
                         
                         Text("v\(updater.currentVersion)")
                             .font(.caption)
@@ -923,7 +1018,7 @@ struct SettingsModalView: View {
                             .padding(.vertical, 2)
                             .background(isDarkMode ? Color.white.opacity(0.16) : primaryAccent.opacity(0.12))
                             .foregroundColor(isDarkMode ? .white : primaryAccent)
-                            .cornerRadius(4)
+                            .cornerRadius(AppRadius.xs)
                     }
                     
                     Text("Native Intelligent Lecture & Document Notes with Local AI & Vault Sync.")
@@ -935,9 +1030,9 @@ struct SettingsModalView: View {
             }
             .padding(16)
             .background(Color.cardBackground(isDarkMode))
-            .cornerRadius(12)
+            .cornerRadius(AppRadius.lg)
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: AppRadius.lg)
                     .stroke(Color.subtleBorder(isDarkMode), lineWidth: 1)
             )
 
@@ -995,7 +1090,7 @@ struct SettingsModalView: View {
                         .padding(.horizontal, 14)
                         .padding(.vertical, 8)
                         .background(primaryAccent)
-                        .cornerRadius(8)
+                        .cornerRadius(AppRadius.md)
                     }
                     .buttonStyle(.plain)
                     .disabled(isCheckingForUpdates)
@@ -1015,9 +1110,9 @@ struct SettingsModalView: View {
             }
             .padding(16)
             .background(Color.cardBackground(isDarkMode))
-            .cornerRadius(12)
+            .cornerRadius(AppRadius.lg)
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: AppRadius.lg)
                     .stroke(Color.subtleBorder(isDarkMode), lineWidth: 1)
             )
 
@@ -1034,7 +1129,7 @@ struct SettingsModalView: View {
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .background(primaryAccent.opacity(0.12))
-                    .cornerRadius(6)
+                    .cornerRadius(AppRadius.sm)
                 }
                 .buttonStyle(.plain)
                 .help("Export local diagnostic logs for bug reports")
@@ -1072,10 +1167,10 @@ struct SettingsModalView: View {
                     .controlSize(.small)
                 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Checking for Updates...")
+                    Text("Checking for Updates…")
                         .font(.subheadline)
                         .fontWeight(.bold)
-                    Text("Contacting GitHub releases repository...")
+                    Text("Contacting GitHub releases repository…")
                         .font(.caption)
                         .foregroundColor(subtitleTextColor)
                 }
@@ -1083,9 +1178,9 @@ struct SettingsModalView: View {
             }
             .padding(16)
             .background(Color.cardBackground(isDarkMode))
-            .cornerRadius(12)
+            .cornerRadius(AppRadius.lg)
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: AppRadius.lg)
                     .stroke(Color.subtleBorder(isDarkMode), lineWidth: 1)
             )
             
@@ -1125,7 +1220,7 @@ struct SettingsModalView: View {
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
                         .background(primaryAccent)
-                        .cornerRadius(6)
+                        .cornerRadius(AppRadius.sm)
                     }
                     .buttonStyle(.plain)
                 }
@@ -1137,7 +1232,7 @@ struct SettingsModalView: View {
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(isDarkMode ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
-                        .cornerRadius(4)
+                        .cornerRadius(AppRadius.xs)
                     
                     Image(systemName: "arrow.right")
                         .font(.caption2)
@@ -1150,14 +1245,14 @@ struct SettingsModalView: View {
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(primaryAccent.opacity(0.15))
-                        .cornerRadius(4)
+                        .cornerRadius(AppRadius.xs)
                 }
             }
             .padding(16)
             .background(primaryAccent.opacity(0.06))
-            .cornerRadius(12)
+            .cornerRadius(AppRadius.lg)
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: AppRadius.lg)
                     .stroke(primaryAccent.opacity(0.35), lineWidth: 1)
             )
             
@@ -1192,7 +1287,7 @@ struct SettingsModalView: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
                         .background(Color.emerald.opacity(0.14))
-                        .cornerRadius(4)
+                        .cornerRadius(AppRadius.xs)
                 }
                 
                 if let release = updater.latestRelease {
@@ -1208,9 +1303,9 @@ struct SettingsModalView: View {
             }
             .padding(16)
             .background(Color.emerald.opacity(0.06))
-            .cornerRadius(12)
+            .cornerRadius(AppRadius.lg)
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: AppRadius.lg)
                     .stroke(Color.emerald.opacity(0.3), lineWidth: 1)
             )
             
@@ -1244,15 +1339,15 @@ struct SettingsModalView: View {
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
                         .background(primaryAccent.opacity(0.12))
-                        .cornerRadius(6)
+                        .cornerRadius(AppRadius.sm)
                 }
                 .buttonStyle(.plain)
             }
             .padding(16)
             .background(Color.cardBackground(isDarkMode))
-            .cornerRadius(12)
+            .cornerRadius(AppRadius.lg)
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: AppRadius.lg)
                     .stroke(Color.subtleBorder(isDarkMode), lineWidth: 1)
             )
             
@@ -1281,9 +1376,9 @@ struct SettingsModalView: View {
             }
             .padding(16)
             .background(Color.cardBackground(isDarkMode))
-            .cornerRadius(12)
+            .cornerRadius(AppRadius.lg)
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: AppRadius.lg)
                     .stroke(Color.subtleBorder(isDarkMode), lineWidth: 1)
             )
         }
@@ -1357,9 +1452,9 @@ struct ThemeSwatchButton: View {
                     .padding(.horizontal, 6)
                     .padding(.vertical, 5)
                     .background(definition.cardBackgroundElevated)
-                    .cornerRadius(4)
+                    .cornerRadius(AppRadius.xs)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 4)
+                        RoundedRectangle(cornerRadius: AppRadius.xs)
                             .stroke(definition.border, lineWidth: 0.5)
                     )
                     .padding(5)
@@ -1394,19 +1489,58 @@ struct ThemeSwatchButton: View {
                         .lineLimit(1)
                     
                     Text(subtitle)
-                        .font(.system(size: 9, weight: .medium))
+                        .font(.system(size: 10, weight: .medium))
                         .foregroundColor(.secondary)
                         .lineLimit(1)
                 }
             }
             .padding(8)
             .background(isSelected ? definition.primary.opacity(0.1) : Color.cardBackground(isDark))
-            .cornerRadius(AppRadius.md)
+            .cornerRadius(AppRadius.lg)
             .overlay(
-                RoundedRectangle(cornerRadius: AppRadius.md)
+                RoundedRectangle(cornerRadius: AppRadius.lg)
                     .stroke(isSelected ? definition.primary : Color.subtleBorder(isDark), lineWidth: isSelected ? 1.5 : 1)
             )
         }
         .buttonStyle(.plain)
+    }
+}
+
+
+// MARK: - Reading width preview
+/// A tiny pane with text bars, so the choice is visible before closing Settings.
+private struct ReadingWidthPreview: View {
+    let width: ReadingWidth
+    let isDark: Bool
+    let accent: Color
+
+    private var fraction: CGFloat {
+        switch width {
+        case .narrow: return 0.55
+        case .standard: return 0.68
+        case .wide: return 0.86
+        case .full: return 1
+        }
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            let column = (geo.size.width - 24) * fraction
+            VStack(alignment: .leading, spacing: 5) {
+                ForEach([1.0, 0.92, 0.97, 0.6], id: \.self) { line in
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color.appTextSecondary(isDark).opacity(0.45))
+                        .frame(width: column * line, height: 5)
+                }
+            }
+            .frame(width: column, alignment: .leading)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .animation(AppAnimation.panel, value: width)
+        }
+        .frame(height: 52)
+        .background(Color.panelBackground(isDark))
+        .cornerRadius(AppRadius.sm)
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).stroke(Color.subtleBorder(isDark), lineWidth: 1))
     }
 }

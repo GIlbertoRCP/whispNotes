@@ -69,11 +69,11 @@ struct NoteTabBarView: View {
                         // New Tab '+' Action Button directly adjacent to the tabs
                         Button(action: onNewTab) {
                             Image(systemName: "plus")
-                                .font(.system(size: 9.5, weight: .semibold))
+                                .font(.system(size: 9, weight: .semibold))
                                 .foregroundColor(.secondary)
                                 .frame(width: 18, height: 18)
                                 .background(Color.primary.opacity(0.04))
-                                .cornerRadius(3)
+                                .cornerRadius(AppRadius.xs)
                         }
                         .buttonStyle(.plain)
                         .help("New Tab (⌘T)")
@@ -133,7 +133,7 @@ struct TabItemView: View {
         HStack(spacing: 4) {
             // Note Type Icon
             Image(systemName: iconName)
-                .font(.system(size: 9.5, weight: isActive ? .bold : .medium))
+                .font(.system(size: 9, weight: isActive ? .bold : .medium))
                 .foregroundColor(isActive ? primaryAccent : .secondary)
             
             // Note Title
@@ -147,7 +147,7 @@ struct TabItemView: View {
             // Close Tab Button (Shows on hover or active)
             Button(action: onClose) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 7.5, weight: .bold))
+                    .font(.system(size: 8, weight: .bold))
                     .foregroundColor(isHovered || isActive ? .secondary : .clear)
                     .frame(width: 12, height: 12)
                     .background(isHovered ? Color.primary.opacity(0.12) : Color.clear)

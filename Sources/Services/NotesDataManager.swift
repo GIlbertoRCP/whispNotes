@@ -38,7 +38,14 @@ class NotesDataManager: ObservableObject {
         undoManager.setActionName(actionName)
     }
     
+    /// The vault folder. Set WHISPNOTES_DATA_DIR to point the app (or the test suite) at a scratch vault
+    /// so development runs never touch real notes.
     var appSupportDir: URL {
+        if let override = ProcessInfo.processInfo.environment["WHISPNOTES_DATA_DIR"], !override.isEmpty {
+            let dir = URL(fileURLWithPath: override, isDirectory: true)
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            return dir
+        }
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         let dir = appSupport.appendingPathComponent("com.whispnotes.app", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -576,13 +583,16 @@ class NotesDataManager: ObservableObject {
                 ---
 
                 ## ⚡ Key Shortcuts & Features
-                - **`⌘N`** — Create New Note
-                - **`⌘T`** — New Note from Template (Meeting, Cornell, RFC, Podcast)
-                - **`⌘K` / `⌘O`** — Fuzzy Vault Spotlight Search
-                - **`⌘G`** — Obsidian Knowledge Graph Canvas
-                - **`⌘⇧F`** — Zen Focus Mode
-                - **`⌘[` / `⌘]`** — History Navigation
-                - **`⌘,`** — Preferences & Color Themes
+                - **`⌘N`** — New note
+                - **`⌘T`** — New tab
+                - **`⌘K`** — Quick search palette
+                - **`⇧⌘F`** — Find in every note and transcript
+                - **`⌘G`** — Knowledge graph
+                - **`⌘D`** — Today's daily note
+                - **`⇧⌘D`** — Focus mode
+                - **`⌘B` / `⌘I`** — Bold / italic
+                - **`⌘[` / `⌘]`** — Back / forward
+                - **`⌘,`** — Settings and themes
 
                 ---
 

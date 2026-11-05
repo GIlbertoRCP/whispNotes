@@ -30,7 +30,7 @@ struct VaultSearchModalView: View {
                         .font(.title2)
                         .foregroundColor(primaryAccent)
                     
-                    TextField("Search all notes, markdown text, transcripts, and #tags...", text: $searchEngine.query)
+                    TextField("Search all notes, markdown text, transcripts, and #tags", text: $searchEngine.query)
                         .font(.headline)
                         .textFieldStyle(.plain)
                         .onChange(of: searchEngine.query) { _, _ in
@@ -56,7 +56,7 @@ struct VaultSearchModalView: View {
                             .padding(.horizontal, 6)
                             .padding(.vertical, 3)
                             .background(Color.panelBackground(isDarkMode))
-                            .cornerRadius(4)
+                            .cornerRadius(AppRadius.xs)
                     }
                     .buttonStyle(.plain)
                 }
@@ -86,14 +86,14 @@ struct VaultSearchModalView: View {
                                 .padding(.vertical, 4)
                                 .background(searchEngine.filterType == type ? primaryAccent.opacity(0.18) : Color.clear)
                                 .foregroundColor(searchEngine.filterType == type ? primaryAccent : .secondary)
-                                .cornerRadius(5)
+                                .cornerRadius(AppRadius.xs)
                             }
                             .buttonStyle(.plain)
                         }
                     }
                     .padding(3)
                     .background(Color.panelBackground(isDarkMode))
-                    .cornerRadius(7)
+                    .cornerRadius(AppRadius.md)
                     
                     Spacer()
                     
@@ -109,7 +109,7 @@ struct VaultSearchModalView: View {
                             .padding(.vertical, 3)
                             .background(searchEngine.matchCase ? primaryAccent.opacity(0.18) : Color.panelBackground(isDarkMode))
                             .foregroundColor(searchEngine.matchCase ? primaryAccent : .secondary)
-                            .cornerRadius(4)
+                            .cornerRadius(AppRadius.xs)
                     }
                     .buttonStyle(.plain)
                     .help("Match Case")
@@ -125,7 +125,7 @@ struct VaultSearchModalView: View {
                             .padding(.vertical, 3)
                             .background(searchEngine.wholeWord ? primaryAccent.opacity(0.18) : Color.panelBackground(isDarkMode))
                             .foregroundColor(searchEngine.wholeWord ? primaryAccent : .secondary)
-                            .cornerRadius(4)
+                            .cornerRadius(AppRadius.xs)
                     }
                     .buttonStyle(.plain)
                     .help("Whole Word Only")
@@ -229,18 +229,18 @@ struct VaultSearchModalView: View {
                 .padding(.vertical, 10)
                 .background(Color.sidebarBackground(isDarkMode))
             }
-            .frame(width: 700, height: 540)
+            .adaptiveSheetFrame(width: 700, height: 540)
             .background(
-                RoundedRectangle(cornerRadius: AppRadius.lg)
+                RoundedRectangle(cornerRadius: AppRadius.xl)
                     .fill(.regularMaterial)
                     .overlay(
-                        RoundedRectangle(cornerRadius: AppRadius.lg)
+                        RoundedRectangle(cornerRadius: AppRadius.xl)
                             .fill(Color.panelBackground(isDarkMode).opacity(0.85))
                     )
             )
-            .cornerRadius(AppRadius.lg)
+            .cornerRadius(AppRadius.xl)
             .overlay(
-                RoundedRectangle(cornerRadius: AppRadius.lg)
+                RoundedRectangle(cornerRadius: AppRadius.xl)
                     .stroke(Color.subtleBorder(isDarkMode), lineWidth: 1)
             )
             .shadow(color: Color.black.opacity(0.4), radius: 24, x: 0, y: 12)
@@ -303,7 +303,7 @@ struct NoteSearchResultCard: View {
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(primaryAccent.opacity(0.12))
-                        .cornerRadius(4)
+                        .cornerRadius(AppRadius.xs)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
@@ -318,7 +318,7 @@ struct NoteSearchResultCard: View {
                         Button(action: { onSelectMatch(match) }) {
                             HStack(alignment: .top, spacing: 8) {
                                 Text("L\(match.lineNumber)")
-                                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                    .font(.system(size: 10, weight: .bold, design: .monospaced))
                                     .foregroundColor(.secondary)
                                     .frame(width: 32, alignment: .trailing)
                                 
@@ -340,7 +340,7 @@ struct NoteSearchResultCard: View {
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
                             .background(Color.cardBackground(isDark).opacity(0.6))
-                            .cornerRadius(4)
+                            .cornerRadius(AppRadius.xs)
                         }
                         .buttonStyle(.plain)
                     }
@@ -349,9 +349,9 @@ struct NoteSearchResultCard: View {
             }
         }
         .background(Color.cardBackground(isDark))
-        .cornerRadius(8)
+        .cornerRadius(AppRadius.md)
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: AppRadius.md)
                 .stroke(Color.subtleBorder(isDark), lineWidth: 1)
         )
     }

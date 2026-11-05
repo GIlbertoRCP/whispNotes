@@ -38,7 +38,7 @@ struct NoteExportModalView: View {
             HStack(spacing: 0) {
                 // Left Column: Configuration Controls
                 controlsColumn
-                    .frame(minWidth: 320, idealWidth: 340, maxWidth: 360)
+                    .frame(minWidth: 280, idealWidth: 340, maxWidth: 360)
 
                 Divider()
                     .background(isDark ? Color.white.opacity(0.12) : Color.black.opacity(0.12))
@@ -54,7 +54,7 @@ struct NoteExportModalView: View {
             // Footer Action Bar
             footerBar
         }
-        .frame(minWidth: 840, idealWidth: 980, maxWidth: 1280, minHeight: 560, idealHeight: 680, maxHeight: .infinity)
+        .adaptiveSheetFrame(width: 980, height: 680)
         .background(isDark ? Color(red: 0.08, green: 0.10, blue: 0.14) : Color(red: 0.96, green: 0.97, blue: 0.99))
         .onAppear {
             if note.transcript.isEmpty {
@@ -71,8 +71,8 @@ struct NoteExportModalView: View {
                 .foregroundColor(primaryAccent)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("DOCUMENT EXPORT STUDIO")
-                    .font(.system(size: 13, weight: .black, design: .monospaced))
+                Text("Export Note")
+                    .font(.headline)
                     .foregroundColor(isDark ? .white : Color(red: 0.08, green: 0.10, blue: 0.15))
 
                 Text("Configure custom fonts, borders, indentation, and page formatting with live preview")
@@ -141,7 +141,7 @@ struct NoteExportModalView: View {
                             Spacer(minLength: 0)
 
                             Text(".\(format.fileExtension)")
-                                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
                                 .foregroundColor(config.format == format ? primaryAccent : (isDark ? Color.white.opacity(0.4) : Color.black.opacity(0.4)))
                         }
                         .padding(.horizontal, 10)
@@ -356,7 +356,7 @@ struct NoteExportModalView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 5)
                         .background(
-                            RoundedRectangle(cornerRadius: 5)
+                            RoundedRectangle(cornerRadius: AppRadius.xs)
                                 .fill(isSelected ? (isDark ? Color(red: 0.20, green: 0.25, blue: 0.36) : Color.white) : Color.clear)
                                 .shadow(color: isSelected ? Color.black.opacity(isDark ? 0.3 : 0.08) : Color.clear, radius: 2, x: 0, y: 1)
                         )
@@ -366,7 +366,7 @@ struct NoteExportModalView: View {
         }
         .padding(2)
         .background(
-            RoundedRectangle(cornerRadius: 7)
+            RoundedRectangle(cornerRadius: AppRadius.md)
                 .fill(isDark ? Color(red: 0.12, green: 0.14, blue: 0.20) : Color(red: 0.88, green: 0.90, blue: 0.93))
         )
     }
@@ -396,12 +396,12 @@ struct NoteExportModalView: View {
                         .foregroundColor(isDark ? Color.white.opacity(0.7) : Color.black.opacity(0.6))
 
                     Text(config.format.shortTitle)
-                        .font(.system(size: 9, weight: .bold))
+                        .font(.system(size: 10, weight: .bold))
                         .padding(.horizontal, 7)
                         .padding(.vertical, 3)
                         .background(primaryAccent.opacity(0.18))
                         .foregroundColor(primaryAccent)
-                        .cornerRadius(4)
+                        .cornerRadius(AppRadius.xs)
                 }
             }
             .padding(.horizontal, 16)
@@ -446,11 +446,11 @@ struct NoteExportModalView: View {
                             .fixedSize(horizontal: false, vertical: true)
 
                         HStack(spacing: 8) {
-                            Text("📁 \(note.folder)")
-                            Text("•")
-                            Text("🕒 \(DateFormatter.localizedString(from: note.timestamp, dateStyle: .medium, timeStyle: .short))")
-                            Text("•")
-                            Text("📝 \(note.content.split(whereSeparator: \.isWhitespace).count) words")
+                            Text(note.folder)
+                            Text("·")
+                            Text(DateFormatter.localizedString(from: note.timestamp, dateStyle: .medium, timeStyle: .short))
+                            Text("·")
+                            Text("\(note.content.split(whereSeparator: \.isWhitespace).count) words")
                         }
                         .font(.system(size: config.fontSize.subtitleSize, weight: .semibold, design: config.fontFamily.fontDesign))
                         .foregroundColor(metaColor)
@@ -516,7 +516,7 @@ struct NoteExportModalView: View {
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 3)
                                 .background(codeBg)
-                                .cornerRadius(4)
+                                .cornerRadius(AppRadius.xs)
                         } else if !trimmed.isEmpty {
                             Text(trimmed)
                                 .font(.system(size: config.fontSize.bodySize, weight: .regular, design: config.fontFamily.fontDesign))
@@ -566,10 +566,10 @@ struct NoteExportModalView: View {
             .overlay(
                 Group {
                     if config.borderStyle == .borderedCard {
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: AppRadius.lg)
                             .stroke(borderColor, lineWidth: 1.5)
                     } else if config.borderStyle == .headerDivider {
-                        RoundedRectangle(cornerRadius: 4)
+                        RoundedRectangle(cornerRadius: AppRadius.xs)
                             .stroke(borderColor.opacity(0.4), lineWidth: 1)
                     }
                 }
@@ -615,10 +615,10 @@ struct NoteExportModalView: View {
                 HStack(spacing: 6) {
                     Image(systemName: config.format.icon)
                         .font(.system(size: 12, weight: .bold))
-                    Text("Export as \(config.format.shortTitle)...")
+                    Text("Export as \(config.format.shortTitle)…")
                         .font(.system(size: 12, weight: .bold))
                 }
-                .foregroundColor(.white)
+                .foregroundColor(Color.onAccent(isDark))
                 .padding(.horizontal, 16)
                 .padding(.vertical, 7)
                 .background(primaryAccent)

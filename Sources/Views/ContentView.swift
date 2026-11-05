@@ -89,6 +89,71 @@ struct ContentView: View {
     @State private var isCalendarOpen = false
     @State private var isExportModalOpen = false
     @State private var editMode: EditModeType = .split
+    @AppStorage(EditorPreferenceKey.defaultViewMode) private var defaultViewModeRaw: String = EditModeType.split.rawValue
+
+    /// The mode a note opens in: its attachment viewer if it has one, otherwise Settings › Editor › Default View.
+    /// Empty notes open in Edit so there's somewhere to type.
+    private func openingMode(for note: NoteItem) -> EditModeType {
+        if note.pptxPath != nil { return .pptx }
+        if note.pdfPath != nil { return .pdf }
+        let preferred = EditModeType(rawValue: defaultViewModeRaw) ?? .split
+        if preferred == .preview && note.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return .edit }
+        return [.edit, .split, .preview].contains(preferred) ? preferred : .split
+    }
+    /// Panels the layout closed because the window got too narrow; they reopen once there's room again.
+    @State private var sidebarAutoClosed = false
+    @State private var transcriptAutoClosed = false
+
+    // MARK: Responsive layout
+    // Widths in points *after* GUI zoom (ZoomContainerView hands us the scaled size).
+    private static let dividerWidth: CGFloat = 9
+    private static let minEditorWidth: CGFloat = 420
+    private static let minTranscriptWidth: CGFloat = 260
+    private static let minSidebarWidth: CGFloat = 190
+    /// Below this the sidebar closes itself so the note keeps a usable column.
+    private static let sidebarCollapseWidth: CGFloat = 700
+
+    private struct PanelLayout {
+        var sidebar: CGFloat
+        var transcript: CGFloat
+        /// The transcript fits beside the editor; otherwise it floats over the editor's trailing edge.
+        var transcriptInline: Bool
+    }
+
+    private func panelLayout(for width: CGFloat, sidebarShown: Bool) -> PanelLayout {
+        let sidebar = sidebarShown ? min(CGFloat(sidebarWidth), max(Self.minSidebarWidth, width * 0.3)) : 0
+        let middle = width - sidebar - (sidebarShown ? Self.dividerWidth : 0)
+        let roomForTranscript = middle - Self.minEditorWidth - Self.dividerWidth
+        let inline = roomForTranscript >= Self.minTranscriptWidth
+        let transcript = inline
+            ? min(CGFloat(rightPanelWidth), roomForTranscript)
+            : min(CGFloat(rightPanelWidth), max(Self.minTranscriptWidth, middle * 0.85))
+        return PanelLayout(sidebar: sidebar, transcript: transcript, transcriptInline: inline)
+    }
+
+    /// Closes panels that no longer fit and restores the ones the layout closed earlier.
+    private func adaptPanels(to width: CGFloat) {
+        if width < Self.sidebarCollapseWidth {
+            if isSidebarOpen && !isFocusMode {
+                sidebarAutoClosed = true
+                withAnimation(AppAnimation.panel) { isSidebarOpen = false }
+            }
+        } else if sidebarAutoClosed {
+            sidebarAutoClosed = false
+            withAnimation(AppAnimation.panel) { isSidebarOpen = true }
+        }
+
+        let inline = panelLayout(for: width, sidebarShown: isSidebarOpen && !isFocusMode).transcriptInline
+        if !inline {
+            if isRightPanelOpen {
+                transcriptAutoClosed = true
+                withAnimation(AppAnimation.panel) { isRightPanelOpen = false }
+            }
+        } else if transcriptAutoClosed {
+            transcriptAutoClosed = false
+            withAnimation(AppAnimation.panel) { isRightPanelOpen = true }
+        }
+    }
 
     var primaryAccent: Color {
         ThemeColors.primary(colorTheme, isDark: isDarkMode)
@@ -112,6 +177,20 @@ struct ContentView: View {
     }
 
     var body: some View {
+        chrome(
+            GeometryReader { geo in
+                mainLayout(width: geo.size.width)
+                    .onAppear { adaptPanels(to: geo.size.width) }
+                    .onChange(of: geo.size.width) { _, newWidth in adaptPanels(to: newWidth) }
+            }
+            .background(Color.appBackground(isDarkMode))
+            .preferredColorScheme(isDarkMode ? .dark : .light)
+        )
+    }
+
+    @ViewBuilder
+    private func mainLayout(width: CGFloat) -> some View {
+        let layout = panelLayout(for: width, sidebarShown: !isFocusMode && isSidebarOpen)
         HStack(spacing: 0) {
             // Sidebar List
             if !isFocusMode && isSidebarOpen {
@@ -124,10 +203,10 @@ struct ContentView: View {
                     secondaryAccent: secondaryAccent,
                     createNewNote: createNewNote
                 )
-                .frame(width: CGFloat(sidebarWidth))
+                .frame(width: layout.sidebar)
                 .transition(.move(edge: .leading))
                 
-                ResizableDivider(width: $sidebarWidth, minWidth: 170, maxWidth: 450, isLeading: true, isDark: isDarkMode, primaryColor: primaryAccent)
+                ResizableDivider(width: $sidebarWidth, minWidth: Double(Self.minSidebarWidth), maxWidth: 450, isLeading: true, isDark: isDarkMode, primaryColor: primaryAccent)
             }
             
             // Middle Main Editor Panel
@@ -170,17 +249,7 @@ struct ContentView: View {
                         notes: $notes,
                         selectedNoteId: $selectedNoteId,
                         recorderVM: recorderVM,
-                        playerVM: playerVM,
-                        onAudioTranscribed: { segments, path in
-                            if let note = selectedNote {
-                                note.wrappedValue.transcript = segments
-                                note.wrappedValue.audioPath = path
-                                note.wrappedValue.isStandalone = false
-                                NotesDataManager.shared.saveNotes(notes)
-                                let audioFileURL = URL(fileURLWithPath: path)
-                                playerVM.loadAudio(url: audioFileURL, transcript: segments)
-                            }
-                        }
+                        playerVM: playerVM
                     )
                 }
                 
@@ -198,27 +267,32 @@ struct ContentView: View {
                             primaryAccent: primaryAccent,
                             secondaryAccent: secondaryAccent
                         )
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        
+                        .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
+                        .overlay(alignment: .trailing) {
+                            // Narrow window: the transcript floats over the editor instead of squeezing it.
+                            if !layout.transcriptInline && !isFocusMode && isRightPanelOpen && !noteBinding.wrappedValue.isStandalone {
+                                transcriptPanel(for: noteBinding)
+                                    .frame(width: layout.transcript)
+                                    .overlay(alignment: .leading) {
+                                        Rectangle().fill(Color.subtleBorder(isDarkMode)).frame(width: 1)
+                                    }
+                                    .shadow(color: Color.black.opacity(isDarkMode ? 0.4 : 0.12), radius: 16, x: -4, y: 0)
+                                    .transition(.move(edge: .trailing))
+                            }
+                        }
+
                         // Right Transcript panel
-                        if !isFocusMode && isRightPanelOpen && !noteBinding.wrappedValue.isStandalone {
-                            ResizableDivider(width: $rightPanelWidth, minWidth: 260, maxWidth: 550, isLeading: false, isDark: isDarkMode, primaryColor: primaryAccent)
-                            
-                            TranscriptPanelView(
-                                note: noteBinding,
-                                notes: $notes,
-                                playerVM: playerVM,
-                                width: $rightPanelWidth,
-                                isDark: isDarkMode,
-                                primaryAccent: primaryAccent,
-                                secondaryAccent: secondaryAccent
-                            )
-                            .frame(width: CGFloat(rightPanelWidth))
-                            .transition(.move(edge: .trailing))
+                        if layout.transcriptInline && !isFocusMode && isRightPanelOpen && !noteBinding.wrappedValue.isStandalone {
+                            ResizableDivider(width: $rightPanelWidth, minWidth: Double(Self.minTranscriptWidth), maxWidth: 550, isLeading: false, isDark: isDarkMode, primaryColor: primaryAccent)
+
+                            transcriptPanel(for: noteBinding)
+                                .frame(width: layout.transcript)
+                                .transition(.move(edge: .trailing))
                         }
                     }
+                    .clipped()
                 } else {
-                    ContentUnavailableView("No Note Selected", systemImage: "doc.text.fill", description: Text("Select a note or press ⌘N to build a new draft."))
+                    ContentUnavailableView("No Note Selected", systemImage: "doc.text.fill", description: Text("Choose a note in the sidebar, or press ⌘N to start a new one."))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 
@@ -234,11 +308,28 @@ struct ContentView: View {
                     )
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // minWidth 0 lets the column shrink with the window instead of pushing the whole layout off-screen.
+            .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
             .background(Color.panelBackground(isDarkMode))
         }
-        .background(Color.appBackground(isDarkMode))
-        .preferredColorScheme(isDarkMode ? .dark : .light)
+    }
+
+    private func transcriptPanel(for noteBinding: Binding<NoteItem>) -> some View {
+        TranscriptPanelView(
+            note: noteBinding,
+            notes: $notes,
+            playerVM: playerVM,
+            width: $rightPanelWidth,
+            isDark: isDarkMode,
+            primaryAccent: primaryAccent,
+            secondaryAccent: secondaryAccent
+        )
+    }
+
+    /// Sheets, overlays and notification handlers wrapped around the responsive layout.
+    private func chrome<V: View>(_ content: V) -> some View {
+        content
         .overlay(alignment: .top) {
             if let release = updater.latestRelease, case .updateAvailable = updater.status {
                 HStack(spacing: 10) {
@@ -269,9 +360,9 @@ struct ContentView: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
                 .background(Color.cardBackground(isDarkMode))
-                .cornerRadius(8)
+                .cornerRadius(AppRadius.md)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 8)
+                    RoundedRectangle(cornerRadius: AppRadius.md)
                         .stroke(primaryAccent.opacity(0.3), lineWidth: 1)
                 )
                 .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 4)
@@ -362,6 +453,9 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .openKnowledgeGraph)) { _ in
             isGraphViewOpen = true
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ToggleGraphView"))) { _ in
+            isGraphViewOpen.toggle()
+        }
         .onReceive(NotificationCenter.default.publisher(for: .openExportModal)) { _ in
             if selectedNote != nil {
                 isExportModalOpen = true
@@ -387,13 +481,8 @@ struct ContentView: View {
                 tabManager.openNote(id)
             }
             if let note = notes.first(where: { $0.id == id }) {
-                if note.pptxPath != nil {
-                    if editMode != .pptx { editMode = .pptx }
-                } else if note.pdfPath != nil {
-                    if editMode != .pdf { editMode = .pdf }
-                } else if editMode == .pdf || editMode == .pptx {
-                    editMode = .edit
-                }
+                let mode = openingMode(for: note)
+                if editMode != mode { editMode = mode }
             }
         }
         .onAppear {
@@ -404,11 +493,7 @@ struct ContentView: View {
             if let id = selectedNoteId ?? notes.first?.id {
                 tabManager.openNote(id)
                 if let note = notes.first(where: { $0.id == id }) {
-                    if note.pptxPath != nil {
-                        editMode = .pptx
-                    } else if note.pdfPath != nil {
-                        editMode = .pdf
-                    }
+                    editMode = openingMode(for: note)
                 }
             }
             NSApplication.shared.setActivationPolicy(.regular)
@@ -505,7 +590,7 @@ struct ContentView: View {
         let newNote = NoteItem(
             title: "Untitled Note",
             folder: "General",
-            content: "# Untitled Note\n\nType your notes here...",
+            content: "",
             timestamp: Date(),
             audioPath: nil,
             transcript: [],
@@ -541,7 +626,7 @@ struct ZenFocusTopBarView: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(primaryAccent.opacity(0.12))
-            .cornerRadius(6)
+            .cornerRadius(AppRadius.sm)
             
             Spacer()
             
@@ -549,7 +634,7 @@ struct ZenFocusTopBarView: View {
             HStack(spacing: 6) {
                 Text(note.title.isEmpty ? "Untitled Note" : note.title)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(isDark ? .white : Color(red: 15/255, green: 23/255, blue: 42/255))
+                    .foregroundColor(Color.appText(isDark))
                     .lineLimit(1)
             }
             
@@ -580,10 +665,10 @@ struct ZenFocusTopBarView: View {
                     .padding(.vertical, 5)
                     .background(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06))
                     .foregroundColor(.secondary)
-                    .cornerRadius(6)
+                    .cornerRadius(AppRadius.sm)
                 }
                 .buttonStyle(.plain)
-                .help("Exit Zen Focus Mode (⌘Shift+F or ESC)")
+                .help("Exit Focus Mode (⇧⌘D)")
             }
         }
         .padding(.horizontal, 20)

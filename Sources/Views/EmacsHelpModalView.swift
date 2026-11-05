@@ -22,8 +22,7 @@ public struct EmacsHelpModalView: View {
                 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("GNU Emacs & Org-Mode Keybindings")
-                        .font(.title3)
-                        .fontWeight(.bold)
+                        .font(.headline)
                     Text("Keyboard commands and modal editing reference in WhispNotes.")
                         .font(.caption)
                         .foregroundColor(.secondary)
@@ -116,10 +115,10 @@ public struct EmacsHelpModalView: View {
             .padding(14)
             .background(Color.sidebarBackground(isDark))
         }
-        .frame(width: 620, height: 500)
-        .cornerRadius(14)
+        .adaptiveSheetFrame(width: 620, height: 500)
+        .cornerRadius(AppRadius.lg)
         .overlay(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: AppRadius.lg)
                 .stroke(Color.subtleBorder(isDark), lineWidth: 1)
         )
     }
@@ -128,7 +127,7 @@ public struct EmacsHelpModalView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(.system(size: 11, weight: .bold, design: .monospaced))
-                .foregroundColor(isDark ? Color(red: 148/255, green: 163/255, blue: 184/255) : Color(red: 100/255, green: 116/255, blue: 139/255))
+                .foregroundColor(Color.appTextSecondary(isDark))
             
             VStack(spacing: 4) {
                 ForEach(items, id: \.0) { key, desc in
@@ -139,12 +138,12 @@ public struct EmacsHelpModalView: View {
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(primaryAccent.opacity(0.12))
-                            .cornerRadius(4)
+                            .cornerRadius(AppRadius.xs)
                             .frame(minWidth: 90, alignment: .leading)
                         
                         Text(desc)
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(isDark ? Color(red: 226/255, green: 232/255, blue: 240/255) : Color(red: 30/255, green: 41/255, blue: 59/255))
+                            .foregroundColor(Color.appTextBody(isDark))
                         
                         Spacer()
                     }
@@ -154,9 +153,9 @@ public struct EmacsHelpModalView: View {
             }
             .padding(10)
             .background(Color.cardBackground(isDark))
-            .cornerRadius(8)
+            .cornerRadius(AppRadius.md)
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: AppRadius.md)
                     .stroke(Color.subtleBorder(isDark), lineWidth: 0.5)
             )
         }

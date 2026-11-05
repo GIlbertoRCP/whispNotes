@@ -70,12 +70,12 @@ struct AIStudyAssistantView: View {
                     Spacer()
                     if gemmaDownloader.isDownloaded {
                         Text("Offline 2B")
-                            .font(.system(size: 9, weight: .bold))
+                            .font(.system(size: 10, weight: .bold))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(primaryAccent.opacity(0.2))
                             .foregroundColor(primaryAccent)
-                            .cornerRadius(4)
+                            .cornerRadius(AppRadius.xs)
                     }
                 }
                 
@@ -108,7 +108,7 @@ struct AIStudyAssistantView: View {
                                 }
                                 .font(.caption2)
                                 .fontWeight(.bold)
-                                .foregroundColor(.white)
+                                .foregroundColor(Color.onAccent(isDark))
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 6)
                                 .background(primaryAccent)
@@ -119,9 +119,9 @@ struct AIStudyAssistantView: View {
                     }
                     .padding(12)
                     .background(primaryAccent.opacity(0.08))
-                    .cornerRadius(AppRadius.md)
+                    .cornerRadius(AppRadius.lg)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 10)
+                        RoundedRectangle(cornerRadius: AppRadius.lg)
                             .stroke(primaryAccent.opacity(0.25), lineWidth: 1)
                     )
                 }
@@ -134,7 +134,7 @@ struct AIStudyAssistantView: View {
                                 .foregroundColor(primaryAccent)
                                 .font(.caption)
                             Text("ATTACHED PDF CONTEXT")
-                                .font(.system(size: 9, weight: .bold))
+                                .font(.system(size: 10, weight: .bold))
                                 .foregroundColor(primaryAccent)
                             Spacer()
                         }
@@ -149,7 +149,7 @@ struct AIStudyAssistantView: View {
                                 ProgressView()
                                     .controlSize(.small)
                                     .scaleEffect(0.7)
-                                Text("Analyzing PDF pages with Gemma AI...")
+                                Text("Analyzing PDF pages with Gemma AI…")
                                     .font(.caption2)
                                     .foregroundColor(.secondary)
                             }
@@ -159,7 +159,7 @@ struct AIStudyAssistantView: View {
                                 Text(pdfSummary)
                                     .font(.caption2)
                                     .lineLimit(8)
-                                    .foregroundColor(isDark ? Color(red: 226/255, green: 232/255, blue: 240/255) : Color(red: 15/255, green: 23/255, blue: 42/255))
+                                    .foregroundColor(Color.appTextBody(isDark))
                                 
                                 Button(action: {
                                     onInsertSummary("\n" + pdfSummary + "\n")
@@ -168,14 +168,14 @@ struct AIStudyAssistantView: View {
                                         Image(systemName: "plus.circle.fill")
                                         Text("Insert PDF Summary into Note")
                                     }
-                                    .font(.system(size: 9, weight: .bold))
+                                    .font(.system(size: 10, weight: .bold))
                                     .foregroundColor(primaryAccent)
                                 }
                                 .buttonStyle(.plain)
                             }
                             .padding(8)
                             .background(Color.sidebarBackground(isDark))
-                            .cornerRadius(6)
+                            .cornerRadius(AppRadius.sm)
                         } else {
                             Button(action: {
                                 isGeneratingPDFSummary = true
@@ -197,16 +197,16 @@ struct AIStudyAssistantView: View {
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 5)
                                 .background(primaryAccent.opacity(0.12))
-                                .cornerRadius(6)
+                                .cornerRadius(AppRadius.sm)
                             }
                             .buttonStyle(.plain)
                         }
                     }
                     .padding(12)
                     .background(Color.cardBackground(isDark))
-                    .cornerRadius(10)
+                    .cornerRadius(AppRadius.lg)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 10)
+                        RoundedRectangle(cornerRadius: AppRadius.lg)
                             .stroke(primaryAccent.opacity(0.3), lineWidth: 1)
                     )
                 }
@@ -244,7 +244,7 @@ struct AIStudyAssistantView: View {
                 }
                 .padding(12)
                 .background(Color.cardBackground(isDark))
-                .cornerRadius(10)
+                .cornerRadius(AppRadius.lg)
                 
                 // Section 2: Action Items Extraction
                 VStack(alignment: .leading, spacing: 8) {
@@ -263,7 +263,7 @@ struct AIStudyAssistantView: View {
                                 Image(systemName: "bolt.fill")
                                 Text("Scan Tasks")
                             }
-                            .font(.system(size: 9, weight: .bold))
+                            .font(.system(size: 10, weight: .bold))
                             .foregroundColor(primaryAccent)
                         }
                         .buttonStyle(.plain)
@@ -303,7 +303,7 @@ struct AIStudyAssistantView: View {
                 }
                 .padding(12)
                 .background(Color.cardBackground(isDark))
-                .cornerRadius(10)
+                .cornerRadius(AppRadius.lg)
 
                 // Section 3: Interactive Prompt / Q&A Bar with Document & Presentation Awareness
                 VStack(alignment: .leading, spacing: 8) {
@@ -324,7 +324,7 @@ struct AIStudyAssistantView: View {
                             .font(.caption)
                             .padding(6)
                             .background(Color.sidebarBackground(isDark))
-                            .cornerRadius(6)
+                            .cornerRadius(AppRadius.sm)
                         
                         Button(action: executePromptQuery) {
                             if isAnswering {
@@ -335,10 +335,10 @@ struct AIStudyAssistantView: View {
                             } else {
                                 Image(systemName: "paperplane.fill")
                                     .font(.caption2)
-                                    .foregroundColor(.white)
+                                    .foregroundColor(Color.onAccent(isDark))
                                     .padding(6)
                                     .background(primaryAccent)
-                                    .cornerRadius(6)
+                                    .cornerRadius(AppRadius.sm)
                             }
                         }
                         .buttonStyle(.plain)
@@ -363,7 +363,7 @@ struct AIStudyAssistantView: View {
                         VStack(alignment: .leading, spacing: 6) {
                             Text(promptResponse)
                                 .font(.caption2)
-                                .foregroundColor(isDark ? Color(red: 226/255, green: 232/255, blue: 240/255) : Color(red: 15/255, green: 23/255, blue: 42/255))
+                                .foregroundColor(Color.appTextBody(isDark))
                             
                             Button(action: {
                                 onInsertSummary("\n" + promptResponse + "\n")
@@ -372,19 +372,19 @@ struct AIStudyAssistantView: View {
                                     Image(systemName: "square.and.arrow.down")
                                     Text("Insert Answer")
                                 }
-                                .font(.system(size: 9, weight: .bold))
+                                .font(.system(size: 10, weight: .bold))
                                 .foregroundColor(secondaryAccent)
                             }
                             .buttonStyle(.plain)
                         }
                         .padding(8)
                         .background(Color.sidebarBackground(isDark))
-                        .cornerRadius(6)
+                        .cornerRadius(AppRadius.sm)
                     }
                 }
                 .padding(12)
                 .background(Color.cardBackground(isDark))
-                .cornerRadius(10)
+                .cornerRadius(AppRadius.lg)
                 
                 // Section 4: Study Flashcards (Note & PDF Derived)
                 VStack(alignment: .leading, spacing: 8) {
@@ -399,7 +399,7 @@ struct AIStudyAssistantView: View {
                         VStack(alignment: .leading, spacing: 6) {
                             HStack {
                                 Text(isFlipped ? "ANSWER" : "QUESTION")
-                                    .font(.system(size: 9, weight: .bold))
+                                    .font(.system(size: 10, weight: .bold))
                                     .foregroundColor(isFlipped ? .emerald : primaryAccent)
                                 Spacer()
                                 Image(systemName: "arrow.triangle.2.circlepath")
@@ -410,14 +410,14 @@ struct AIStudyAssistantView: View {
                             Text(isFlipped ? card.answer : card.question)
                                 .font(.caption)
                                 .fontWeight(isFlipped ? .regular : .bold)
-                                .foregroundColor(isFlipped ? (isDark ? .white : Color(red: 15/255, green: 23/255, blue: 42/255)) : primaryAccent)
+                                .foregroundColor(isFlipped ? Color.appText(isDark) : primaryAccent)
                         }
                         .padding(12)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(isFlipped ? Color.emerald.opacity(0.12) : Color.cardBackground(isDark))
-                        .cornerRadius(8)
+                        .cornerRadius(AppRadius.md)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 8)
+                            RoundedRectangle(cornerRadius: AppRadius.md)
                                 .stroke(isFlipped ? Color.emerald.opacity(0.4) : Color.subtleBorder(isDark), lineWidth: 1)
                         )
                         .onTapGesture {
@@ -445,12 +445,12 @@ struct AIStudyAssistantView: View {
             executePromptQuery()
         }) {
             Text(title)
-                .font(.system(size: 9, weight: .medium))
+                .font(.system(size: 10, weight: .medium))
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
                 .background(Color.sidebarBackground(isDark))
-                .cornerRadius(4)
+                .cornerRadius(AppRadius.xs)
         }
         .buttonStyle(.plain)
     }
